@@ -1,0 +1,21 @@
+---
+title: AISystem 研发环境门户
+background:
+  image: ""
+  blur: sm
+  brightness: 50
+theme: dark
+color: slate
+layout:
+  研发:
+    style: row
+    columns: 3
+  知识与文档:
+    style: row
+    columns: 3
+  管理（老板视角）:
+    style: row
+    columns: 4
+providers:
+  openweathermap: null
+  weatherapi: null

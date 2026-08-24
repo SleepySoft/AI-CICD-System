@@ -1,0 +1,364 @@
+# ============================================================
+# AISystem 一体化研发环境 —— 唯一事实源
+#
+# 默认（不带 profile）启动核心栈:
+#   caddy(入口) / postgres / redis / keycloak / gitea / jenkins / homepage
+#
+# 可选 profile:
+#   knowledge     Qdrant + Outline + MkDocs 文档站
+#   requirements  OpenProject 需求管理
+#   monitor       Uptime Kuma 状态监控
+#   localai       Ollama（本地 embedding / 小模型）
+#   browsers      Playwright 有头浏览器 (noVNC 可视化)
+#
+# 示例:
+#   docker compose up -d                                  # 仅核心
+#   docker compose --profile knowledge up -d              # 核心 + 知识库
+#   docker compose --profile knowledge --profile monitor \
+#       --profile requirements up -d                      # 多个 profile 组合
+# ============================================================
+
+name: aisystem
+
+networks:
+  aisystem:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  keycloak_data:
+  gitea_data:
+  jenkins_home:
+  qdrant_data:
+  outline_data:
+  openproject_data:
+  ollama_data:
+  uptime_kuma_data:
+
+x-common-env: &common-env
+  TZ: ${TZ:-Asia/Shanghai}
+
+services:
+
+  # ----------------------------------------------------------
+  # 入口：反向代理（唯一对外 HTTP 端口）
+  # ----------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    environment: *common-env
+    networks: [aisystem]
+
+  # ----------------------------------------------------------
+  # 基础设施：共享 PostgreSQL / Redis
+  # ----------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      POSTGRES_USER: ${POSTGRES_USER:-aisys}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [aisystem]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [aisystem]
+
+  # ----------------------------------------------------------
+  # SSO：Keycloak（预置 realm 自动导入，含 dev/boss 组）
+  # ----------------------------------------------------------
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm"]
+    environment:
+      <<: *common-env
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER:-aisys}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?}
+      KC_HOSTNAME: http://sso.${BASE_DOMAIN:-localhost}
+      # 允许容器间回源（backchannel）使用内部地址 keycloak:8080
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ./keycloak/realm:/opt/keycloak/data/import:ro
+      - keycloak_data:/opt/keycloak/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '200' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    networks: [aisystem]
+
+  # ----------------------------------------------------------
+  # Git 仓库 + 管理界面：Gitea
+  # ----------------------------------------------------------
+  gitea:
+    image: gitea/gitea:1.22
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      USER_UID: "1000"
+      USER_GID: "1000"
+      GITEA__database__DB_TYPE: postgres
+      GITEA__database__HOST: postgres:5432
+      GITEA__database__NAME: gitea
+      GITEA__database__USER: ${POSTGRES_USER:-aisys}
+      GITEA__database__PASSWD: ${POSTGRES_PASSWORD:?}
+      GITEA__server__DOMAIN: git.${BASE_DOMAIN:-localhost}
+      GITEA__server__ROOT_URL: http://git.${BASE_DOMAIN:-localhost}/
+      GITEA__server__SSH_PORT: ${GITEA_SSH_PORT:-2222}
+      GITEA__service__DISABLE_REGISTRATION: "true"
+      GITEA__security__INSTALL_LOCK: "true"
+      GITEA__packages__ENABLED: "true"
+    volumes:
+      - gitea_data:/data
+    ports:
+      - "${GITEA_SSH_PORT:-2222}:22"   # git over ssh
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks: [aisystem]
+
+  # ----------------------------------------------------------
+  # CI/CD：Jenkins（JCasC 配置即代码）
+  # ----------------------------------------------------------
+  jenkins:
+    build: ./jenkins
+    image: aisystem/jenkins:lts
+    restart: unless-stopped
+    user: root   # 简化：便于访问挂载的 docker.sock
+    environment:
+      <<: *common-env
+      JAVA_OPTS: "-Djenkins.install.runSetupWizard=false"
+      JENKINS_ADMIN_ID: ${JENKINS_ADMIN_ID:-admin}
+      JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:?}
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      # 挂载宿主 docker.sock：流水线中用工具链镜像起一次性构建容器
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/login >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+    networks: [aisystem]
+
+  # ----------------------------------------------------------
+  # 统一门户：Homepage
+  # ----------------------------------------------------------
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      # Homepage v1+ 需要显式声明允许的 Host（防 DNS rebinding）
+      HOMEPAGE_ALLOWED_HOSTS: portal.${BASE_DOMAIN:-localhost},localhost,127.0.0.1
+    volumes:
+      - ./homepage/config:/app/config
+    networks: [aisystem]
+
+  # ==========================================================
+  # Manager：管理服务（工具总览 + Agent 终端，无 profile 默认启动）
+  # ==========================================================
+  terminal-runtime:
+    build:
+      context: .
+      dockerfile: images/terminal-runtime/Dockerfile
+    image: aisystem/terminal-runtime:latest
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      ATR_API_TOKEN: ${ATR_API_TOKEN:?ATR_API_TOKEN is required}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -H \"Authorization: Bearer $${ATR_API_TOKEN}\" http://localhost:18650/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks: [aisystem]
+
+  manager:
+    build: ./manager
+    image: aisystem/manager:latest
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      MANAGER_PUBLIC_URL: http://app.${BASE_DOMAIN:-localhost}
+      KC_PUBLIC_URL: http://sso.${BASE_DOMAIN:-localhost}
+      KC_INTERNAL_URL: http://keycloak:8080
+      OIDC_MANAGER_SECRET: ${OIDC_MANAGER_SECRET:?}
+      MANAGER_SESSION_SECRET: ${MANAGER_SESSION_SECRET:?}
+      ATR_API_TOKEN: ${ATR_API_TOKEN:?}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # 工具状态/启停
+      - ./manager/tools.yaml:/app/tools.yaml:ro      # 工具注册表热更新
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      terminal-runtime:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health')\" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks: [aisystem]
+
+  # ==========================================================
+  # profile: knowledge —— 向量库 + 知识库 Web + 文档站
+  # ==========================================================
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    restart: unless-stopped
+    profiles: ["knowledge"]
+    environment: *common-env
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks: [aisystem]
+
+  outline:
+    image: docker.getoutline.com/outlinewiki/outline:latest
+    restart: unless-stopped
+    profiles: ["knowledge"]
+    environment:
+      <<: *common-env
+      SECRET_KEY: ${OUTLINE_SECRET_KEY:?}
+      UTILS_SECRET: ${OUTLINE_UTILS_SECRET:?}
+      DATABASE_URL: postgres://${POSTGRES_USER:-aisys}:${POSTGRES_PASSWORD}@postgres:5432/outline
+      REDIS_URL: redis://redis:6379
+      URL: http://kb.${BASE_DOMAIN:-localhost}
+      PORT: "3000"
+      FORCE_HTTPS: "false"
+      FILE_STORAGE: local
+      FILE_STORAGE_LOCAL_ROOT_DIR: /var/lib/outline/data
+      FILE_STORAGE_UPLOAD_MAX_SIZE: "26214400"
+      # OIDC -> Keycloak
+      OIDC_CLIENT_ID: outline
+      OIDC_CLIENT_SECRET: ${OIDC_OUTLINE_SECRET:?}
+      OIDC_AUTH_URI: http://sso.${BASE_DOMAIN:-localhost}/realms/aisystem/protocol/openid-connect/auth
+      OIDC_TOKEN_URI: http://keycloak:8080/realms/aisystem/protocol/openid-connect/token
+      OIDC_USERINFO_URI: http://keycloak:8080/realms/aisystem/protocol/openid-connect/userinfo
+      OIDC_LOGOUT_URI: http://sso.${BASE_DOMAIN:-localhost}/realms/aisystem/protocol/openid-connect/logout
+      OIDC_USERNAME_CLAIM: preferred_username
+      OIDC_DISPLAY_NAME: Keycloak
+      OIDC_SCOPES: openid profile email
+    volumes:
+      - outline_data:/var/lib/outline/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    networks: [aisystem]
+
+  mkdocs:
+    image: squidfunk/mkdocs-material:latest
+    restart: unless-stopped
+    profiles: ["knowledge"]
+    working_dir: /docs
+    command: ["serve", "--dev-addr=0.0.0.0:8000"]
+    volumes:
+      - ./mkdocs:/docs
+    networks: [aisystem]
+
+  # ==========================================================
+  # profile: requirements —— OpenProject 需求管理
+  # ==========================================================
+  openproject:
+    image: openproject/openproject:15
+    restart: unless-stopped
+    profiles: ["requirements"]
+    environment:
+      <<: *common-env
+      DATABASE_URL: postgresql://${POSTGRES_USER:-aisys}:${POSTGRES_PASSWORD}@postgres:5432/openproject
+      OPENPROJECT_SECRET_KEY_BASE: ${OPENPROJECT_SECRET_KEY_BASE:?}
+      OPENPROJECT_HOST__NAME: req.${BASE_DOMAIN:-localhost}
+      OPENPROJECT_HTTPS: "false"
+      OPENPROJECT_DEFAULT__LANGUAGE: zh
+    volumes:
+      - openproject_data:/var/openproject/assets
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [aisystem]
+
+  # ==========================================================
+  # profile: monitor —— Uptime Kuma 状态页
+  # ==========================================================
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    restart: unless-stopped
+    profiles: ["monitor"]
+    environment: *common-env
+    volumes:
+      - uptime_kuma_data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [aisystem]
+
+  # ==========================================================
+  # profile: localai —— Ollama（本地 embedding / 小模型）
+  # ==========================================================
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    profiles: ["localai"]
+    environment: *common-env
+    volumes:
+      - ollama_data:/root/.ollama
+    networks: [aisystem]
+
+  # ==========================================================
+  # profile: browsers —— 有头浏览器（noVNC 可视化）
+  # 无头场景直接用 Jenkins 流水线中的 mcr.microsoft.com/playwright 镜像
+  # ==========================================================
+  browsers:
+    build: ./images/browsers
+    image: aisystem/browsers:latest
+    restart: unless-stopped
+    profiles: ["browsers"]
+    environment: *common-env
+    shm_size: "2gb"
+    networks: [aisystem]

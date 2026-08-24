@@ -1,0 +1,13 @@
+configuration-as-code
+workflow-aggregator
+git
+gitea
+docker-plugin
+docker-workflow
+allure-jenkins-plugin
+oic-auth
+job-dsl
+timestamper
+ansicolor
+ws-cleanup
+pipeline-stage-view

@@ -1,0 +1,49 @@
+---
+# Homepage 统一门户 —— 服务导航
+# 分组对应权限视角：管理组入口建议仅对 boss 角色宣传（精细 RBAC 由 Keycloak + 各系统落实）
+
+- 研发:
+    - Gitea 代码仓库:
+        href: http://git.localhost
+        icon: gitea.png
+        description: Git 托管 / PR / Issue / 包注册表
+    - Jenkins CI:
+        href: http://ci.localhost
+        icon: jenkins.png
+        description: 流水线构建 / 测试 / 定时 Agent 任务
+    - 浏览器工作台:
+        href: http://browser.localhost
+        icon: chromium.png
+        description: 有头浏览器 noVNC（需启用 browsers profile）
+
+- 知识与文档:
+    - 知识库 Outline:
+        href: http://kb.localhost
+        icon: outline.png
+        description: 团队知识库（含老板专属集合）
+    - 文档站 MkDocs:
+        href: http://docs.localhost
+        icon: material-for-mkdocs.png
+        description: Agent 自动生成的结构化软件文档
+    - 向量库 Qdrant:
+        href: http://vectors.localhost/dashboard
+        icon: qdrant.png
+        description: 语义检索引擎控制台
+
+- 管理（老板视角）:
+    - OpenProject 需求:
+        href: http://req.localhost
+        icon: openproject.png
+        description: 需求管理 / 追踪矩阵
+    - 状态监控:
+        href: http://status.localhost
+        icon: uptime-kuma.png
+        description: 服务健康状态与告警
+    - Keycloak 认证中心:
+        href: http://sso.localhost/admin
+        icon: keycloak.png
+        description: 用户 / 组 / 权限管理
+    - Ollama 本地模型:
+        href: http://llm.localhost
+        icon: ollama.png
+        description: 本地 embedding / 小模型 API

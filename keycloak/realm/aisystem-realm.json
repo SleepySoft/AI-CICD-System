@@ -1,0 +1,118 @@
+{
+  "realm": "aisystem",
+  "enabled": true,
+  "displayName": "AISystem",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "bruteForceProtected": false,
+  "sslRequired": "none",
+  "groups": [
+    { "name": "dev", "path": "/dev" },
+    { "name": "boss", "path": "/boss" }
+  ],
+  "users": [
+    {
+      "username": "boss",
+      "enabled": true,
+      "email": "boss@aisystem.local",
+      "firstName": "Boss",
+      "groups": ["/boss"],
+      "credentials": [
+        { "type": "password", "value": "boss123", "temporary": true }
+      ]
+    },
+    {
+      "username": "dev",
+      "enabled": true,
+      "email": "dev@aisystem.local",
+      "firstName": "Developer",
+      "groups": ["/dev"],
+      "credentials": [
+        { "type": "password", "value": "dev123", "temporary": true }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "gitea",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "gitea-oidc-secret-change-me",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://git.localhost/user/oauth2/keycloak/callback",
+        "http://git.localhost/*"
+      ],
+      "webOrigins": ["http://git.localhost"],
+      "attributes": {
+        "post.logout.redirect.uris": "http://git.localhost/*"
+      }
+    },
+    {
+      "clientId": "manager",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "manager-oidc-secret-change-me",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://app.localhost/api/auth/callback",
+        "http://app.localhost/*"
+      ],
+      "webOrigins": ["http://app.localhost"],
+      "attributes": {
+        "post.logout.redirect.uris": "http://app.localhost/*"
+      },
+      "defaultClientScopes": ["web-origins", "acr", "profile", "email", "roles", "groups"]
+    },
+    {
+      "clientId": "outline",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "outline-oidc-secret-change-me",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://kb.localhost/auth/oidc.callback",
+        "http://kb.localhost/*"
+      ],
+      "webOrigins": ["http://kb.localhost"],
+      "attributes": {
+        "post.logout.redirect.uris": "http://kb.localhost/*"
+      }
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "groups",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "claim.name": "groups"
+          }
+        }
+      ]
+    }
+  ],
+  "defaultDefaultClientScopes": [
+    "role_list", "profile", "email", "roles", "web-origins", "acr", "groups"
+  ]
+}

@@ -1,0 +1,111 @@
+# AISystem 环境工具注册表
+# name: 唯一标识  group: 分组  desc: 描述
+# url: 跳转地址   container: compose 容器名（用于状态/启停，无则 external）
+# health_url: 容器内健康探测地址（可选）  visibility: all|boss（boss 仅 boss 组可见）
+tools:
+  - name: portal
+    group: 研发
+    desc: 统一门户（Homepage）
+    url: http://portal.localhost
+    container: aisystem-homepage-1
+    health_url: http://homepage:3000
+    visibility: all
+
+  - name: gitea
+    group: 研发
+    desc: Git 仓库 / PR / Issue / 包注册表
+    url: http://git.localhost
+    container: aisystem-gitea-1
+    health_url: http://gitea:3000/api/healthz
+    visibility: all
+
+  - name: jenkins
+    group: 研发
+    desc: CI/CD 流水线
+    url: http://ci.localhost
+    container: aisystem-jenkins-1
+    health_url: http://jenkins:8080/login
+    visibility: all
+
+  - name: browsers
+    group: 研发
+    desc: 有头浏览器工作台（noVNC，browsers profile）
+    url: http://browser.localhost
+    container: aisystem-browsers-1
+    visibility: all
+
+  - name: outline
+    group: 知识与文档
+    desc: 知识库 Web（knowledge profile）
+    url: http://kb.localhost
+    container: aisystem-outline-1
+    visibility: all
+
+  - name: mkdocs
+    group: 知识与文档
+    desc: 结构化文档站（knowledge profile）
+    url: http://docs.localhost
+    container: aisystem-mkdocs-1
+    visibility: all
+
+  - name: qdrant
+    group: 知识与文档
+    desc: 向量库控制台（knowledge profile）
+    url: http://vectors.localhost/dashboard
+    container: aisystem-qdrant-1
+    visibility: boss
+
+  - name: openproject
+    group: 管理
+    desc: 需求管理（requirements profile）
+    url: http://req.localhost
+    container: aisystem-openproject-1
+    visibility: all
+
+  - name: uptime-kuma
+    group: 管理
+    desc: 状态监控（monitor profile）
+    url: http://status.localhost
+    container: aisystem-uptime-kuma-1
+    visibility: boss
+
+  - name: keycloak
+    group: 管理
+    desc: 认证中心 / 用户与权限
+    url: http://sso.localhost/admin
+    container: aisystem-keycloak-1
+    health_url: http://keycloak:8080/health/ready
+    visibility: boss
+
+  - name: ollama
+    group: 管理
+    desc: 本地模型（localai profile）
+    url: http://llm.localhost
+    container: aisystem-ollama-1
+    visibility: boss
+
+  - name: terminal-runtime
+    group: 平台
+    desc: ATR 终端运行时（Agent 会话载体，/ui 调试页）
+    url: http://term.localhost/ui
+    container: aisystem-terminal-runtime-1
+    health_url: http://terminal-runtime:18650/health
+    visibility: boss
+
+  - name: postgres
+    group: 平台
+    desc: 共享数据库
+    container: aisystem-postgres-1
+    visibility: boss
+
+  - name: redis
+    group: 平台
+    desc: 缓存
+    container: aisystem-redis-1
+    visibility: boss
+
+  - name: caddy
+    group: 平台
+    desc: 统一入口反向代理
+    container: aisystem-caddy-1
+    visibility: boss

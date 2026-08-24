@@ -1,0 +1,21 @@
+# Jenkins Configuration as Code（保持最小集，避免 JCasC 版本差异导致启动失败）
+# 环境变量来自 docker-compose.yml（JENKINS_ADMIN_ID / JENKINS_ADMIN_PASSWORD）
+jenkins:
+  systemMessage: "AISystem Jenkins —— 配置由 JCasC 管理"
+  mode: NORMAL
+  numExecutors: 2
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "${JENKINS_ADMIN_ID}"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+unclassified:
+  location:
+    url: "http://ci.localhost/"
+  timestamper:
+    allPipelines: true

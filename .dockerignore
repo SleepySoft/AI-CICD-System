@@ -1,0 +1,13 @@
+.git
+docs
+*.md
+!third_party/**
+knowledge
+mkdocs
+homepage
+jenkins
+caddy
+keycloak
+postgres
+scripts
+manager/app/static

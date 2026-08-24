@@ -1,0 +1,58 @@
+# AISystem 统一入口（*.localhost 子域名，HTTP 内部环境）
+# 浏览器访问: http://portal.localhost 等；若不解析请写入 hosts
+
+{
+	auto_https off
+}
+
+http://app.localhost {
+	reverse_proxy manager:8000
+}
+
+http://term.localhost {
+	reverse_proxy terminal-runtime:18650
+}
+
+http://portal.localhost {
+	reverse_proxy homepage:3000
+}
+
+http://git.localhost {
+	reverse_proxy gitea:3000
+}
+
+http://ci.localhost {
+	reverse_proxy jenkins:8080
+}
+
+http://sso.localhost {
+	reverse_proxy keycloak:8080
+}
+
+http://kb.localhost {
+	reverse_proxy outline:3000
+}
+
+http://docs.localhost {
+	reverse_proxy mkdocs:8000
+}
+
+http://req.localhost {
+	reverse_proxy openproject:8080
+}
+
+http://vectors.localhost {
+	reverse_proxy qdrant:6333
+}
+
+http://status.localhost {
+	reverse_proxy uptime-kuma:3001
+}
+
+http://browser.localhost {
+	reverse_proxy browsers:6080
+}
+
+http://llm.localhost {
+	reverse_proxy ollama:11434
+}

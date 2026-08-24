@@ -1,0 +1,21 @@
+site_name: AISystem 结构化软件文档
+site_description: 由 Agent 定时分析代码自动生成的结构化文档
+docs_dir: docs
+
+theme:
+  name: material
+  language: zh
+  palette:
+    scheme: slate
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+
+plugins:
+  - search:
+      lang: zh
+
+nav:
+  - 首页: index.md
+  # Agent 生成的文档会按仓库/模块追加到此处

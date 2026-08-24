@@ -1,0 +1,13 @@
+# 通用忽略
+.env
+.env.bak
+__pycache__/
+*.pyc
+node_modules/
+.DS_Store
+
+# Homepage 容器运行时在挂载目录自动生成的文件
+homepage/config/logs/
+homepage/config/settings.yaml
+homepage/config/docker.yaml
+homepage/config/kubernetes.yaml

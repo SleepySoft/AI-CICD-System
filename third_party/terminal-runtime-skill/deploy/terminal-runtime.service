@@ -1,0 +1,44 @@
+# Agent Terminal Runtime - systemd unit
+# 1. Copy this file to /etc/systemd/system/terminal-runtime.service
+# 2. Adjust User / WorkingDirectory / Environment below
+# 3. systemctl daemon-reload && systemctl enable --now terminal-runtime
+[Unit]
+Description=Agent Terminal Runtime (headless terminal for AI agents)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Run as a dedicated, low-privilege user. tmux sessions live in this user's
+# tmux server, so the service and `tmux attach` debugging must share it.
+User=atr
+WorkingDirectory=/opt/terminal-runtime-skill
+ExecStart=/opt/terminal-runtime-skill/.venv/bin/python scripts/terminal_runtime_service.py
+
+# --- Persistence ------------------------------------------------------------
+# tmux backend: sessions survive service restarts/crashes and are re-adopted
+# automatically on startup.
+Environment=ATR_DEFAULT_BACKEND=tmux
+Environment=ATR_TMUX_ADOPT=1
+
+# --- Network / security -------------------------------------------------------
+# Keep loopback-only unless you have set a token. To expose remotely:
+#   Environment=ATR_HOST=0.0.0.0
+#   Environment=ATR_API_TOKEN=<long-random-token>
+Environment=ATR_HOST=127.0.0.1
+Environment=ATR_PORT=18650
+Environment=ATR_API_TOKEN=
+
+# --- Reliability --------------------------------------------------------------
+# The service may die; the sessions must not. Restart aggressively.
+Restart=always
+RestartSec=2
+# tmux sessions are detached (not killed) on shutdown, so a fast stop is fine.
+TimeoutStopSec=10
+
+# Reasonable hardening (keep shared /tmp access: tmux sockets live there)
+NoNewPrivileges=true
+PrivateTmp=false
+
+[Install]
+WantedBy=multi-user.target
