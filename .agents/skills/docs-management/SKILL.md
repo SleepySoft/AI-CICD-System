@@ -61,7 +61,17 @@ docs/
 
 ## 资源
 
-- **references/requirements-scheme.md** — 需求分层定义、ID 编号规则、验收标准写法、追溯矩阵格式。编写或变更需求条目前必读。
+细节规则按文档域拆分，只加载当前任务对应的一个文件：
+
+| 任务 | 必读文件 |
+|------|---------|
+| 编写/变更需求条目、维护追溯矩阵 | **references/requirements-scheme.md** |
+| 在 why/ what/ how/ 下新建或修改设计文档 | **references/design-docs.md** |
+| 记录架构决策（ADR） | **references/adr.md** |
+| 编写操作手册（runbook） | **references/runbooks.md** |
+
+模板（复制后填写）：
+
 - **assets/templates/design-doc.md** — why/what/how 层通用模板
 - **assets/templates/requirements.md** — requirements/ 需求文件模板
 - **assets/templates/adr.md** — ADR 模板
