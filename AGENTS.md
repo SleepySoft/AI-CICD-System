@@ -12,8 +12,10 @@
 
 ## 关键文档
 
-- `docs/01-需求分析与选型.md` —— 需求与选型（含 Anaconda/Obsidian 授权结论）
-- `docs/02-管理服务设计.md` —— Manager 架构、数据模型、任务框架、里程碑
+- `docs/README.md` —— 文档索引（WHY→WHAT→HOW 分层 + 需求 ID 追溯 + 阅读路径）
+- `docs/requirements/` —— 需求库（BR/UR/FR/NFR 带 ID，机器可读事实源）
+- `docs/why|what|how/` —— 设计文档三层；决策史在 `docs/adr/`；操作手册在 `docs/runbooks/`
+- `docs/01、02` —— 重构前的历史文档（状态：过时，仅供溯源）
 
 ## 项目技能（.agents/skills/）
 
@@ -58,4 +60,4 @@ bash scripts/verify.sh && bash scripts/verify-manager.sh
 ## 路线图（Manager）
 
 M2 代码源管理 + agent-runner 执行器 → M3 内置任务（code-insight/日报/gap分析/合规/knowhow蒸馏/综合报告）
-→ M4 待审闭环 → M5 CI 综合报告 → M6 Nuitka 保密打包。详见 docs/02。
+→ M4 待审闭环 → M5 CI 综合报告 → M6 Nuitka 保密打包。详见 docs/what/manager.md §里程碑。

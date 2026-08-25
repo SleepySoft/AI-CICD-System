@@ -1,0 +1,44 @@
+# 干系人需求（UR）
+
+> 版本：v1.0 · 日期：2026-08-25 · 状态：生效
+> 定位：干系人（dev / boss / Agent）在具体场景下的诉求。角色定义见 `../what/environment.md` SSO 契约。
+
+### UR-001 dev 一键部署整套环境
+- 状态: 生效 | 上层: BR-001 | 优先级: P0
+- 描述: 开发者在 WSL/VM/裸 Docker 上用同一份 Compose 启动环境，按 profile 选择组件。
+- 验收: `cp .env.example .env && docker compose up -d` 拉起核心栈；按需 profile 可叠加。
+
+### UR-002 dev 在可复现容器中构建与测试
+- 状态: 生效 | 上层: BR-001 | 优先级: P0
+- 描述: C/C++、Android、Node 构建与 Python 测试在版本锁定的容器镜像中执行，消除"我机器上能跑"。
+- 验收: 同一 commit 在任意机器构建产物一致（镜像 digest 相同）。
+
+### UR-003 dev 提交代码后自动获得构建与测试反馈
+- 状态: 生效 | 上层: BR-001 | 优先级: P0
+- 描述: push 到 Gitea 后自动触发 Jenkins 流水线，测试报告归档可查。
+- 验收: push 后流水线自动触发；Allure 报告可从 Jenkins 入口访问。
+
+### UR-004 boss 查看日报与综合报告
+- 状态: 生效 | 上层: BR-002, BR-004 | 优先级: P1
+- 描述: 管理层在报告中心查看 Agent 产出的日报、gap 分析与综合报告。
+- 验收: boss 账号登录 Manager 可见 boss 级报告；dev 账号不可见。
+
+### UR-005 boss 审批 AI 产出
+- 状态: 生效 | 上层: BR-007 | 优先级: P1
+- 描述: AI 产出的知识卡片/文档先进入待审区，人工批准后转正。
+- 验收: 未经 approve 的条目不进入正式知识库与文档站；审批动作有审计记录。
+
+### UR-006 全员单点登录、按角色呈现
+- 状态: 生效 | 上层: BR-008 | 优先级: P0
+- 描述: 所有子系统经 Keycloak OIDC 登录；门户与知识库按 dev/boss 组呈现不同视图。
+- 验收: 一次登录可进入 Gitea/Outline/Manager；门户按组显隐入口。
+
+### UR-007 Agent 经 API/MCP 读取内部系统
+- 状态: 生效 | 上层: BR-002, BR-003 | 优先级: P0
+- 描述: Agent 通过 REST API 与 MCP 工具链读取代码、issue、需求、知识库与 CI 结果。
+- 验收: Agent 会话内可调 gitea-mcp/qdrant-mcp/playwright-mcp 完成只读操作。
+
+### UR-008 用户在知识库补充笔记且不被 AI 内容污染
+- 状态: 生效 | 上层: BR-007 | 优先级: P1
+- 描述: 用户用 Obsidian 等工具直接编辑 vault 的人工分区，AI 产出隔离在独立分区。
+- 验收: `human/` 分区无 AI 直写条目；frontmatter `origin` 字段可机检。

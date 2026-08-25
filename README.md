@@ -1,7 +1,7 @@
 # AISystem —— AI 研发一体化环境
 
 > 环境部分：**Docker Compose 是唯一事实源**，WSL/VM 镜像后续由其封装。
-> 需求分析与选型见 [docs/01-需求分析与选型.md](docs/01-需求分析与选型.md)。
+> 需求分析与设计文档：[docs/README.md](docs/README.md)（WHY→WHAT→HOW 分层 + 需求 ID 追溯的文档索引）
 
 ## 快速开始（WSL / Linux）
 
@@ -55,6 +55,8 @@ docker compose --profile localai up -d                                # + Ollama
 ├── homepage/config/         # 门户导航（含 boss 视角分组）
 ├── mkdocs/                  # Agent 结构化文档站
 ├── knowledge/vault/         # 知识库（human/ai-inbox/know-how 分区）
+├── docs/                    # 项目文档：requirements/why/what/how/adr/runbooks（索引见 docs/README.md）
+├── .agents/skills/          # 项目技能（Agent 行为规范，含 docs-management）
 ├── images/                  # 工具链镜像：cpp / android / node / test-python / browsers
 └── scripts/                 # 构建与接线脚本
 ```
@@ -69,7 +71,7 @@ docker compose --profile localai up -d                                # + Ollama
 初始化：`bash scripts/wire-manager.sh`（向 Keycloak 注册 manager 客户端）。
 验证：`bash scripts/verify-manager.sh`。
 
-> 说明：M1 阶段无数据库（工具清单读 YAML，会话存于 ATR）；任务框架/调度/报告按 docs/02 设计后续迭代。
+> 说明：M1 阶段无数据库（工具清单读 YAML，会话存于 ATR）；任务框架/调度/报告按 [docs/what/manager.md](docs/what/manager.md) 里程碑后续迭代。
 
 ## 环境注意事项（本机实测）
 
