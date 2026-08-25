@@ -38,7 +38,7 @@ docs/
 2. "帮我完成一个操作任务"（部署/排障/轮换）？ → `docs/runbooks/`
 3. "记录一个已做（或被推翻）的决策"？ → `docs/adr/`（新增一篇，编号递增）
 4. 设计阐释文档 → 按抽象深度进 `why/` | `what/` | `how/`，按模块选文件
-5. 都不像（教程、索引）→ `README.md` 或 `docs/README.md`
+5. 入口层（根 README.md、AGENTS.md、docs/README.md 索引）→ 规则见 references/entry-docs.md；mkdocs/ 为 Agent 生成的用户文档层，约定同文件
 
 **命名歧义警示**：`how/` 只放"系统内部如何工作"（阐释），"如何完成某任务"一律进 `runbooks/`，二者不可混放。
 
@@ -68,7 +68,8 @@ docs/
 | 编写/变更需求条目、维护追溯矩阵 | **references/requirements-scheme.md** |
 | 在 why/ what/ how/ 下新建或修改设计文档 | **references/design-docs.md** |
 | 记录架构决策（ADR） | **references/adr.md** |
-| 编写操作手册（runbook） | **references/runbooks.md** |
+| 编写操作手册（runbook）、部署/测试指导 | **references/runbooks.md** |
+| 修改根 README.md、AGENTS.md、docs/ 索引、mkdocs 用户文档 | **references/entry-docs.md** |
 
 模板（复制后填写）：
 
