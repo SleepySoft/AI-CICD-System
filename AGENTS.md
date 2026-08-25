@@ -15,6 +15,17 @@
 - `docs/01-需求分析与选型.md` —— 需求与选型（含 Anaconda/Obsidian 授权结论）
 - `docs/02-管理服务设计.md` —— Manager 架构、数据模型、任务框架、里程碑
 
+## 项目技能（.agents/skills/）
+
+Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.md），今后会持续新增：
+
+- `docs-management/` —— 项目文档管理规范：docs/ 按 WHY→WHAT→HOW 分层、按模块分文件，
+  requirements/ 纵向需求 ID 体系（BR/UR/FR/NFR）+ 追溯矩阵，ADR 与 runbooks 正交轴。
+  **凡是在 docs/ 下新建、修改、拆分文档，必须遵循该技能。**
+
+新增技能：在 `.agents/skills/` 下建子目录（小写连字符命名），写 SKILL.md
+（frontmatter 仅 name/description），并在本节登记一行。
+
 ## 硬性约定
 
 - 所有脚本/配置文件统一 **LF 行尾**（.gitattributes 已强制；Windows 编辑后注意转换，
