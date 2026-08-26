@@ -4,6 +4,7 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from ..agents import build_session_payload, get_agent
 from ..atr import atr_request, atr_text
 from ..auth import current_user, require_boss
 
@@ -13,6 +14,7 @@ router = APIRouter(prefix="/api/agent", tags=["agent"])
 class CreateSession(BaseModel):
     id: str
     command: str = "bash"
+    agent: str | None = None   # 指定注册表 agent（agents.yaml）时覆盖 command 并注入 env
     rows: int = 40
     cols: int = 120
     owner: str = "manager"
@@ -45,7 +47,12 @@ async def list_sessions(user: dict = Depends(current_user)):
 
 @router.post("/sessions")
 async def create_session(body: CreateSession, user: dict = Depends(require_boss)):
-    return await atr_request("POST", "/sessions", body.model_dump())
+    payload = body.model_dump(exclude_none=True)
+    if body.agent:
+        payload.pop("agent")
+        payload.update(build_session_payload(get_agent(body.agent)))
+        payload["purpose"] = payload["purpose"] or f"agent:{body.agent}"
+    return await atr_request("POST", "/sessions", payload)
 
 
 @router.delete("/sessions/{sid}")

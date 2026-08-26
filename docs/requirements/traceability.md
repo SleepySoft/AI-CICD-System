@@ -29,7 +29,7 @@
 | FR-REQ-002 | 追踪矩阵自动生成 | what/req-mgmt.md | Sphinx-Needs(规划) | 待实现 |
 | FR-REQ-003 | 需求管理界面 | what/req-mgmt.md | docker-compose.yml(requirements profile) | 人工：OpenProject |
 | FR-MGR-001 | 工具总览面板 | what/manager.md §前端页面 | manager/app/ + manager/tools.yaml | scripts/verify-manager.sh |
-| FR-MGR-002 | Agent 终端 | what/manager.md §前端页面 | manager/app/ + terminal-runtime | scripts/verify-manager.sh |
+| FR-MGR-002 | Agent 终端 | what/manager.md §前端页面 | manager/app/ + terminal-runtime + manager/agents.yaml + scripts/agents/（注册表与安装，ADR-0018） | scripts/verify-manager.sh |
 | FR-MGR-003 | 代码源管理 | what/manager.md §数据模型 | manager/（M2 规划） | 待实现（M2） |
 | FR-MGR-004 | 任务多方式触发 | what/manager.md §数据模型 | manager/（M2-M3 规划） | 待实现（M3） |
 | FR-MGR-005 | 一切皆 Run | what/manager.md §数据模型 | manager/（M2 规划） | 待实现（M2） |

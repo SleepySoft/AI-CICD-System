@@ -197,6 +197,9 @@ services:
     environment:
       <<: *common-env
       ATR_API_TOKEN: ${ATR_API_TOKEN:?ATR_API_TOKEN is required}
+    volumes:
+      - ${DATA_ROOT:-./data}/agents:/opt/agents        # agent CLI 与登录态持久卷（ADR-0017，NFR-008）
+      - ./scripts/agents:/opt/agent-install:ro         # 锁版本安装脚本
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS -H \"Authorization: Bearer $${ATR_API_TOKEN}\" http://localhost:18650/health || exit 1"]
       interval: 15s
@@ -216,9 +219,12 @@ services:
       OIDC_MANAGER_SECRET: ${OIDC_MANAGER_SECRET:?}
       MANAGER_SESSION_SECRET: ${MANAGER_SESSION_SECRET:?}
       ATR_API_TOKEN: ${ATR_API_TOKEN:?}
+      LLM_API_KEY: ${LLM_API_KEY:-}                    # agents.yaml api_key_ref 的解析来源
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock   # 工具状态/启停
       - ./manager/tools.yaml:/app/tools.yaml:ro      # 工具注册表热更新
+      - ./manager/agents.yaml:/app/agents.yaml:ro    # agent 注册表热更新（ADR-0018）
+      - ${DATA_ROOT:-./data}/agents:/opt/agents:ro   # 探测 agent 安装状态/版本
     depends_on:
       keycloak:
         condition: service_healthy

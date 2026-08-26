@@ -5,13 +5,14 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .routers import agent, auth, tools
+from .routers import agent, agents, auth, tools
 
 app = FastAPI(title="AISystem Manager", docs_url=None, redoc_url=None)
 
 app.include_router(auth.router)
 app.include_router(tools.router)
 app.include_router(agent.router)
+app.include_router(agents.router)
 
 STATIC = Path(__file__).parent / "static"
 

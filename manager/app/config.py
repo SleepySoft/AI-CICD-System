@@ -25,6 +25,10 @@ class Cfg:
     # 工具注册表
     TOOLS_YAML = os.environ.get("TOOLS_YAML", "tools.yaml")
 
+    # Agent 注册表（M1.5 过渡形态，M2 迁移 Postgres，见 docs/what/manager.md §2.1）
+    AGENTS_YAML = os.environ.get("AGENTS_YAML", "agents.yaml")
+    AGENTS_ROOT = os.environ.get("AGENTS_ROOT", "/opt/agents")  # 只读挂载，探测安装状态
+
     # 角色
     BOSS_GROUP = "boss"
     DEV_GROUP = "dev"

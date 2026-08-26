@@ -38,6 +38,7 @@ audit_log          审计：actor, action, target, detail, at
 - **密钥不落明文**（NFR-002）：`api_key_ref` 指向 Docker secret 或加密列（Fernet，密钥来自 .env）。
 - **CI 上下文入 Run**（FR-MGR-010）：`ci_context` 记录同期 Jenkins 构建号/结果。
 - **Agent 后装与登录持久化**（ADR-0017）：CLI 程序与登录态落 `${DATA_ROOT:-./data}/agents/<name>/`；首次网页/OAuth 登录经 Agent 终端人工完成一次；cc-switch 类转发接入只配 `base_url`。
+- **Agent 注册表过渡形态**（ADR-0018）：当前以 `manager/agents.yaml`（只读挂载热更新）为 agent 清单单一事实源，字段与本表 `agent_profile` 同名，M2 建库后原样迁移；安装脚本在 `scripts/agents/<name>.sh`（锁版本、幂等、写 VERSION 标记）；操作流程见 ../runbooks/agent-onboarding.md。
 
 ### 2.2 API 概要
 
@@ -46,6 +47,7 @@ POST   /api/auth/callback            OIDC 回调
 GET    /api/me                       当前用户与角色
 CRUD   /api/repos                    + POST /api/repos/{id}/sync
 CRUD   /api/agents                   + POST /api/agents/{id}/test（连通性自检）
+                                   （过渡落地 ADR-0018：GET /api/agents + POST /api/agents/{name}/install 已实现，CRUD/test 待 M2）
 CRUD   /api/prompts                  + GET /api/prompts/{id}/versions
 CRUD   /api/tasks                    + POST /api/tasks/{id}/trigger | /toggle
 GET    /api/runs?task_id=&status=    + GET /api/runs/{id} | /logs(SSE) | /rerun

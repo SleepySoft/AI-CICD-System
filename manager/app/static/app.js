@@ -18,7 +18,8 @@ createApp({
     const cmdText = ref("");
     const acting = ref(false);
     const autoRefresh = ref(false);
-    const newSession = ref({ id: "", command: "bash", purpose: "" });
+    const newSession = ref({ id: "", command: "bash", agent: "", purpose: "" });
+    const agents = ref([]);
     let refreshTimer = null;
 
     const isBoss = computed(() => (user.value?.groups || []).includes("boss"));
@@ -76,11 +77,27 @@ createApp({
       } catch (e) { ElementPlus.ElMessage.error(e.message); }
       finally { loadingSessions.value = false; }
     }
+    async function loadAgents() {
+      try { agents.value = await api("/api/agents"); }
+      catch (e) { ElementPlus.ElMessage.error(e.message); }
+    }
+    function onAgentChange(name) {
+      if (name && !newSession.value.id) newSession.value.id = `${name}-1`;
+    }
+    async function installAgent(name) {
+      try {
+        await api(`/api/agents/${name}/install`, { method: "POST" });
+        ElementPlus.ElMessage.success(`已开始安装 ${name}，请在会话 install-${name} 中观察进度`);
+        await loadSessions();
+      } catch (e) { ElementPlus.ElMessage.error(e.message); }
+    }
     async function createSession() {
       if (!newSession.value.id) { ElementPlus.ElMessage.warning("请填写会话 ID"); return; }
       acting.value = true;
       try {
-        await api("/api/agent/sessions", { method: "POST", body: JSON.stringify(newSession.value) });
+        const body = { ...newSession.value };
+        if (!body.agent) delete body.agent;
+        await api("/api/agent/sessions", { method: "POST", body: JSON.stringify(body) });
         ElementPlus.ElMessage.success("会话已创建");
         await loadSessions();
         selectSession(newSession.value.id);
@@ -134,7 +151,7 @@ createApp({
 
     onMounted(async () => {
       await loadMe();
-      if (user.value) { loadTools(); loadSessions(); }
+      if (user.value) { loadTools(); loadSessions(); loadAgents(); }
       refreshTimer = setInterval(() => { if (autoRefresh.value) refreshScreen(); }, 2000);
     });
     onUnmounted(() => clearInterval(refreshTimer));
@@ -143,6 +160,7 @@ createApp({
       user, loading, loginError, tab, isBoss,
       tools, loadingTools, groupedTools, statusText, open, ctl, loadTools,
       sessions, loadingSessions, currentSession, screenText, cmdText, acting, autoRefresh, newSession,
+      agents, loadAgents, onAgentChange, installAgent,
       login, logout, loadSessions, createSession, removeSession, selectSession,
       refreshScreen, submitCmd, sendKey, sendControl, waitStable,
     };

@@ -10,6 +10,7 @@ curl --noproxy '*' -s -H "$H" http://127.0.0.1/api/health; echo
 echo '--- 未登录访问受保护 API（应 401） ---'
 curl --noproxy '*' -s -o /dev/null -w 'app /api/tools         -> %{http_code}\n' -H "$H" http://127.0.0.1/api/tools
 curl --noproxy '*' -s -o /dev/null -w 'app /api/agent/sessions -> %{http_code}\n' -H "$H" http://127.0.0.1/api/agent/sessions
+curl --noproxy '*' -s -o /dev/null -w 'app /api/agents         -> %{http_code}\n' -H "$H" http://127.0.0.1/api/agents
 
 echo '--- 登录跳转（应 302 到 keycloak） ---'
 curl --noproxy '*' -s -o /dev/null -w 'app /api/auth/login -> %{http_code} redirect=%{redirect_url}\n' -H "$H" http://127.0.0.1/api/auth/login
@@ -35,3 +36,7 @@ curl -s $B/sessions/smoke-1/screenshot -H "$AUTH" | grep -o "ATR-WORKS-[0-9]*" |
 curl -s -X DELETE $B/sessions/smoke-1 -H "$AUTH" > /dev/null
 echo ATR-E2E-DONE
 '
+
+echo '--- agent 持久卷挂载（应可写且与宿主 data/agents 同一目录） ---'
+docker exec aisystem-terminal-runtime-1 bash -c \
+  'touch /opt/agents/.mount-probe && ls /opt/agent-install/ && rm /opt/agents/.mount-probe && echo AGENTS-VOLUME-OK'

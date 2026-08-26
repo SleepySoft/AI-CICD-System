@@ -40,6 +40,8 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
 - 组件全部免费（含商用）：Python 环境用 **Miniforge**（禁用 Anaconda/defaults 通道）。
 - 新增环境服务：改 `docker-compose.yml`（按需挂 profile）+ `caddy/Caddyfile` 子域名 +
   `manager/tools.yaml` 注册 + README 更新。
+- 新增 agent：`scripts/agents/<name>.sh` 锁版本安装脚本 + `manager/agents.yaml` 一条记录，
+  不动镜像（ADR-0017/0018；操作流程见 `docs/runbooks/agent-onboarding.md`）。
 - compose 校验：`docker compose config -q`（在 WSL 中执行，项目路径 `/mnt/c/D/code/AI-CICD-System`）。
 
 ## 部署/验证

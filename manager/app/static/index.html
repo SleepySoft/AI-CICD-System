@@ -84,11 +84,25 @@
               <el-card shadow="never" style="background:#1a2230; border-color:#2a3546">
                 <template #header><span style="color:#e5e9ef">会话</span></template>
                 <el-form v-if="isBoss" label-position="top" size="small">
+                  <el-form-item label="Agent（来自注册表 agents.yaml）">
+                    <el-select v-model="newSession.agent" placeholder="自定义命令" clearable style="width:100%" @change="onAgentChange">
+                      <el-option v-for="a in agents" :key="a.name" :value="a.name"
+                                 :label="a.name + (a.installed ? '（' + (a.version || '已安装') + '）' : '（未安装）')" :disabled="!a.installed" />
+                    </el-select>
+                  </el-form-item>
+                  <el-form-item v-if="!newSession.agent" label="启动命令（直接启动目标程序，如 bash）"><el-input v-model="newSession.command" placeholder="bash" /></el-form-item>
                   <el-form-item label="会话 ID"><el-input v-model="newSession.id" placeholder="kimi-1" /></el-form-item>
-                  <el-form-item label="启动命令（直接启动目标程序，如 kimi / aider / bash）"><el-input v-model="newSession.command" placeholder="bash" /></el-form-item>
                   <el-form-item label="用途"><el-input v-model="newSession.purpose" placeholder="代码分析" /></el-form-item>
                   <el-button type="primary" size="small" @click="createSession" :loading="acting">创建会话</el-button>
                 </el-form>
+                <template v-if="isBoss && agents.length">
+                  <el-divider style="margin:10px 0" />
+                  <div v-for="a in agents" :key="a.name" style="font-size:12px; color:#8b98a9; margin-top:4px">
+                    <span style="color:#e5e9ef">{{ a.name }}</span>
+                    <span v-if="a.installed"> · {{ a.version || '已安装' }}</span>
+                    <el-button v-else size="small" text type="warning" @click="installAgent(a.name)">安装</el-button>
+                  </div>
+                </template>
                 <el-divider />
                 <el-button size="small" @click="loadSessions" :loading="loadingSessions">刷新列表</el-button>
                 <div v-for="s in sessions" :key="s.id || s.session_id" style="margin-top:8px">

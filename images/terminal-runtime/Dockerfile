@@ -4,10 +4,10 @@ FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 TZ=Asia/Shanghai
 
-# tmux 后端 + 常用 TUI 测试程序（使用国内镜像源加速）
+# tmux 后端 + 常用 TUI 测试程序 + agent CLI 运行底座（node/python/tmux，ADR-0017；使用国内镜像源加速）
 RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
     && apt-get update && apt-get install -y --no-install-recommends \
-        tmux git vim htop dialog fzf curl ca-certificates \
+        tmux git vim htop dialog fzf curl ca-certificates nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
 COPY third_party/terminal-runtime-skill /opt/atr
