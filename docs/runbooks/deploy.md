@@ -2,6 +2,7 @@
 
 > 版本：v1.0 · 日期：2026-08-25 · 状态：生效
 > 适用：WSL2 / Linux，已装 Docker；Windows 下在 WSL 中执行（项目路径 `/mnt/c/D/code/AI-CICD-System`）
+> 克隆仓库需 `git clone --recurse-submodules`（ATR 子模块，ADR-0016）
 > 关联：scripts/（wire-sso.sh / wire-manager.sh / verify*.sh / build-images.sh）；机制原理见 ../how/deployment.md
 
 ## 目的

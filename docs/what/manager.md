@@ -37,6 +37,7 @@ audit_log          审计：actor, action, target, detail, at
 - **prompt_template 版本化**（FR-MGR-011）：任务记录 prompt 版本，Run 可复现。
 - **密钥不落明文**（NFR-002）：`api_key_ref` 指向 Docker secret 或加密列（Fernet，密钥来自 .env）。
 - **CI 上下文入 Run**（FR-MGR-010）：`ci_context` 记录同期 Jenkins 构建号/结果。
+- **Agent 后装与登录持久化**（ADR-0017）：CLI 程序与登录态落 `${DATA_ROOT:-./data}/agents/<name>/`；首次网页/OAuth 登录经 Agent 终端人工完成一次；cc-switch 类转发接入只配 `base_url`。
 
 ### 2.2 API 概要
 

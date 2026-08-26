@@ -48,6 +48,8 @@
 | ADR-0013 系统数据 Git 化 | adr/0013-git-managed-system-data.md | adr | 已接受 |
 | ADR-0014 OpenProject 手工导出 | adr/0014-openproject-manual-export.md | adr | 已接受 |
 | ADR-0015 备份策略（一键双模式） | adr/0015-backup-strategy.md | adr | 已接受 |
+| ADR-0016 ATR 改 submodule | adr/0016-atr-as-submodule.md | adr | 已接受 |
+| ADR-0017 Agent 后装与登录持久化 | adr/0017-agent-lifecycle.md | adr | 已接受 |
 | 部署与初始化 | runbooks/deploy.md | runbooks | 生效 |
 | 备份与恢复 | runbooks/backup-restore.md | runbooks | 生效 |
 | 旧-需求分析与选型 | 01-需求分析与选型.md | 历史 | 过时（已拆分至本结构） |
