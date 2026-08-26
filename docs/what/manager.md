@@ -2,7 +2,7 @@
 
 > 版本：v1.0 · 日期：2026-08-25 · 状态：生效
 > 定位：Manager 对外可见的契约与规格；内部机制（架构、执行管线、CI 集成）见 ../how/manager-architecture.md
-> 关联需求：FR-MGR-001 ~ FR-MGR-011、BR-008
+> 关联需求：FR-MGR-001 ~ FR-MGR-011、FR-TASK-002、FR-TASK-003、BR-008
 
 ## 1. WHY
 
@@ -23,7 +23,8 @@ task_def           任务定义：name, type(见 §2.3), repo_ids[], agent_id, p
                    schedule_cron, enabled, params(JSON), output_visibility(dev|boss)
 task_run           一次执行：task_id, status(queued|running|success|failed|canceled),
                    trigger(cron|manual|webhook), started_at, finished_at, input_snapshot(JSON),
-                   runner_container, log_path, error, ci_context(JSON, 关联的 Jenkins 构建)
+                   runner_container, log_path, error, ci_context(JSON, 关联的 Jenkins 构建),
+                   openproject_id(关联的 OpenProject 工作包，可空，FR-TASK-002/003)
 report             报告：run_id, title, type, visibility, md_path, summary, created_at,
                    reviewed(bool), reviewer
 review_item        待审区条目：run_id, kind(knowhow|doc|common-module|...),

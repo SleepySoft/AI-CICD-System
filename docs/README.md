@@ -17,6 +17,7 @@
 | 功能需求-工具链镜像 | requirements/functional/images.md | requirements | 生效 |
 | 功能需求-知识库 | requirements/functional/kb.md | requirements | 生效 |
 | 功能需求-需求管理 | requirements/functional/req.md | requirements | 生效 |
+| 功能需求-任务管理 | requirements/functional/task.md | requirements | 生效 |
 | 功能需求-Manager | requirements/functional/manager.md | requirements | 生效 |
 | 追溯矩阵 | requirements/traceability.md | requirements | 生效 |
 | 项目愿景与边界 | why/vision.md | why | 生效 |
@@ -27,6 +28,7 @@
 | Manager 规格 | what/manager.md | what | 生效 |
 | 知识库规格 | what/knowledge.md | what | 生效 |
 | 需求管理工具链规格 | what/req-mgmt.md | what | 生效 |
+| 任务管理规格 | what/task-mgmt.md | what | 生效 |
 | Manager 架构与执行机制 | how/manager-architecture.md | how | 生效 |
 | 部署与交付机制 | how/deployment.md | how | 生效 |
 | 工具链镜像机制 | how/images-toolchain.md | how | 生效 |
@@ -41,7 +43,7 @@
 | ADR-0008 APScheduler | adr/0008-apscheduler-over-celery.md | adr | 已接受 |
 | ADR-0009 报告落文件卷 | adr/0009-reports-on-file-volume.md | adr | 已接受 |
 | ADR-0010 Vue3 前端 | adr/0010-vue3-frontend.md | adr | 已接受 |
-| ADR-0011 任务管理（OpenProject + AI 回写） | adr/0011-openproject-task-management.md | adr | 提议 |
+| ADR-0011 任务管理（OpenProject + AI 回写） | adr/0011-openproject-task-management.md | adr | 已接受 |
 | ADR-0012 数据显式挂载宿主目录 | adr/0012-data-on-host-bind-mounts.md | adr | 已接受 |
 | ADR-0013 系统数据 Git 化 | adr/0013-git-managed-system-data.md | adr | 已接受 |
 | ADR-0014 OpenProject 手工导出 | adr/0014-openproject-manual-export.md | adr | 已接受 |
@@ -67,4 +69,5 @@
 | CI 与镜像 | why/principles.md | what/environment.md | how/images-toolchain.md | requirements/functional/ci.md, images.md |
 | 知识库 | why/principles.md | what/knowledge.md | how/deployment.md | requirements/functional/kb.md |
 | 需求管理 | why/vision.md | what/req-mgmt.md | how/deployment.md | requirements/functional/req.md |
+| 任务管理 | why/vision.md | what/task-mgmt.md | .agents/skills/openproject/ | requirements/functional/task.md |
 | Manager | why/vision.md | what/manager.md | how/manager-architecture.md | requirements/functional/manager.md |

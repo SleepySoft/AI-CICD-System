@@ -21,6 +21,7 @@
 | `IMG` | 工具链与运行时镜像 | `functional/images.md` | `../how/images-toolchain.md` |
 | `KB` | 知识库（vault/Qdrant/Outline） | `functional/kb.md` | `../what/knowledge.md` |
 | `REQ` | 需求管理工具链 | `functional/req.md` | `../what/req-mgmt.md` |
+| `TASK` | 任务管理（OpenProject 工作包 + AI 回写） | `functional/task.md` | `../what/task-mgmt.md` |
 | `MGR` | Manager 管理服务 | `functional/manager.md` | `../what/manager.md`、`../how/manager-architecture.md` |
 
 新增模块短码：在本表注册后再使用，短码 3~4 位大写字母、全局唯一。

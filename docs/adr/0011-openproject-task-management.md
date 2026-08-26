@@ -1,6 +1,6 @@
 # ADR-0011 任务管理：复用 OpenProject 工作包，AI 经 API 执行与回写
 
-> 日期：2026-08-26 · 状态：提议
+> 日期：2026-08-26 · 状态：已接受
 > 关联：what/req-mgmt.md、what/manager.md；需求 BR-001、BR-003、NFR-001；ADR-0006
 
 ## 背景

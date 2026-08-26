@@ -39,6 +39,11 @@
 | FR-MGR-009 | 待审闭环 | what/manager.md §数据模型 | manager/（M4 规划） | 待实现（M4） |
 | FR-MGR-010 | CI 结果消费 | what/manager.md §数据模型 | manager/（M5 规划） | 待实现（M5） |
 | FR-MGR-011 | Prompt 库版本化 | what/manager.md §数据模型 | manager/（M3 规划） | 待实现（M3） |
+| FR-TASK-001 | 任务前端提交 | what/task-mgmt.md §角色分工 | docker-compose.yml(requirements profile) | 人工：建包后 API 检索 |
+| FR-TASK-002 | AI 任务领取 | what/task-mgmt.md §API 契约 | .agents/skills/openproject/（Manager M2 起自动化） | 人工：按 skill 领任务置 in progress |
+| FR-TASK-003 | AI 状态回写 | what/task-mgmt.md §状态机 | .agents/skills/openproject/ + OpenProject workflow 配置 | 人工：回写成功且置 closed 被拒 |
+| FR-TASK-004 | 任务↔提交关联 | what/task-mgmt.md §关联契约 | 提交信息约定 OP#<id> | 人工：抽查提交↔工作包互查 |
+| FR-TASK-005 | 任务手工导出快照 | what/task-mgmt.md §关联契约 | scripts/export-openproject.sh | 人工：运行脚本看 INDEX.md |
 
 ## 非功能需求（NFR）
 
