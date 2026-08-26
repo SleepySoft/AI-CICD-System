@@ -1,0 +1,3 @@
+[submodule "third_party/terminal-runtime-skill"]
+	path = third_party/terminal-runtime-skill
+	url = https://github.com/SleepySoft/terminal-runtime-skill.git
