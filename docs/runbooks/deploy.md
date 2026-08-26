@@ -59,6 +59,7 @@ bash scripts/verify.sh && bash scripts/verify-manager.sh && bash scripts/check-k
 ## 回滚
 
 ```bash
-docker compose down            # 保留数据卷
-docker compose down -v         # 彻底清空（数据不可恢复，谨慎）
+docker compose down            # 保留数据（数据在宿主 ${DATA_ROOT:-./data}/ 下，down 不影响）
+# 彻底清空：down 后手动删除数据目录（不可恢复，谨慎）
+rm -rf "${DATA_ROOT:-./data}"
 ```

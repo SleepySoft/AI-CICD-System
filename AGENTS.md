@@ -33,6 +33,8 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
 - 所有脚本/配置文件统一 **LF 行尾**（.gitattributes 已强制；Windows 编辑后注意转换，
   或运行 `scripts/dev-sync.sh`）。
 - **密钥绝不入库**：只提交 `.env.example`；`.env` 已在 .gitignore。
+- **数据显式落宿主**（NFR-008/009，ADR-0012/0013）：服务数据 bind mount 到
+  `${DATA_ROOT:-./data}/<服务>`，禁止命名卷存业务数据；`data/` 已入 .gitignore。
 - 组件全部免费（含商用）：Python 环境用 **Miniforge**（禁用 Anaconda/defaults 通道）。
 - 新增环境服务：改 `docker-compose.yml`（按需挂 profile）+ `caddy/Caddyfile` 子域名 +
   `manager/tools.yaml` 注册 + README 更新。

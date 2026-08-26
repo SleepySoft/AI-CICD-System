@@ -2,7 +2,7 @@
 
 > 版本：v1.0 · 日期：2026-08-25 · 状态：生效
 > 定位：环境对外可见的规格与契约——服务清单、域名、profile、资源分档；内部机制见 ../how/deployment.md
-> 关联需求：FR-ENV-001 ~ FR-ENV-005、NFR-003、NFR-006
+> 关联需求：FR-ENV-001 ~ FR-ENV-005、NFR-003、NFR-006、NFR-008、NFR-009
 
 ## 1. WHY
 
@@ -43,6 +43,11 @@ Keycloak 预置 realm：组 `dev` / `boss`；token 的 `groups` claim 为各系�
 | 最小（core，无 Android 构建） | 4C | 8 GB | 60 GB | Gitea+Jenkins+门户 |
 | 推荐（含 Node/C++ 构建、知识库全量） | 8C | 16 GB | 150 GB | 日常团队使用 |
 | 完整（含 Android 编译、本地 embedding） | 16C | 32 GB+ | 300 GB+ SSD | Android 构建建议独立节点或夜间构建 |
+
+### 2.5 数据持久化契约（NFR-008、NFR-009）
+
+- **显式落宿主**（ADR-0012）：所有持久化数据 bind mount 到 `${DATA_ROOT:-./data}/<服务名>`（已落实于 compose），禁用命名卷存业务数据；升级 = 只重建容器，数据目录不动。
+- **Git 为事实源**（ADR-0013）：可文本化数据（配置、文档、需求、Prompt、报告、知识、任务元数据）以 Git 仓库为事实源；DB（Postgres 各库）与二进制数据（向量索引、镜像、构建产物）仅作可重建/可导出的运行时层。
 
 ## 3. HOW
 

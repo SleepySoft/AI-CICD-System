@@ -5,6 +5,10 @@ __pycache__/
 *.pyc
 node_modules/
 .DS_Store
+.idea/
+
+# 服务数据根目录（NFR-008，bind mount 落点，绝不入库）
+/data/
 
 # Homepage 容器运行时在挂载目录自动生成的文件
 homepage/config/logs/

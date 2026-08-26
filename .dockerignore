@@ -1,6 +1,7 @@
 .git
 docs
 *.md
+data
 !third_party/**
 knowledge
 mkdocs
