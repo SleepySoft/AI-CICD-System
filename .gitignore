@@ -13,6 +13,9 @@ node_modules/
 # OpenProject 手工导出默认落点（ADR-0014；需审计时改输出到 git 仓库目录）
 /exports/
 
+# 备份落点（ADR-0015）
+/backups/
+
 # Homepage 容器运行时在挂载目录自动生成的文件
 homepage/config/logs/
 homepage/config/settings.yaml

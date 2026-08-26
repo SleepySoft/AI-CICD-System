@@ -50,6 +50,7 @@ docker compose up -d           # 核心栈
 bash scripts/wire-sso.sh       # Gitea↔Keycloak + Gitea 管理员
 bash scripts/wire-manager.sh   # Manager↔Keycloak 客户端
 bash scripts/verify.sh && bash scripts/verify-manager.sh
+bash scripts/backup.sh            # 一键备份（恢复见 docs/runbooks/backup-restore.md）
 ```
 
 ## 已知环境坑（本机实测）

@@ -48,6 +48,7 @@ Keycloak 预置 realm：组 `dev` / `boss`；token 的 `groups` claim 为各系�
 
 - **显式落宿主**（ADR-0012）：所有持久化数据 bind mount 到 `${DATA_ROOT:-./data}/<服务名>`（已落实于 compose），禁用命名卷存业务数据；升级 = 只重建容器，数据目录不动。
 - **Git 为事实源**（ADR-0013）：可文本化数据（配置、文档、需求、Prompt、报告、知识、任务元数据）以 Git 仓库为事实源；DB（Postgres 各库）与二进制数据（向量索引、镜像、构建产物）仅作可重建/可导出的运行时层。
+- **备份**（ADR-0015）：一键双模式脚本（在线 dump+打包 / 停服整体打包），操作见 ../runbooks/backup-restore.md。
 
 ## 3. HOW
 
