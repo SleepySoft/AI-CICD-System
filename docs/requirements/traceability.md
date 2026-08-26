@@ -52,4 +52,4 @@
 | NFR-006 | 三形态同源 | scripts/build-images.sh + 封装脚本 | 人工：封装脚本复用 compose |
 | NFR-007 | Agent 成本可控 | manager LLM 抽象层 + Ollama profile | 人工：切换本地模型跑任务 |
 | NFR-008 | 数据显式持久化 | docker-compose.yml bind mounts（${DATA_ROOT:-./data}） | `down`+升级+`up` 后数据完整 |
-| NFR-009 | 系统数据 Git 化 | docs/、knowledge/vault/、jenkins/casc.yaml（已落实）；manager Git 落盘（M3 起） | 抽查数据可定位 Git 事实源 |
+| NFR-009 | 系统数据 Git 化 | docs/、knowledge/vault/、jenkins/casc.yaml（已落实）；scripts/export-openproject.sh（手工导出，ADR-0014）；manager Git 落盘（M3 起） | 抽查数据可定位 Git 事实源 |

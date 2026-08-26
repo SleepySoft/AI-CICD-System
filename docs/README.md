@@ -44,6 +44,7 @@
 | ADR-0011 任务管理（OpenProject + AI 回写） | adr/0011-openproject-task-management.md | adr | 提议 |
 | ADR-0012 数据显式挂载宿主目录 | adr/0012-data-on-host-bind-mounts.md | adr | 已接受 |
 | ADR-0013 系统数据 Git 化 | adr/0013-git-managed-system-data.md | adr | 已接受 |
+| ADR-0014 OpenProject 手工导出 | adr/0014-openproject-manual-export.md | adr | 已接受 |
 | 部署与初始化 | runbooks/deploy.md | runbooks | 生效 |
 | 旧-需求分析与选型 | 01-需求分析与选型.md | 历史 | 过时（已拆分至本结构） |
 | 旧-Manager 设计 | 02-管理服务设计.md | 历史 | 过时（已拆分至本结构） |

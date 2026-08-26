@@ -24,6 +24,8 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
 - `docs-management/` —— 项目文档管理规范：docs/ 按 WHY→WHAT→HOW 分层、按模块分文件，
   requirements/ 纵向需求 ID 体系（BR/UR/FR/NFR）+ 追溯矩阵，ADR 与 runbooks 正交轴。
   **凡是在 docs/ 下新建、修改、拆分文档，必须遵循该技能。**
+- `openproject/` —— Agent 操作 OpenProject 的规范：API 认证与 curl 约定、状态流转
+  （人提/AI 执行/AI 标记）、`OP#<id>` 提交关联、手工导出配套（ADR-0011/0014）。
 
 新增技能：在 `.agents/skills/` 下建子目录（小写连字符命名），写 SKILL.md
 （frontmatter 仅 name/description），并在本节登记一行。
