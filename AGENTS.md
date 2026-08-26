@@ -47,7 +47,13 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
 ## 部署/验证
 
 ```bash
-cp .env.example .env           # 修改所有 *_change_me
+bash scripts/up.sh                # 一键：起核心栈 → SSO 接线 → 冒烟验证（幂等）
+```
+
+首次部署只需先 `cp .env.example .env` 并修改所有 *_change_me（up.sh 检测到缺失会自动复制模板）。
+等价的分步命令：
+
+```bash
 docker compose up -d           # 核心栈
 bash scripts/wire-sso.sh       # Gitea↔Keycloak + Gitea 管理员
 bash scripts/wire-manager.sh   # Manager↔Keycloak 客户端
