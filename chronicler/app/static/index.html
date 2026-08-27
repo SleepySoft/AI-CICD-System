@@ -186,6 +186,8 @@
 
         <!-- ============ 用户（admin） ============ -->
         <el-tab-pane v-if="isAdmin" label="用户" name="users">
+          <el-alert v-if="authBackend === 'oidc'" type="info" :closable="false" style="margin-bottom:12px"
+                    title="账号事实源在 Keycloak：请到 sso.localhost/admin 管理用户与分组（boss 组 = 本系统 admin）；此处列表为 OIDC 首次登录自动建档的影子记录，手工新建仅用于无 Keycloak 的兜底场景。" />
           <div class="card-box" style="max-width:560px">
             <div class="tool-name" style="margin-bottom:10px">新建用户</div>
             <el-form inline size="small">
