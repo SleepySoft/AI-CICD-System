@@ -56,7 +56,9 @@ async def oidc_callback(code: str | None = None, state: str = "",
     except BadSignature:
         raise HTTPException(status_code=400, detail="state 无效或过期") from None
 
-    async with httpx.AsyncClient(timeout=10) as client:
+    # trust_env=False：不读取 http_proxy 等环境变量——宿主回源是内网直连，
+    # 经 Clash 类代理会被拦（no_proxy 的 127.* glob 模式 httpx 不认）
+    async with httpx.AsyncClient(timeout=10, trust_env=False) as client:
         tok = await client.post(f"{_realm_url(public=False)}/token",
                                 headers=_headers(public=False),
                                 data={"grant_type": "authorization_code", "code": code,
