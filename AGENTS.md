@@ -2,13 +2,12 @@
 
 ## 项目定位
 
-一体化 AI 研发环境 + 管理服务。两部分：
+产品本体是 **Chronicler**（宿主侧 supervisor，ADR-0020/0022）；compose 栈是默认自带的可选底座。两部分：
 
-1. **环境**（本仓库主体）：Docker Compose 是唯一事实源，含 Gitea / Jenkins / Keycloak /
-   Qdrant / Outline / OpenProject / MkDocs / Playwright / Ollama / Manager / terminal-runtime。
-   WSL/VM 镜像是对 Compose 的封装，不单独维护。
-2. **管理服务 Manager**（`manager/`）：FastAPI + Vue3(CDN) SPA，Keycloak OIDC 鉴权，
-   工具集中管理（`manager/tools.yaml` 注册表）+ Agent 终端（经 terminal-runtime/ATR 控制子 Agent CLI）。
+1. **Chronicler**（`chronicler/`）：宿主侧 Python 进程（FastAPI + SQLite + Vue3 CDN SPA），本地账密鉴权（admin/user），
+   工程管理（git 链接）+ harness 登记（命令模板，ADR-0021）+ 任务执行（subprocess 拉起 agent CLI）+ 工具面板。
+2. **环境底座**（可选）：Docker Compose 编排 Gitea / Jenkins / Keycloak / Qdrant / Outline / OpenProject 等；
+   terminal-runtime/ATR 为 sandbox profile（可选隔离沙箱，ADR-0021）。WSL/VM 镜像是对 Compose 的封装。
 
 ## 关键文档
 
@@ -39,31 +38,33 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
   `${DATA_ROOT:-./data}/<服务>`，禁止命名卷存业务数据；`data/` 已入 .gitignore。
 - 组件全部免费（含商用）：Python 环境用 **Miniforge**（禁用 Anaconda/defaults 通道）。
 - 新增环境服务：改 `docker-compose.yml`（按需挂 profile）+ `caddy/Caddyfile` 子域名 +
-  `manager/tools.yaml` 注册 + README 更新。
-- 新增 agent：`scripts/agents/<name>.sh` 锁版本安装脚本 + `manager/agents.yaml` 一条记录，
-  不动镜像（ADR-0017/0018；操作流程见 `docs/runbooks/agent-onboarding.md`）。
+  `chronicler/config/tools.yaml` 注册 + README 更新。
+- 新增 agent：用户在宿主自装 harness 后，在 `chronicler/config/harness.yaml` 登记一条命令模板
+  （ADR-0021；操作流程见 `docs/runbooks/agent-onboarding.md`）。
 - compose 校验：`docker compose config -q`（在 WSL 中执行，项目路径 `/mnt/c/D/code/AI-CICD-System`）。
 
 ## 部署/验证
 
 ```bash
-bash scripts/up.sh                # 一键：起核心栈 → SSO 接线 → 冒烟验证（幂等）
+bash scripts/up.sh                # 底座一键：起核心栈 → SSO 接线 → 冒烟验证（幂等）
 ```
 
-首次部署只需先 `cp .env.example .env` 并修改所有 *_change_me（up.sh 检测到缺失会自动复制模板）。
-等价的分步命令：
+supervisor（产品本体，宿主侧）：
 
 ```bash
-docker compose up -d           # 核心栈
-bash scripts/wire-sso.sh       # Gitea↔Keycloak + Gitea 管理员
-bash scripts/wire-manager.sh   # Manager↔Keycloak 客户端
-bash scripts/verify.sh && bash scripts/verify-manager.sh
-bash scripts/backup.sh            # 一键备份（恢复见 docs/runbooks/backup-restore.md）
+cd /mnt/c/D/code/AI-CICD-System
+python3 -m venv chronicler/.venv && chronicler/.venv/bin/pip install -r chronicler/requirements.txt
+chronicler/.venv/bin/python -m chronicler create-admin   # 首次：建管理员
+chronicler/.venv/bin/python -m chronicler serve          # 或 bash chronicler/scripts/install-service.sh（systemd）
+bash scripts/verify-chronicler.sh                        # 冒烟
 ```
+
+详见 docs/runbooks/deploy.md。
 
 ## 已知环境坑（本机实测）
 
-- WSL2 空闲约 60s 回收 VM → 容器随重启；建议 `.wslconfig` 设 `vmIdleTimeout=-1`。
+- WSL 有原生 dockerd（docker.socket enabled+active），非常规 Docker Desktop shim（2026-08-27 实测复核）；
+  容器常驻使 VM 不易被空闲回收，`.wslconfig` 设 `vmIdleTimeout=-1` 作双保险。
 - WSL 中 http_proxy（Clash）会拦截 127.0.0.1 的 curl → 脚本一律 `curl --noproxy '*'`。
 - Keycloak 26 健康端点在 **9000** 端口（非 8080）。
 - Gitea CLI 拒绝 root：`docker exec -u git`。
@@ -75,12 +76,8 @@ bash scripts/backup.sh            # 一键备份（恢复见 docs/runbooks/backu
 M2 代码源管理 + harness 执行器（宿主直起，ADR-0021）→ M3 内置任务（code-insight/日报/gap分析/合规/knowhow蒸馏/综合报告）
 → M4 待审闭环 → M5 CI 综合报告 → M6 supervisor Nuitka 保密打包。详见 docs/what/manager.md §里程碑。
 
-## 文档同步债（ADR-0020/0021/0022 已决策，以下刻意暂缓，随 supervisor 实现一并改）
+## 文档同步债（ADR-0020/0021/0022 落地后剩余）
 
-- `docs/runbooks/deploy.md`、`docs/runbooks/agent-onboarding.md`：仍描述容器内 Manager +
-  ATR 容器 agent 的旧流程，避免文档超前于代码。
 - `docs/why/vision.md`：定位回写（ADR-0022：产品本体为 Chronicler/supervisor，compose 栈降为可选底座）。
-- 根 `README.md`、`docker-compose.yml`、`manager/` 代码、`scripts/`：未动，supervisor 落地时统一迁移
-  （含 `manager/` → `chronicler/` 更名与仓库名再议）。
-- 上方"已知环境坑"中 WSL 回收条目：ADR-0020 复核发现本机无原生 dockerd（docker 命令为
-  Docker Desktop shim），该条目需实测复核后再修订。
+- 根 `README.md`：仍描述旧“环境+Manager”定位，随仓库更名再议一并改。
+- `manager/` 目录已删除（supervisor v1 落地，ADR-0020/0023）；仓库名 AI-CICD-System 与新定位不符，更名再议。

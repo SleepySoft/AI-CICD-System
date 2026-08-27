@@ -68,7 +68,7 @@ FastAPI + SQLAlchemy 2 + Alembic（异步、自带 OpenAPI）；APScheduler（As
 
 运行拓扑（ADR-0020，推翻 ADR-0019）：Manager 不在 compose 内，而是部署在 **docker 宿主侧的 supervisor 进程**——跟随 dockerd 同环境部署（WSL 原生 dockerd → 部在 WSL；Docker Desktop → 部在 Windows；Linux/macOS → 本机），经本地 Docker API（unix socket / npipe，尊重 `DOCKER_HOST` 与显式配置）控制栈。推荐 Linux/WSL，Windows 可用但不推荐。supervisor 同时吸收引导职责：开机自启（平台原生服务管理器：systemd / launchd / 任务计划）+ 探活 + 异常时执行 `scripts/up.sh` 救栈；不维护任何跨边界会话。
 
-入口与依赖：管理台仍为 `app.localhost`（Caddy 回源宿主进程或 supervisor 直监听宿主端口，落地时定）；Keycloak backchannel 走 `sso.localhost`（`KC_HOSTNAME_BACKCHANNEL_DYNAMIC` 已开）；工具 API 全经 Caddy `*.localhost` 消费，无新开端口。数据仍落 `${DATA_ROOT:-./data}`（NFR-008），supervisor 直读 `.env`。
+入口与依赖：管理台仍为 `app.localhost`——v1 已落地为 Caddy `extra_hosts: host-gateway` 回源 `host.docker.internal:8600`，supervisor 监听宿主 8600（本地账密，不接 Keycloak；ADR-0023）；工具 API 全经 Caddy `*.localhost` 消费，无新开端口。数据仍落 `${DATA_ROOT:-./data}/chronicler`（NFR-008），supervisor 直读 `.env`。
 
 平台选择原则："在哪个环境跑，就用哪个环境的 docker"。Docker Desktop 仅作用户自带许可的可选运行时（NFR-001 注记），免费默认路径为 WSL/原生 dockerd（docker 须 systemd 常驻，`vmIdleTimeout=-1` 作双保险）。
 
@@ -84,3 +84,4 @@ FastAPI + SQLAlchemy 2 + Alembic（异步、自带 OpenAPI）；APScheduler（As
 | 前端 | Vue3（M1-M2 可 Jinja2/htmx 过渡） | ../adr/0010-vue3-frontend.md |
 | 运行拓扑 | docker 宿主侧 supervisor，跟随 dockerd 同环境部署（推翻容器化+引导器） | ../adr/0020-manager-out-of-docker-supervisor.md |
 | Agent 执行位置 | 用户自装 harness，宿主执行；terminal-runtime 降为可选沙箱（部分推翻 ADR-0017） | ../adr/0021-agent-user-installed-harness.md |
+| v1 形态 | SQLite + 本地账密 + 一次性会话（闭环 ADR-0022 悬置的单机瘦身项） | ../adr/0023-supervisor-v1-form.md |

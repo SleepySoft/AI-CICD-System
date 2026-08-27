@@ -1,8 +1,9 @@
-# Manager 规格（数据模型 / API / 任务框架 / 权限 / 页面）
+# Chronicler（supervisor）规格（数据模型 / API / 任务框架 / 权限 / 页面）
 
-> 版本：v1.2 · 日期：2026-08-27 · 状态：生效
-> 定位：Manager 对外可见的契约与规格；内部机制（架构、执行管线、CI 集成）见 ../how/manager-architecture.md
-> 关联需求：FR-MGR-001 ~ FR-MGR-011、FR-TASK-002、FR-TASK-003、BR-008
+> 版本：v1.3 · 日期：2026-08-27 · 状态：生效
+> 定位：Chronicler（原 Manager，宿主侧 supervisor，ADR-0020/0022）对外可见的契约与规格；内部机制（架构、执行管线、CI 集成）见 ../how/manager-architecture.md
+> 关联需求：FR-MGR-001 ~ FR-MGR-021、FR-TASK-002、FR-TASK-003、BR-008
+> v1 实现注记：存储 SQLite（ADR-0023），鉴权本地账密 admin/user（Keycloak 后端预留），agent 为宿主自装 harness（ADR-0021）；仍属规划的能力在文中标注
 
 ## 1. WHY
 
@@ -82,16 +83,16 @@ GET    /api/health                   供 Uptime Kuma
 
 自定义任务：选 repo + agent + prompt + cron 即成新任务（`type=custom`）。
 
-### 2.4 权限规格（FR-MGR-008）
+### 2.4 权限规格（FR-MGR-008、FR-MGR-017）
 
-- 角色映射：Keycloak `groups` claim → `boss`（全部可见 + 审批 + 管理配置）/ `dev`（可见 visibility=dev 的内容）/ `admin`（平台配置）。
-- 双层过滤：API 层按 `report.visibility` 强制过滤（安全边界）+ 前端路由守卫（体验层）。
-- 默认可见性：蒸馏报告、gap 分析、know-how 私库默认 `boss`；日报可选。
-- 审计：查看 boss 级报告、审批、配置变更均落 `audit_log`。
+- v1（ADR-0023）：本地账密，admin（全部 + 配置/触发/用户管理）/ user（只读查看工程/Run/报告）两级；写操作 API 层强制 403。
+- 规划：Keycloak OIDC 作为可插拔后端接入后，角色映射 `groups` claim → `boss`/`dev`；报告 visibility 双层过滤（API 强制 + 前端守卫）。
+- 审计：登录、配置变更、触发、工具启停均落 `audit_log`。
 
 ### 2.5 前端页面清单
 
-`/login` OIDC 跳转 · `/` 项目全景（各代码源活跃度、任务状态、待审/偏离计数，FR-MGR-012） · `/repos` 代码源 · `/agents` Agent 配置 · `/prompts` Prompt 库 · `/tasks` 任务 · `/runs` 运行记录（SSE 日志） · `/reports` 报告中心 · `/assets` 资产库（shadow/全局库浏览、检索、审批上升，FR-MGR-013/014） · `/review` 待审区 · `/settings` 系统设置（含资源能力注册，FR-MGR-015）
+v1 已落地：`/login` 本地账密 · 工程（登记/同步/覆盖项） · 任务（Run 列表/日志/报告/触发） · 配置（harness/components/prompts 只读） · 工具面板 · 用户管理(admin)。
+规划：`/` 项目全景（FR-MGR-012） · `/reports` 报告中心 · `/assets` 资产库（FR-MGR-013/014） · `/review` 待审区 · `/settings` 系统设置（FR-MGR-015）
 
 ### 2.6 里程碑
 

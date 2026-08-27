@@ -10,8 +10,8 @@
 
 ### NFR-002 密钥不落明文、不入库
 - 状态: 生效 | 上层: - | 优先级: P0
-- 描述: 仓库内只提交 `.env.example`；运行时密钥存 Docker secret 或加密列。
-- 验收: 仓库全文检索无真实密钥；Manager 中 `api_key_ref` 指向 secret 或 Fernet 加密列。
+- 描述: 仓库内只提交 `.env.example`；运行时密钥存 Docker secret、supervisor 进程环境变量（`harness.yaml` 的 `${VAR}` 引用，ADR-0021）或加密列。supervisor v1 本地账密后端（ADR-0023）仅限内网/单机使用，暴露公网必须换 OIDC 后端。
+- 验收: 仓库全文检索无真实密钥；注册表/配置中密钥只出现 `${VAR}` 引用名；公网部署走 OIDC。
 
 ### NFR-003 资源占用可控、组件按需启停
 - 状态: 生效 | 上层: UR-001 | 优先级: P0
