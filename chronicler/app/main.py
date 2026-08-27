@@ -12,6 +12,14 @@ app = FastAPI(title="Chronicler", docs_url=None, redoc_url=None)
 
 db.init()
 
+
+@app.on_event("startup")
+def _autostart_boot():
+    """启动钩子：拉起标记自启但已停止的组件（FR-MGR-022）"""
+    from .tools import autostart_boot
+    autostart_boot()
+
+
 for r in (auth.router, oidc.router, users.router, projects.router, runs.router, config.router, tools.router):
     app.include_router(r)
 

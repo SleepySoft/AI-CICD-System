@@ -38,7 +38,7 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
   `${DATA_ROOT:-./data}/<服务>`，禁止命名卷存业务数据；`data/` 已入 .gitignore。
 - 组件全部免费（含商用）：Python 环境用 **Miniforge**（禁用 Anaconda/defaults 通道）。
 - 新增环境服务：改 `docker-compose.yml`（按需挂 profile）+ `caddy/Caddyfile` 子域名 +
-  `chronicler/config/tools.yaml` 注册 + README 更新。
+  `chronicler/config/tools.d/<name>.yaml` 组件插件（FR-MGR-022）+ README 更新。
 - 新增 agent：用户在宿主自装 harness 后，在 `chronicler/config/harness.yaml` 登记一条命令模板
   （ADR-0021；操作流程见 `docs/runbooks/agent-onboarding.md`）。
 - compose 校验：`docker compose config -q`（在 WSL 中执行，项目路径 `/mnt/c/D/code/AI-CICD-System`）。

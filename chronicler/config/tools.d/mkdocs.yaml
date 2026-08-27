@@ -1,0 +1,11 @@
+# 组件插件（FR-MGR-022）：一个文件一个组件，丢进 config/tools.d/ 即注册
+# 用户覆盖：data/chronicler/config/tools.d/ 同名文件覆盖本文件
+name: mkdocs
+group: 知识与文档
+desc: 结构化文档站（knowledge profile）
+url: http://docs.localhost
+container: aisystem-mkdocs-1
+visibility: all
+autostart: false
+critical: false
+driver: docker

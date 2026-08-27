@@ -92,7 +92,7 @@ GET    /api/health                   供 Uptime Kuma
 
 ### 2.5 前端页面清单
 
-v1 已落地：`/login` 本地账密 · 工程（登记/同步/覆盖项） · 任务（Run 列表/日志/报告/触发） · 配置（harness/components/prompts 只读） · 工具面板 · 用户管理(admin)。
+v1 已落地：`/login`（SSO 主入口 + 本地应急） · 首页（组件卡片：状态/启停/自启开关/日志/详情，FR-ENV-003、FR-MGR-022） · 工程（登记/同步/覆盖项） · 任务（Run 列表/日志/报告/触发） · 配置（harness/components/prompts 只读） · 用户管理(admin)。
 规划：`/` 项目全景（FR-MGR-012） · `/reports` 报告中心 · `/assets` 资产库（FR-MGR-013/014） · `/review` 待审区 · `/settings` 系统设置（FR-MGR-015）
 
 ### 2.6 里程碑

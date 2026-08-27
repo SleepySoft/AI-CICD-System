@@ -71,10 +71,16 @@
                 <div class="tool-card">
                   <div class="tool-name">
                     <span class="dot" :class="t.status"></span>{{ t.desc || t.name }}
+                    <el-tag v-if="t.critical" size="small" type="danger" effect="plain">关键</el-tag>
+                    <span v-if="isAdmin && t.driver==='docker'" style="margin-left:auto; font-size:12px; color:#909399">
+                      自启 <el-switch :model-value="t.autostart" size="small" @change="v => toggleAutostart(t, v)" />
+                    </span>
                   </div>
                   <div class="tool-desc">{{ t.name }} · {{ toolStatusText(t) }}</div>
                   <el-button v-if="t.url" size="small" type="primary" plain @click="open(t.url)">打开</el-button>
-                  <template v-if="isAdmin">
+                  <el-button size="small" text @click="openToolLogs(t)">日志</el-button>
+                  <el-button size="small" text @click="openToolDetail(t)">详情</el-button>
+                  <template v-if="isAdmin && t.driver==='docker'">
                     <el-button v-if="t.status==='stopped'" size="small" type="success" plain @click="ctlTool(t,'start')">启动</el-button>
                     <el-button v-if="t.status==='running'" size="small" type="warning" plain @click="ctlTool(t,'stop')">停止</el-button>
                     <el-button v-if="t.status==='running'" size="small" plain @click="ctlTool(t,'restart')">重启</el-button>
@@ -284,6 +290,30 @@
     <!-- 报告 -->
     <el-dialog v-model="showReport" :title="'任务 #' + reportRunId + ' 报告'" width="80%" top="6vh">
       <pre class="log-view">{{ reportText }}</pre>
+    </el-dialog>
+
+    <!-- 组件日志 -->
+    <el-dialog v-model="showToolLog" :title="toolLogName + ' 日志'" width="80%" top="6vh">
+      <template #header><span>{{ toolLogName }} 日志</span>
+        <el-button size="small" style="float:right" @click="refreshToolLogs">刷新</el-button></template>
+      <pre class="log-view">{{ toolLogText || '（暂无日志）' }}</pre>
+    </el-dialog>
+
+    <!-- 组件详情 -->
+    <el-dialog v-model="showToolDetail" :title="(toolDetail?.desc || toolDetail?.name || '') + ' 详情'" width="560px">
+      <el-descriptions v-if="toolDetail" :column="1" border size="small">
+        <el-descriptions-item label="名称">{{ toolDetail.name }}</el-descriptions-item>
+        <el-descriptions-item label="状态">{{ toolStatusText(toolDetail) }}</el-descriptions-item>
+        <el-descriptions-item label="自启">{{ toolDetail.autostart ? '开' : '关' }}</el-descriptions-item>
+        <template v-if="toolDetail.detail">
+          <el-descriptions-item label="镜像">{{ toolDetail.detail.image }}</el-descriptions-item>
+          <el-descriptions-item label="启动时间">{{ toolDetail.detail.started_at }}</el-descriptions-item>
+          <el-descriptions-item label="运行时长">{{ fmtUptime(toolDetail.detail.uptime_sec) }}</el-descriptions-item>
+          <el-descriptions-item label="健康">{{ toolDetail.detail.health || '（无健康检查）' }}</el-descriptions-item>
+          <el-descriptions-item label="重启次数">{{ toolDetail.detail.restart_count }}</el-descriptions-item>
+          <el-descriptions-item label="端口"><span style="font-family:Consolas,monospace; font-size:12px">{{ fmtPorts(toolDetail.detail.ports) }}</span></el-descriptions-item>
+        </template>
+      </el-descriptions>
     </el-dialog>
   </template>
 </div>

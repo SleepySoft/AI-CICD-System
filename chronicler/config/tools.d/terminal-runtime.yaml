@@ -1,0 +1,11 @@
+# 组件插件（FR-MGR-022）：一个文件一个组件，丢进 config/tools.d/ 即注册
+# 用户覆盖：data/chronicler/config/tools.d/ 同名文件覆盖本文件
+name: terminal-runtime
+group: 平台
+desc: ATR 终端运行时（sandbox profile，可选隔离沙箱）
+url: http://term.localhost/ui
+container: aisystem-terminal-runtime-1
+visibility: admin
+autostart: false
+critical: false
+driver: docker

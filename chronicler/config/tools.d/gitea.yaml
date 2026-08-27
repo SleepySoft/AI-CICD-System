@@ -1,0 +1,11 @@
+# 组件插件（FR-MGR-022）：一个文件一个组件，丢进 config/tools.d/ 即注册
+# 用户覆盖：data/chronicler/config/tools.d/ 同名文件覆盖本文件
+name: gitea
+group: 研发
+desc: Git 仓库 / PR / Issue / 包注册表（Keycloak 登录）
+url: http://git.localhost
+container: aisystem-gitea-1
+visibility: all
+autostart: true
+critical: false
+driver: docker

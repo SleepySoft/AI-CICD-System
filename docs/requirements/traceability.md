@@ -48,7 +48,8 @@
 | FR-MGR-018 | 全局组件配置 | what/manager.md §数据模型 | chronicler/config/components.yaml + chronicler/app/registry.py | 人工：改 enabled 后观察 prompt 注入变化 |
 | FR-MGR-019 | Agent harness 登记（命令模板） | what/manager.md §数据模型 | chronicler/config/harness.yaml + chronicler/app/runner.py（ADR-0021） | 人工：登记 harness 后触发 Run |
 | FR-MGR-020 | 工程实体与配置覆盖 | what/manager.md §数据模型 | chronicler/app/projects.py | 人工：建工程+覆盖项触发 Run |
-| FR-MGR-021 | 工程分析策略配置 | what/manager.md §任务类型框架 | supervisor（M3 规划） | 待实现（M3） |
+| FR-MGR-021 | 工程分析策略配置 | what/manager.md §任务类型框架 | chronicler/（M3 规划） | 待实现（M3） |
+| FR-MGR-022 | 组件生命周期管理 | what/manager.md §前端页面 | chronicler/app/tools.py + chronicler/config/tools.d/ | 人工：自启开关重启验证/日志/详情弹窗 |
 | FR-TASK-001 | 任务前端提交 | what/task-mgmt.md §角色分工 | docker-compose.yml(requirements profile) | 人工：建包后 API 检索 |
 | FR-TASK-002 | AI 任务领取 | what/task-mgmt.md §API 契约 | .agents/skills/openproject/（Manager M2 起自动化） | 人工：按 skill 领任务置 in progress |
 | FR-TASK-003 | AI 状态回写 | what/task-mgmt.md §状态机 | .agents/skills/openproject/ + OpenProject workflow 配置 | 人工：回写成功且置 closed 被拒 |

@@ -1,0 +1,11 @@
+# 组件插件（FR-MGR-022）：一个文件一个组件，丢进 config/tools.d/ 即注册
+# 用户覆盖：data/chronicler/config/tools.d/ 同名文件覆盖本文件
+name: jenkins
+group: 研发
+desc: CI/CD 流水线（独立账号）
+url: http://ci.localhost
+container: aisystem-jenkins-1
+visibility: all
+autostart: true
+critical: false
+driver: docker

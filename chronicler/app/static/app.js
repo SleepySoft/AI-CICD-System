@@ -22,6 +22,11 @@ createApp({
     const prompts = ref([]);
     const tools = ref([]);
     const loadingTools = ref(false);
+    const showToolLog = ref(false);
+    const toolLogName = ref("");
+    const toolLogText = ref("");
+    const showToolDetail = ref(false);
+    const toolDetail = ref(null);
     const users = ref([]);
     const newUser = ref({ username: "", password: "", role: "user" });
 
@@ -187,10 +192,54 @@ createApp({
       finally { loadingTools.value = false; }
     }
     async function ctlTool(t, action) {
+      if (t.critical && action !== "start") {
+        try {
+          await ElementPlus.ElMessageBox.confirm(
+            `${t.desc || t.name} 是关键组件，${action === "stop" ? "停止" : "重启"}它可能影响统一认证与系统入口，确认继续？`,
+            "关键组件操作", { type: "warning", confirmButtonText: "确认执行", cancelButtonText: "取消" });
+        } catch (_) { return; }
+      }
       try {
         await api(`/api/tools/${t.name}/${action}`, { method: "POST" });
         toast.ok(`${t.name} ${action} 已执行`); setTimeout(loadTools, 1500);
       } catch (e) { toast.err(e); }
+    }
+    async function toggleAutostart(t, val) {
+      if (t.critical && !val) {
+        try {
+          await ElementPlus.ElMessageBox.confirm(
+            `${t.desc || t.name} 是关键组件，关闭自启后 supervisor 重启时将不再自动拉起它，确认关闭？`,
+            "关闭自启", { type: "warning", confirmButtonText: "确认关闭", cancelButtonText: "取消" });
+        } catch (_) { return; }  // 取消：switch 用 model-value 单向绑定，不落库即回弹
+      }
+      try {
+        await api(`/api/tools/${t.name}/autostart`, { method: "POST", body: JSON.stringify({ enabled: val }) });
+        t.autostart = val;
+        toast.ok(`${t.name} 自启已${val ? "开启" : "关闭"}`);
+      } catch (e) { toast.err(e); }
+    }
+    async function openToolLogs(t) {
+      showToolLog.value = true; toolLogName.value = t.name; toolLogText.value = "加载中...";
+      await refreshToolLogs();
+    }
+    async function refreshToolLogs() {
+      try { toolLogText.value = await api(`/api/tools/${toolLogName.value}/logs?tail=300`); }
+      catch (e) { toolLogText.value = `（获取失败: ${e.message}）`; }
+    }
+    async function openToolDetail(t) {
+      showToolDetail.value = true;
+      try { toolDetail.value = await api(`/api/tools/${t.name}/detail`); }
+      catch (e) { toast.err(e); showToolDetail.value = false; }
+    }
+    function fmtUptime(sec) {
+      if (sec == null) return "-";
+      const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
+      return (d ? d + "天" : "") + (h ? h + "小时" : "") + m + "分钟";
+    }
+    function fmtPorts(ports) {
+      const out = [];
+      for (const [k, v] of Object.entries(ports || {})) if (v) out.push(`${v.map(x => x.HostPort).join(",")}→${k}`);
+      return out.join("  ") || "（无映射）";
     }
     async function loadUsers() {
       try { users.value = await api("/api/users"); } catch (e) { toast.err(e); }
@@ -236,6 +285,8 @@ createApp({
       projects, loadingProjects, runs, loadingRuns, runFilter,
       harnesses, components, componentList, prompts,
       tools, loadingTools, groupedTools, users, newUser,
+      showToolLog, toolLogName, toolLogText, showToolDetail, toolDetail,
+      toggleAutostart, openToolLogs, refreshToolLogs, openToolDetail, fmtUptime, fmtPorts,
       showNewProject, newProject, showOverrides, editProject, overridesText,
       showTrigger, triggerForm, showLog, logRunId, logText, showReport, reportRunId, reportText,
       fmtTime, open, projectName, runStatusText, runTagType, toolStatusText,

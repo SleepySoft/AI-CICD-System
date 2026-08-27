@@ -1,0 +1,11 @@
+# 组件插件（FR-MGR-022）：一个文件一个组件，丢进 config/tools.d/ 即注册
+# 用户覆盖：data/chronicler/config/tools.d/ 同名文件覆盖本文件
+name: uptime-kuma
+group: 管理
+desc: 状态监控（monitor profile）
+url: http://status.localhost
+container: aisystem-uptime-kuma-1
+visibility: admin
+autostart: false
+critical: false
+driver: docker
