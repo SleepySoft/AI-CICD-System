@@ -5,39 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chronicler</title>
   <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
-  <link rel="stylesheet" href="https://unpkg.com/element-plus/theme-chalk/dark/css-vars.css" />
   <style>
-    html { color-scheme: dark; }
-    body { margin: 0; background: #0f1419; font-family: "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }
-    .header { display: flex; align-items: center; justify-content: space-between; padding: 0 20px; height: 56px; background: #141a21; border-bottom: 1px solid #262e38; }
-    .header .title { font-size: 17px; font-weight: 600; color: #e5e9ef; }
+    body { margin: 0; background: #f5f7fa; font-family: "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    .header { display: flex; align-items: center; justify-content: space-between; padding: 0 20px; height: 56px; background: #fff; border-bottom: 1px solid #e4e7ed; }
+    .header .title { font-size: 17px; font-weight: 600; color: #303133; }
     .main { padding: 20px; max-width: 1400px; margin: 0 auto; }
-    .group-title { color: #8b98a9; font-size: 14px; margin: 22px 0 10px; }
-    .tool-card { background: #1a2230; border: 1px solid #2a3546; border-radius: 8px; padding: 14px 16px; height: 100%; box-sizing: border-box; }
-    .tool-name { font-weight: 600; color: #e5e9ef; display: flex; align-items: center; gap: 8px; }
-    .tool-desc { color: #8b98a9; font-size: 12px; margin: 8px 0 12px; min-height: 32px; }
+    .group-title { color: #909399; font-size: 14px; margin: 22px 0 10px; }
+    .tool-card { background: #fff; border: 1px solid #e4e7ed; border-radius: 8px; padding: 14px 16px; height: 100%; box-sizing: border-box; }
+    .tool-name { font-weight: 600; color: #303133; display: flex; align-items: center; gap: 8px; }
+    .tool-desc { color: #909399; font-size: 12px; margin: 8px 0 12px; min-height: 32px; }
     .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-    .dot.running { background: #3fb950; } .dot.stopped { background: #8b98a9; }
-    .dot.absent { background: #d29922; } .dot.unknown { background: #f85149; }
+    .dot.running { background: #67c23a; } .dot.stopped { background: #909399; }
+    .dot.absent { background: #e6a23c; } .dot.unknown { background: #f56c6c; }
     .login-page { display: flex; align-items: center; justify-content: center; height: 100vh; }
-    .card-box { background: #1a2230; border: 1px solid #2a3546; border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
-    .log-view { background: #000; color: #33ff66; font-family: Consolas, "Courier New", monospace; font-size: 12px; line-height: 1.35; padding: 12px; border-radius: 6px; white-space: pre-wrap; word-break: break-all; overflow: auto; height: 60vh; border: 1px solid #2a3546; margin: 0; }
-    .muted { color: #8b98a9; font-size: 12px; }
+    .card-box { background: #fff; border: 1px solid #e4e7ed; border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
+    .log-view { background: #1e1e1e; color: #d4d4d4; font-family: Consolas, "Courier New", monospace; font-size: 12px; line-height: 1.35; padding: 12px; border-radius: 6px; white-space: pre-wrap; word-break: break-all; overflow: auto; height: 60vh; margin: 0; }
+    .muted { color: #909399; font-size: 12px; }
   </style>
 </head>
 <body>
 <div id="app">
   <!-- 未登录 -->
   <div v-if="!user" class="login-page">
-    <el-card style="width: 380px; background:#1a2230; border-color:#2a3546;">
-      <h2 style="color:#e5e9ef; text-align:center; margin-top:0">Chronicler</h2>
+    <el-card style="width: 380px">
+      <h2 style="text-align:center; margin-top:0">Chronicler</h2>
       <p class="muted" style="text-align:center">AI 研发任务编排与执行监督</p>
       <el-form label-position="top" @submit.prevent>
         <el-form-item label="用户名"><el-input v-model="loginForm.username" @keyup.enter="login" /></el-form-item>
         <el-form-item label="密码"><el-input v-model="loginForm.password" type="password" show-password @keyup.enter="login" /></el-form-item>
         <el-button type="primary" style="width:100%" @click="login" :loading="loading">登录</el-button>
       </el-form>
-      <p v-if="loginError" style="color:#f85149; font-size:12px">{{ loginError }}</p>
+      <p v-if="loginError" style="color:#f56c6c; font-size:12px">{{ loginError }}</p>
     </el-card>
   </div>
 
@@ -47,7 +45,7 @@
       <span class="title">📜 Chronicler</span>
       <span>
         <el-tag :type="isAdmin ? 'danger' : 'info'" size="small" effect="plain">{{ user.role }}</el-tag>
-        <span style="color:#e5e9ef; margin: 0 12px 0 8px">{{ user.username }}</span>
+        <span style="margin: 0 12px 0 8px">{{ user.username }}</span>
         <el-button size="small" @click="logout">登出</el-button>
       </span>
     </div>
@@ -270,7 +268,7 @@
 
     <!-- 报告 -->
     <el-dialog v-model="showReport" :title="'任务 #' + reportRunId + ' 报告'" width="80%" top="6vh">
-      <pre class="log-view" style="color:#e5e9ef">{{ reportText }}</pre>
+      <pre class="log-view">{{ reportText }}</pre>
     </el-dialog>
   </template>
 </div>
