@@ -49,9 +49,11 @@
 | ADR-0014 OpenProject 手工导出 | adr/0014-openproject-manual-export.md | adr | 已接受 |
 | ADR-0015 备份策略（一键双模式） | adr/0015-backup-strategy.md | adr | 已接受 |
 | ADR-0016 ATR 改 submodule | adr/0016-atr-as-submodule.md | adr | 已接受 |
-| ADR-0017 Agent 后装与登录持久化 | adr/0017-agent-lifecycle.md | adr | 已接受 |
+| ADR-0017 Agent 后装与登录持久化 | adr/0017-agent-lifecycle.md | adr | 部分被 ADR-0021 推翻 |
 | ADR-0018 Agent 注册表过渡（YAML） | adr/0018-agent-registry-yaml.md | adr | 已接受 |
-| ADR-0019 Manager 运行拓扑（容器化+宿主引导器） | adr/0019-manager-runtime-topology.md | adr | 已接受 |
+| ADR-0019 Manager 运行拓扑（容器化+宿主引导器） | adr/0019-manager-runtime-topology.md | adr | 已被 ADR-0020 推翻 |
+| ADR-0020 Manager 出容器为宿主侧 supervisor | adr/0020-manager-out-of-docker-supervisor.md | adr | 已接受 |
+| ADR-0021 Agent 用户自装 harness 模型 | adr/0021-agent-user-installed-harness.md | adr | 已接受 |
 | 部署与初始化 | runbooks/deploy.md | runbooks | 生效 |
 | 备份与恢复 | runbooks/backup-restore.md | runbooks | 生效 |
 | 接入新 Agent | runbooks/agent-onboarding.md | runbooks | 生效 |
