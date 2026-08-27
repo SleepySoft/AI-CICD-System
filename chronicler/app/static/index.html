@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chronicler</title>
+  <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
+  <link rel="stylesheet" href="https://unpkg.com/element-plus/theme-chalk/dark/css-vars.css" />
+  <style>
+    html { color-scheme: dark; }
+    body { margin: 0; background: #0f1419; font-family: "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    .header { display: flex; align-items: center; justify-content: space-between; padding: 0 20px; height: 56px; background: #141a21; border-bottom: 1px solid #262e38; }
+    .header .title { font-size: 17px; font-weight: 600; color: #e5e9ef; }
+    .main { padding: 20px; max-width: 1400px; margin: 0 auto; }
+    .group-title { color: #8b98a9; font-size: 14px; margin: 22px 0 10px; }
+    .tool-card { background: #1a2230; border: 1px solid #2a3546; border-radius: 8px; padding: 14px 16px; height: 100%; box-sizing: border-box; }
+    .tool-name { font-weight: 600; color: #e5e9ef; display: flex; align-items: center; gap: 8px; }
+    .tool-desc { color: #8b98a9; font-size: 12px; margin: 8px 0 12px; min-height: 32px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot.running { background: #3fb950; } .dot.stopped { background: #8b98a9; }
+    .dot.absent { background: #d29922; } .dot.unknown { background: #f85149; }
+    .login-page { display: flex; align-items: center; justify-content: center; height: 100vh; }
+    .card-box { background: #1a2230; border: 1px solid #2a3546; border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
+    .log-view { background: #000; color: #33ff66; font-family: Consolas, "Courier New", monospace; font-size: 12px; line-height: 1.35; padding: 12px; border-radius: 6px; white-space: pre-wrap; word-break: break-all; overflow: auto; height: 60vh; border: 1px solid #2a3546; margin: 0; }
+    .muted { color: #8b98a9; font-size: 12px; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <!-- 未登录 -->
+  <div v-if="!user" class="login-page">
+    <el-card style="width: 380px; background:#1a2230; border-color:#2a3546;">
+      <h2 style="color:#e5e9ef; text-align:center; margin-top:0">Chronicler</h2>
+      <p class="muted" style="text-align:center">AI 研发任务编排与执行监督</p>
+      <el-form label-position="top" @submit.prevent>
+        <el-form-item label="用户名"><el-input v-model="loginForm.username" @keyup.enter="login" /></el-form-item>
+        <el-form-item label="密码"><el-input v-model="loginForm.password" type="password" show-password @keyup.enter="login" /></el-form-item>
+        <el-button type="primary" style="width:100%" @click="login" :loading="loading">登录</el-button>
+      </el-form>
+      <p v-if="loginError" style="color:#f85149; font-size:12px">{{ loginError }}</p>
+    </el-card>
+  </div>
+
+  <!-- 已登录 -->
+  <template v-else>
+    <div class="header">
+      <span class="title">📜 Chronicler</span>
+      <span>
+        <el-tag :type="isAdmin ? 'danger' : 'info'" size="small" effect="plain">{{ user.role }}</el-tag>
+        <span style="color:#e5e9ef; margin: 0 12px 0 8px">{{ user.username }}</span>
+        <el-button size="small" @click="logout">登出</el-button>
+      </span>
+    </div>
+    <div class="main">
+      <el-tabs v-model="tab" @tab-change="onTabChange">
+        <!-- ============ 工程 ============ -->
+        <el-tab-pane label="工程" name="projects">
+          <div style="margin-bottom: 8px">
+            <el-button size="small" @click="loadProjects" :loading="loadingProjects">刷新</el-button>
+            <el-button v-if="isAdmin" size="small" type="primary" @click="showNewProject = true">新建工程</el-button>
+          </div>
+          <el-table :data="projects" size="small" style="width:100%">
+            <el-table-column prop="name" label="名称" width="160" />
+            <el-table-column prop="git_url" label="Git 地址" show-overflow-tooltip />
+            <el-table-column prop="last_commit" label="最近提交" width="120" show-overflow-tooltip />
+            <el-table-column label="已同步" width="80">
+              <template #default="{ row }">
+                <el-tag :type="row.synced ? 'success' : 'warning'" size="small">{{ row.synced ? '是' : '否' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="创建时间" width="160">
+              <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
+            </el-table-column>
+            <el-table-column v-if="isAdmin" label="操作" width="200">
+              <template #default="{ row }">
+                <el-button size="small" text type="primary" @click="syncProject(row)">同步</el-button>
+                <el-button size="small" text @click="openOverrides(row)">覆盖项</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <p v-if="!projects.length" class="muted">暂无工程</p>
+        </el-tab-pane>
+
+        <!-- ============ 任务 ============ -->
+        <el-tab-pane label="任务" name="runs">
+          <div style="margin-bottom: 8px; display:flex; gap:10px; align-items:center">
+            <el-select v-model="runFilter" placeholder="全部工程" clearable size="small" style="width:200px" @change="loadRuns">
+              <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
+            </el-select>
+            <el-button size="small" @click="loadRuns" :loading="loadingRuns">刷新</el-button>
+            <el-button v-if="isAdmin" size="small" type="primary" @click="openTrigger">触发任务</el-button>
+          </div>
+          <el-table :data="runs" size="small" style="width:100%">
+            <el-table-column prop="id" label="ID" width="70" />
+            <el-table-column label="工程" width="140">
+              <template #default="{ row }">{{ projectName(row.project_id) }}</template>
+            </el-table-column>
+            <el-table-column prop="task_type" label="任务类型" width="140" />
+            <el-table-column label="状态" width="90">
+              <template #default="{ row }">
+                <el-tag :type="runTagType(row.status)" size="small">{{ runStatusText(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="harness" label="Harness" width="110" show-overflow-tooltip />
+            <el-table-column label="开始时间" width="160">
+              <template #default="{ row }">{{ fmtTime(row.started_at) }}</template>
+            </el-table-column>
+            <el-table-column prop="error" label="错误" show-overflow-tooltip />
+            <el-table-column label="操作" width="130">
+              <template #default="{ row }">
+                <el-button size="small" text type="primary" @click="openLog(row)">日志</el-button>
+                <el-button size="small" text @click="openReport(row)">报告</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <p v-if="!runs.length" class="muted">暂无任务</p>
+        </el-tab-pane>
+
+        <!-- ============ 配置 ============ -->
+        <el-tab-pane label="配置" name="config">
+          <div class="group-title">Harness 列表</div>
+          <div class="card-box" v-for="h in harnesses" :key="h.name">
+            <div class="tool-name">{{ h.name }}
+              <el-tag v-if="h.session" size="small" effect="plain">会话</el-tag>
+              <el-tag size="small" type="info" effect="plain">超时 {{ h.timeout_sec }}s</el-tag>
+            </div>
+            <div class="tool-desc">{{ h.desc }}</div>
+            <div class="muted" style="font-family:Consolas,monospace">{{ h.command_template }}</div>
+            <div style="margin-top:6px">
+              <el-tag v-for="k in h.env_keys" :key="k" size="small" type="warning" effect="plain" style="margin-right:6px">{{ k }}</el-tag>
+            </div>
+          </div>
+          <div class="group-title">组件</div>
+          <el-table :data="componentList" size="small" style="width:100%">
+            <el-table-column prop="name" label="名称" width="160" />
+            <el-table-column label="启用" width="80">
+              <template #default="{ row }">
+                <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '停用' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="url" label="地址" width="260" show-overflow-tooltip />
+            <el-table-column prop="note" label="备注" show-overflow-tooltip />
+          </el-table>
+          <div class="group-title">提示词</div>
+          <el-table :data="prompts" size="small" style="width:100%">
+            <el-table-column prop="task_type" label="任务类型" width="200" />
+            <el-table-column prop="version" label="版本" width="120" />
+            <el-table-column label="已被覆盖" width="100">
+              <template #default="{ row }">
+                <el-tag :type="row.overridden ? 'warning' : 'info'" size="small">{{ row.overridden ? '是' : '否' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="size" label="大小(字节)" width="120" />
+          </el-table>
+          <p class="muted" style="margin-top:16px">配置为 YAML 文件，改文件即热生效。</p>
+        </el-tab-pane>
+
+        <!-- ============ 工具 ============ -->
+        <el-tab-pane label="工具" name="tools">
+          <div style="margin-bottom: 8px">
+            <el-button size="small" @click="loadTools" :loading="loadingTools">刷新状态</el-button>
+          </div>
+          <div v-for="(items, group) in groupedTools" :key="group">
+            <div class="group-title">{{ group }}</div>
+            <el-row :gutter="14">
+              <el-col :span="8" v-for="t in items" :key="t.name" style="margin-bottom:14px">
+                <div class="tool-card">
+                  <div class="tool-name">
+                    <span class="dot" :class="t.status"></span>{{ t.desc || t.name }}
+                  </div>
+                  <div class="tool-desc">{{ t.name }} · {{ toolStatusText(t) }}</div>
+                  <el-button v-if="t.url" size="small" type="primary" plain @click="open(t.url)">打开</el-button>
+                  <template v-if="isAdmin">
+                    <el-button v-if="t.status==='stopped'" size="small" type="success" plain @click="ctlTool(t,'start')">启动</el-button>
+                    <el-button v-if="t.status==='running'" size="small" type="warning" plain @click="ctlTool(t,'stop')">停止</el-button>
+                    <el-button v-if="t.status==='running'" size="small" plain @click="ctlTool(t,'restart')">重启</el-button>
+                  </template>
+                </div>
+              </el-col>
+            </el-row>
+          </div>
+          <p v-if="!tools.length" class="muted">暂无工具</p>
+        </el-tab-pane>
+
+        <!-- ============ 用户（admin） ============ -->
+        <el-tab-pane v-if="isAdmin" label="用户" name="users">
+          <div class="card-box" style="max-width:560px">
+            <div class="tool-name" style="margin-bottom:10px">新建用户</div>
+            <el-form inline size="small">
+              <el-form-item><el-input v-model="newUser.username" placeholder="用户名" /></el-form-item>
+              <el-form-item><el-input v-model="newUser.password" type="password" placeholder="密码" /></el-form-item>
+              <el-form-item>
+                <el-select v-model="newUser.role" style="width:110px">
+                  <el-option label="admin" value="admin" /><el-option label="user" value="user" />
+                </el-select>
+              </el-form-item>
+              <el-form-item><el-button type="primary" @click="createUser" :loading="acting">创建</el-button></el-form-item>
+            </el-form>
+          </div>
+          <el-table :data="users" size="small" style="width:100%">
+            <el-table-column prop="id" label="ID" width="70" />
+            <el-table-column prop="username" label="用户名" width="200" />
+            <el-table-column label="角色" width="120">
+              <template #default="{ row }">
+                <el-tag :type="row.role==='admin' ? 'danger' : 'info'" size="small" effect="plain">{{ row.role }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="创建时间" width="180">
+              <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
+            </el-table-column>
+            <el-table-column label="操作">
+              <template #default="{ row }">
+                <el-button size="small" text type="danger" @click="removeUser(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+      </el-tabs>
+    </div>
+
+    <!-- 新建工程 -->
+    <el-dialog v-model="showNewProject" title="新建工程" width="560px">
+      <el-form label-position="top" size="small">
+        <el-form-item label="名称"><el-input v-model="newProject.name" /></el-form-item>
+        <el-form-item label="Git 地址"><el-input v-model="newProject.git_url" /></el-form-item>
+        <el-form-item label="CI 地址"><el-input v-model="newProject.ci_url" /></el-form-item>
+        <el-form-item label="描述"><el-input v-model="newProject.description" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item label="覆盖项（JSON）"><el-input v-model="newProject.overrides" type="textarea" :rows="4" placeholder="{}" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showNewProject = false">取消</el-button>
+        <el-button type="primary" @click="createProject" :loading="acting">创建</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 编辑覆盖项 -->
+    <el-dialog v-model="showOverrides" :title="'覆盖项 - ' + (editProject?.name || '')" width="560px">
+      <el-input v-model="overridesText" type="textarea" :rows="8" placeholder="{}" />
+      <template #footer>
+        <el-button @click="showOverrides = false">取消</el-button>
+        <el-button type="primary" @click="saveOverrides" :loading="acting">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 触发任务 -->
+    <el-dialog v-model="showTrigger" title="触发任务" width="520px">
+      <el-form label-position="top" size="small">
+        <el-form-item label="工程">
+          <el-select v-model="triggerForm.project_id" style="width:100%">
+            <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="任务类型">
+          <el-select v-model="triggerForm.task_type" style="width:100%">
+            <el-option v-for="p in prompts" :key="p.task_type" :label="p.task_type + '（' + p.version + '）'" :value="p.task_type" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="附加提示（可选）"><el-input v-model="triggerForm.extra_prompt" type="textarea" :rows="4" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showTrigger = false">取消</el-button>
+        <el-button type="primary" @click="triggerRun" :loading="acting">触发</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 日志 -->
+    <el-dialog v-model="showLog" :title="'任务 #' + logRunId + ' 日志'" width="80%" top="6vh" @close="stopLogPoll">
+      <pre class="log-view">{{ logText || '（暂无日志）' }}</pre>
+    </el-dialog>
+
+    <!-- 报告 -->
+    <el-dialog v-model="showReport" :title="'任务 #' + reportRunId + ' 报告'" width="80%" top="6vh">
+      <pre class="log-view" style="color:#e5e9ef">{{ reportText }}</pre>
+    </el-dialog>
+  </template>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus/dist/index.full.min.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

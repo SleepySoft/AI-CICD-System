@@ -1,0 +1,31 @@
+# Agent harness 注册表（ADR-0021：用户自装 harness，supervisor 只登记命令模板）
+# 新增一家 agent = 此处一条记录；安装/登录由用户在其宿主自行完成。
+# 字段：
+#   name              唯一标识
+#   command_template  启动命令模板，支持变量：{prompt_file} {report_file} {repo_dir}
+#                     以 shell 执行（cwd = 工程仓库目录）
+#   session           会话能力声明：once（一次性，v1 仅此）| persistent（预留，TBD）
+#   env               注入的环境变量；"${VAR}" 从 supervisor 进程环境解析（密钥不落明文）
+#   timeout_sec       单次执行超时
+harnesses:
+  - name: aider
+    desc: AI pair programming（OpenAI 兼容接口）
+    command_template: "aider --message-file {prompt_file} --yes-always --no-auto-commits"
+    session: once
+    env:
+      OPENAI_API_BASE: https://api.moonshot.cn/v1
+      OPENAI_API_KEY: "${LLM_API_KEY}"
+    timeout_sec: 1800
+  - name: kimi
+    desc: Kimi CLI（按本机实际安装调整命令模板）
+    command_template: "kimi --yolo -p {prompt_file}"
+    session: once
+    env:
+      MOONSHOT_API_KEY: "${LLM_API_KEY}"
+    timeout_sec: 1800
+  - name: shell
+    desc: 冒烟测试用假 harness：不做 AI 调用，把 prompt 原样写成报告
+    command_template: "cat {prompt_file} > {report_file}"
+    session: once
+    env: {}
+    timeout_sec: 60

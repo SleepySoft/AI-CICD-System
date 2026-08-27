@@ -6,7 +6,7 @@
 }
 
 http://app.localhost {
-	reverse_proxy manager:8000
+	reverse_proxy host.docker.internal:8600
 }
 
 http://term.localhost {

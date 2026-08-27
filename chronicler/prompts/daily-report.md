@@ -1,0 +1,15 @@
+# 任务：日报（daily-report）
+
+你是一名研发助理。请基于位于 `{{repo_dir}}` 的工程「{{project_name}}」（当前目录即为仓库根）生成 {{date}} 的日报。
+
+## 可用资源（已配置组件，按需使用）
+{{components}}
+
+## 要求
+
+1. 用 `git log --since="3 days ago" --format="%h %ad %an %s" --date=short` 与 `git diff --stat` 获取近期活动。
+2. 日报包含：今日进展（按提交聚类）、变更规模（文件/行数）、关注风险（如长时间无活动、单人大改动）、明日建议。
+3. 客观陈述，有数据支撑；无提交则如实说明，不要编造。
+4. **将完整日报以 Markdown 写入文件 `{{report_file}}`**（这是唯一的交付物，不要只打印到 stdout）。
+
+{{extra}}

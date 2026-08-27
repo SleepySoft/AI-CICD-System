@@ -1,0 +1,39 @@
+# 工具面板注册表（FR-MGR-001，自 manager/tools.yaml 迁移）
+# name 唯一；container 为 docker 容器名（admin 可启停）；url 为浏览器跳转入口
+tools:
+  - name: portal
+    group: 入口
+    desc: 统一门户导航
+    url: http://portal.localhost
+    container: aisystem-homepage-1
+  - name: gitea
+    group: 研发
+    desc: 代码托管
+    url: http://git.localhost
+    container: aisystem-gitea-1
+    health_url: http://git.localhost/api/v1/version
+  - name: jenkins
+    group: 研发
+    desc: CI 流水线
+    url: http://ci.localhost
+    container: aisystem-jenkins-1
+  - name: keycloak
+    group: 平台
+    desc: 统一认证
+    url: http://sso.localhost
+    container: aisystem-keycloak-1
+    health_url: http://sso.localhost/realms/aisystem/.well-known/openid-configuration
+  - name: terminal-runtime
+    group: 平台
+    desc: ATR 终端运行时（sandbox profile，可选）
+    url: http://term.localhost/ui
+    container: aisystem-terminal-runtime-1
+    health_url: http://term.localhost/health
+  - name: postgres
+    group: 平台
+    desc: 共享数据库
+    container: aisystem-postgres-1
+  - name: redis
+    group: 平台
+    desc: 缓存
+    container: aisystem-redis-1

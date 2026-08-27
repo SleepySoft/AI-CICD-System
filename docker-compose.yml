@@ -42,6 +42,8 @@ services:
       - "${HTTP_PORT:-80}:80"
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # 回源宿主侧 supervisor（ADR-0020）
     environment: *common-env
     networks: [aisystem]
 
@@ -186,9 +188,11 @@ services:
     networks: [aisystem]
 
   # ==========================================================
-  # Manager：管理服务（工具总览 + Agent 终端，无 profile 默认启动）
+  # ATR 终端运行时（sandbox profile：可选隔离沙箱，ADR-0021）
+  # supervisor（Chronicler）已移出 compose，运行于宿主侧（ADR-0020）
   # ==========================================================
   terminal-runtime:
+    profiles: [sandbox]
     build:
       context: .
       dockerfile: images/terminal-runtime/Dockerfile
@@ -202,36 +206,6 @@ services:
       - ./scripts/agents:/opt/agent-install:ro         # 锁版本安装脚本
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS -H \"Authorization: Bearer $${ATR_API_TOKEN}\" http://localhost:18650/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-    networks: [aisystem]
-
-  manager:
-    build: ./manager
-    image: aisystem/manager:latest
-    restart: unless-stopped
-    environment:
-      <<: *common-env
-      MANAGER_PUBLIC_URL: http://app.${BASE_DOMAIN:-localhost}
-      KC_PUBLIC_URL: http://sso.${BASE_DOMAIN:-localhost}
-      KC_INTERNAL_URL: http://keycloak:8080
-      OIDC_MANAGER_SECRET: ${OIDC_MANAGER_SECRET:?}
-      MANAGER_SESSION_SECRET: ${MANAGER_SESSION_SECRET:?}
-      ATR_API_TOKEN: ${ATR_API_TOKEN:?}
-      LLM_API_KEY: ${LLM_API_KEY:-}                    # agents.yaml api_key_ref 的解析来源
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock   # 工具状态/启停
-      - ./manager/tools.yaml:/app/tools.yaml:ro      # 工具注册表热更新
-      - ./manager/agents.yaml:/app/agents.yaml:ro    # agent 注册表热更新（ADR-0018）
-      - ${DATA_ROOT:-./data}/agents:/opt/agents:ro   # 探测 agent 安装状态/版本
-    depends_on:
-      keycloak:
-        condition: service_healthy
-      terminal-runtime:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health')\" || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10

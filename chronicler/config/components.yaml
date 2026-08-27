@@ -1,0 +1,24 @@
+# 全局组件配置（FR-MGR-018）：登记本地启用哪些组件适配器及其参数
+# enabled=false 的组件：不出现在任务 prompt 注入中；依赖它的任务来源自动降级（FR-MGR-016）
+# note 会作为该组件的访问说明注入任务 prompt（FR-MGR-015）
+components:
+  gitea:
+    enabled: true
+    url: http://git.localhost
+    note: 代码托管 API（仓库/提交/issue 查询）
+  jenkins:
+    enabled: true
+    url: http://ci.localhost
+    note: CI 构建结果查询（只读）
+  openproject:
+    enabled: false
+    url: http://req.localhost
+    note: 任务管理（工作包）；未启用时任务来源降级为文本/直接指令
+  qdrant:
+    enabled: false
+    url: http://vectors.localhost
+    note: 语义检索向量库
+  outline:
+    enabled: false
+    url: http://kb.localhost
+    note: 知识库 Wiki

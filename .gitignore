@@ -1,4 +1,4 @@
-# 通用忽略
+# 閫氱敤蹇界暐
 .env
 .env.bak
 __pycache__/
@@ -7,17 +7,17 @@ node_modules/
 .DS_Store
 .idea/
 
-# 服务数据根目录（NFR-008，bind mount 落点，绝不入库）
+# 鏈嶅姟鏁版嵁鏍圭洰褰曪紙NFR-008锛宐ind mount 钀界偣锛岀粷涓嶅叆搴擄級
 /data/
 
-# OpenProject 手工导出默认落点（ADR-0014；需审计时改输出到 git 仓库目录）
-/exports/
+# OpenProject 鎵嬪伐瀵煎嚭榛樿钀界偣锛圓DR-0014锛涢渶瀹¤鏃舵敼杈撳嚭鍒?git 浠撳簱鐩綍锛?/exports/
 
-# 备份落点（ADR-0015）
-/backups/
+# 澶囦唤钀界偣锛圓DR-0015锛?/backups/
 
-# Homepage 容器运行时在挂载目录自动生成的文件
-homepage/config/logs/
+# Homepage 瀹瑰櫒杩愯鏃跺湪鎸傝浇鐩綍鑷姩鐢熸垚鐨勬枃浠?homepage/config/logs/
 homepage/config/settings.yaml
 homepage/config/docker.yaml
 homepage/config/kubernetes.yaml
+
+# Chronicler host-side venv (ADR-0020)
+chronicler/.venv/
