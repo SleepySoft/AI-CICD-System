@@ -1,7 +1,7 @@
 # ADR-0020 Manager 移出 Docker：docker 宿主侧 supervisor（推翻 ADR-0019）
 
 > 日期：2026-08-27 · 状态：已接受
-> 关联：how/manager-architecture.md §2.5（部署形态）；需求 NFR-001、NFR-005、NFR-008、BR-009、FR-MGR-001；ADR-0012、ADR-0017、ADR-0019（被推翻）、ADR-0021（配套）
+> 关联：how/manager-architecture.md §2.5（部署形态）；需求 NFR-001、NFR-006、NFR-008、BR-009、FR-MGR-001；ADR-0012、ADR-0017、ADR-0019（被推翻）、ADR-0021（配套）
 
 ## 背景
 
@@ -29,8 +29,8 @@ ADR-0019 曾决策"Manager 保持容器化 + Windows 极简宿主引导器"。�
 ## 后果
 
 - 正面：agent 获得真实宿主路径（配套 ADR-0021）；调试 = 本地进程（IDE 直跑、断点、热重载，容器调试三件套不再需要）；docker 控制永远走本地 socket，无 2375 暴露面；引导器消失，架构组件数净减一；四平台部署对称。
-- 负面：交付变两段式（compose 栈 VM 镜像 + supervisor 安装器），NFR-005 措辞需修订；compose 不再是全部系统的事实源（栈仍是，supervisor 在外）；密钥/配置由 supervisor 在宿主直读 `.env`，散落面较容器环境变量略增；OIDC 回调与 Caddy `app.localhost` 路由需重接（指向宿主进程或 supervisor 直监听宿主端口）。
+- 负面：交付变两段式（compose 栈 VM 镜像 + supervisor 安装器），NFR-006 措辞需修订；compose 不再是全部系统的事实源（栈仍是，supervisor 在外）；密钥/配置由 supervisor 在宿主直读 `.env`，散落面较容器环境变量略增；OIDC 回调与 Caddy `app.localhost` 路由需重接（指向宿主进程或 supervisor 直监听宿主端口）。
 - 待办：supervisor 安装器与各平台服务注册；Caddy/OIDC 重接；docker compose 移除 manager 服务；M2 起路线图按 supervisor 形态重排。
-- 同步：ADR-0019 状态标注被本篇推翻；how/manager-architecture.md §2.5/§3 改写为现状；what/manager.md、requirements/non-functional.md（NFR-001 许可注记、NFR-005 两段式）、traceability.md、runbooks/deploy.md、docs/README.md 索引。
+- 同步：ADR-0019 状态标注被本篇推翻；how/manager-architecture.md §2.5/§3 改写为现状；what/manager.md、requirements/non-functional.md（NFR-001 许可注记、NFR-006 两段式）、traceability.md、runbooks/deploy.md、docs/README.md 索引。
 
 <!-- 规则：ADR 只增不改。推翻旧决策时新建一篇并在旧篇状态字段标注"已被 ADR-MMMM 推翻"。 -->

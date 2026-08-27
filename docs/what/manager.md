@@ -1,6 +1,6 @@
 # Manager 规格（数据模型 / API / 任务框架 / 权限 / 页面）
 
-> 版本：v1.0 · 日期：2026-08-25 · 状态：生效
+> 版本：v1.1 · 日期：2026-08-27 · 状态：生效
 > 定位：Manager 对外可见的契约与规格；内部机制（架构、执行管线、CI 集成）见 ../how/manager-architecture.md
 > 关联需求：FR-MGR-001 ~ FR-MGR-011、FR-TASK-002、FR-TASK-003、BR-008
 
@@ -15,8 +15,9 @@ Manager 是环境之上的"管理程序"：配置代码源、配置 Agent、编�
 ```
 repo_source        代码源：name, url(任意 git 远端，含 GitHub/Gitea), auth(ssh key/token 引用),
                    default_branch, sync_cron, last_synced_at, last_commit
-agent_profile      Agent 配置：name, cli_type(aider|opencode|kimi|...), model, base_url,
-                   api_key_ref(密钥存加密列或挂载 secret), extra_args, max_runtime_sec
+agent_profile      Agent harness 配置：name, command(可执行命令 + 参数模板，如 --yolo),
+                   session_cap(persistent|oneshot|resume，会话能力声明), model, base_url,
+                   api_key_ref(密钥存加密列或挂载 secret), max_runtime_sec
 prompt_template    Prompt 库：name, scope(system|task), content(支持 {{变量}}), version,
                    builtin(bool), updated_by, updated_at
 task_def           任务定义：name, type(见 §2.3), repo_ids[], agent_id, prompt_id,
@@ -37,8 +38,8 @@ audit_log          审计：actor, action, target, detail, at
 - **prompt_template 版本化**（FR-MGR-011）：任务记录 prompt 版本，Run 可复现。
 - **密钥不落明文**（NFR-002）：`api_key_ref` 指向 Docker secret 或加密列（Fernet，密钥来自 .env）。
 - **CI 上下文入 Run**（FR-MGR-010）：`ci_context` 记录同期 Jenkins 构建号/结果。
-- **Agent 后装与登录持久化**（ADR-0017）：CLI 程序与登录态落 `${DATA_ROOT:-./data}/agents/<name>/`；首次网页/OAuth 登录经 Agent 终端人工完成一次；cc-switch 类转发接入只配 `base_url`。
-- **Agent 注册表过渡形态**（ADR-0018）：当前以 `manager/agents.yaml`（只读挂载热更新）为 agent 清单单一事实源，字段与本表 `agent_profile` 同名，M2 建库后原样迁移；安装脚本在 `scripts/agents/<name>.sh`（锁版本、幂等、写 VERSION 标记）；操作流程见 ../runbooks/agent-onboarding.md。
+- **Agent 用户自装 harness**（ADR-0021，部分推翻 ADR-0017）：CLI 由用户在 supervisor 所在宿主自行安装与登录，supervisor 只登记命令模板（`command` + 参数），不接管安装与版本锁定；会话经 ATR 抽象尽力持久（harness 不支持持久会话则一次性 + resume 续接，语义 TBD）；terminal-runtime 保留为可选隔离沙箱（CI/不可信任务）。endpoint 抽象（`base_url` + key）与登录态复用约定沿用 ADR-0017 未推翻部分。
+- **Agent 注册表过渡形态**（ADR-0018，契约已随 ADR-0021 更新）：当前以 `manager/agents.yaml`（只读挂载热更新）为 agent 清单单一事实源，字段与本表 `agent_profile` 同名，M2 建库后原样迁移；`scripts/agents/<name>.sh` 锁版本安装脚本降级为 terminal-runtime 沙箱专用；操作流程见 ../runbooks/agent-onboarding.md。
 
 ### 2.2 API 概要
 
@@ -47,7 +48,8 @@ POST   /api/auth/callback            OIDC 回调
 GET    /api/me                       当前用户与角色
 CRUD   /api/repos                    + POST /api/repos/{id}/sync
 CRUD   /api/agents                   + POST /api/agents/{id}/test（连通性自检）
-                                   （过渡落地 ADR-0018：GET /api/agents + POST /api/agents/{name}/install 已实现，CRUD/test 待 M2）
+                                   （过渡落地 ADR-0018：GET /api/agents 已实现，CRUD/test 待 M2；
+                                     ADR-0021 后 install 接口废弃——agent 用户自装，不再由 Manager 安装）
 CRUD   /api/prompts                  + GET /api/prompts/{id}/versions
 CRUD   /api/tasks                    + POST /api/tasks/{id}/trigger | /toggle
 GET    /api/runs?task_id=&status=    + GET /api/runs/{id} | /logs(SSE) | /rerun
@@ -88,11 +90,11 @@ GET    /api/health                   供 Uptime Kuma
 | 里程碑 | 内容 | 验收 |
 |--------|------|------|
 | M1 骨架 ✅ | FastAPI + OIDC + 工具总览 + Agent 终端 + 接入 compose | boss/dev 登录看到不同视图 |
-| M2 代码源与执行器 | repo 同步 + agent-runner 镜像 + 手动触发 + SSE 日志 | 跑一次"总结 README"任务看流式日志 |
+| M2 代码源与执行器 | repo 同步 + harness 执行器（宿主直起）+ 手动触发 + SSE 日志 | 跑一次"总结 README"任务看流式日志 |
 | M3 内置任务 | 6 类内置任务 + prompt 库 + 报告中心 | 日报/gap 报告产出，可见性正确 |
 | M4 待审闭环 | review 区 + 卡片转正 + Qdrant 索引 + 文档站更新 | 蒸馏卡片审批后入 know-how/ 并可检索 |
 | M5 CI 综合 | Jenkins 结果接入 + 综合报告 + webhook 触发 | 综合报告含构建结果；push 触发任务 |
-| M6 加固 | Nuitka 打包 + prompt 加密 + 审计 + 限流 | 镜像内无源码与明文 prompt |
+| M6 加固 | supervisor Nuitka 打包 + prompt 加密 + 审计 + 限流 | 二进制内无源码与明文 prompt |
 
 ## 3. HOW
 

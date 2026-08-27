@@ -72,5 +72,13 @@ bash scripts/backup.sh            # 一键备份（恢复见 docs/runbooks/backu
 
 ## 路线图（Manager）
 
-M2 代码源管理 + agent-runner 执行器 → M3 内置任务（code-insight/日报/gap分析/合规/knowhow蒸馏/综合报告）
-→ M4 待审闭环 → M5 CI 综合报告 → M6 Nuitka 保密打包。详见 docs/what/manager.md §里程碑。
+M2 代码源管理 + harness 执行器（宿主直起，ADR-0021）→ M3 内置任务（code-insight/日报/gap分析/合规/knowhow蒸馏/综合报告）
+→ M4 待审闭环 → M5 CI 综合报告 → M6 supervisor Nuitka 保密打包。详见 docs/what/manager.md §里程碑。
+
+## 文档同步债（ADR-0020/0021 已决策，以下刻意暂缓，随 supervisor 实现一并改）
+
+- `docs/runbooks/deploy.md`、`docs/runbooks/agent-onboarding.md`：仍描述容器内 Manager +
+  ATR 容器 agent 的旧流程，避免文档超前于代码。
+- 根 `README.md`、`docker-compose.yml`、`manager/` 代码、`scripts/`：未动，supervisor 落地时统一迁移。
+- 上方"已知环境坑"中 WSL 回收条目：ADR-0020 复核发现本机无原生 dockerd（docker 命令为
+  Docker Desktop shim），该条目需实测复核后再修订。

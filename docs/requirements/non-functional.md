@@ -1,12 +1,12 @@
 # 非功能需求（NFR）
 
-> 版本：v1.0 · 日期：2026-08-25 · 状态：生效
+> 版本：v1.1 · 日期：2026-08-27 · 状态：生效
 > 定位：质量属性与横切约束。`[一票否决]` 项是选型的前置过滤条件，违反即淘汰。
 
 ### NFR-001 [一票否决] 全部组件免费（含商用）
 - 状态: 生效 | 上层: - | 优先级: P0
 - 描述: [一票否决] 环境内所有软件组件须免费且允许商用，授权须为 OSI 许可或官方明确商用免费。
-- 验收: 组件清单逐一核查授权（背景见 `../why/licensing.md`）；已知风险项（Anaconda/defaults 通道）被排除并有替代。
+- 验收: 组件清单逐一核查授权（背景见 `../why/licensing.md`）；已知风险项（Anaconda/defaults 通道）被排除并有替代；Docker Desktop 仅作为用户自带许可的可选 docker 运行时，默认路径（WSL/原生 dockerd）保持免费（决策见 `../adr/0020-manager-out-of-docker-supervisor.md`）。
 
 ### NFR-002 密钥不落明文、不入库
 - 状态: 生效 | 上层: - | 优先级: P0
@@ -30,8 +30,8 @@
 
 ### NFR-006 三种交付形态同源
 - 状态: 生效 | 上层: UR-001 | 优先级: P1
-- 描述: Docker Compose 是唯一事实源；WSL rootfs 与 VM 镜像只是其封装，不单独维护配置。
-- 验收: WSL/VM 镜像构建脚本复用仓库内 compose，无独立配置副本。
+- 描述: Docker Compose 是容器栈的唯一事实源；WSL rootfs 与 VM 镜像只是其封装，不单独维护配置。supervisor（Manager 宿主形态，决策见 `../adr/0020-manager-out-of-docker-supervisor.md`）独立于 compose，作为第二交付件由平台原生服务管理器托管。
+- 验收: WSL/VM 镜像构建脚本复用仓库内 compose，无独立配置副本；supervisor 有独立安装器/服务注册，不侵入 compose 配置。
 
 ### NFR-007 Agent 调用成本可控
 - 状态: 生效 | 上层: BR-002 | 优先级: P2

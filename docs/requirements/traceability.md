@@ -1,6 +1,6 @@
 # 追溯矩阵
 
-> 版本：v1.0 · 日期：2026-08-25 · 状态：生效
+> 版本：v1.1 · 日期：2026-08-27 · 状态：生效
 > 定位：需求 ID ↔ 设计章节 ↔ 实现位置 ↔ 验证手段。Agent 做 gap 分析的输入；改代码必须同步本表。
 
 ## 功能需求（FR）
@@ -29,7 +29,7 @@
 | FR-REQ-002 | 追踪矩阵自动生成 | what/req-mgmt.md | Sphinx-Needs(规划) | 待实现 |
 | FR-REQ-003 | 需求管理界面 | what/req-mgmt.md | docker-compose.yml(requirements profile) | 人工：OpenProject |
 | FR-MGR-001 | 工具总览面板 | what/manager.md §前端页面 | manager/app/ + manager/tools.yaml | scripts/verify-manager.sh |
-| FR-MGR-002 | Agent 终端 | what/manager.md §前端页面 | manager/app/ + terminal-runtime + manager/agents.yaml + scripts/agents/（注册表与安装，ADR-0018） | scripts/verify-manager.sh |
+| FR-MGR-002 | Agent 终端 | what/manager.md §前端页面 | manager/app/ + manager/agents.yaml（harness 注册表，ADR-0018/0021）；terminal-runtime 降为可选沙箱 | scripts/verify-manager.sh |
 | FR-MGR-003 | 代码源管理 | what/manager.md §数据模型 | manager/（M2 规划） | 待实现（M2） |
 | FR-MGR-004 | 任务多方式触发 | what/manager.md §数据模型 | manager/（M2-M3 规划） | 待实现（M3） |
 | FR-MGR-005 | 一切皆 Run | what/manager.md §数据模型 | manager/（M2 规划） | 待实现（M2） |
@@ -49,12 +49,12 @@
 
 | 需求 ID | 标题 | 落实位置 | 验证 |
 |---------|------|---------|------|
-| NFR-001 | 全免费含商用 | why/licensing.md；镜像选型 | 人工：license 清单核查 |
+| NFR-001 | 全免费含商用 | why/licensing.md；镜像选型；Docker Desktop 可选路径注记（ADR-0020） | 人工：license 清单核查 |
 | NFR-002 | 密钥不落明文 | .env.example / .gitignore；manager 加密列 | 仓库检索 + 人工核查 |
 | NFR-003 | 资源可控/按需启停 | docker-compose.yml profiles | `docker compose ps` 按 profile |
 | NFR-004 | 一键部署可验证 | scripts/*.sh + README | scripts/verify.sh |
 | NFR-005 | 构建可复现 | images/*/Dockerfile 版本锁定 | 重建比对 digest |
-| NFR-006 | 三形态同源 | scripts/build-images.sh + 封装脚本 | 人工：封装脚本复用 compose |
+| NFR-006 | 三形态同源 | scripts/build-images.sh + 封装脚本；supervisor 独立交付（ADR-0020，待实现） | 人工：封装脚本复用 compose |
 | NFR-007 | Agent 成本可控 | manager LLM 抽象层 + Ollama profile | 人工：切换本地模型跑任务 |
 | NFR-008 | 数据显式持久化 | docker-compose.yml bind mounts（${DATA_ROOT:-./data}）；scripts/backup.sh + restore.sh（ADR-0015） | `down`+升级+`up` 后数据完整 |
 | NFR-009 | 系统数据 Git 化 | docs/、knowledge/vault/、jenkins/casc.yaml（已落实）；scripts/export-openproject.sh（手工导出，ADR-0014）；manager Git 落盘（M3 起） | 抽查数据可定位 Git 事实源 |

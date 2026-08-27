@@ -1,6 +1,6 @@
 # Manager 架构与执行机制
 
-> 版本：v1.0 · 日期：2026-08-25 · 状态：生效
+> 版本：v1.1 · 日期：2026-08-27 · 状态：生效
 > 定位：Manager 的内部实现机制（架构、执行管线、CI 集成、部署形态）；规格契约见 ../what/manager.md
 > 关联需求：FR-MGR-003 ~ FR-MGR-011
 
@@ -18,11 +18,11 @@ Manager 管"分析与洞察"，消费 CI 结果、不替代 CI（Non-Goal 见 ..
 └──────────────────────────────▲──────────────────────────────────────────────┘
                                │ OIDC 登录 (Keycloak) + REST/SSE
 ┌──────────────────────────────┴──────────────────────────────────────────────┐
-│ Manager 后端 (FastAPI)                                                       │
+│ Manager 后端 (FastAPI) —— docker 宿主侧进程（compose 外，ADR-0020）          │
 │ ├─ API 层        /api/repos /agents /prompts /tasks /runs /reports /review  │
 │ ├─ 调度器        APScheduler（cron 定时 + 手动触发 + Webhook 触发）           │
 │ ├─ 任务框架      TaskType 注册表（内置 6 类 + 自定义）                        │
-│ ├─ 执行器        docker.sock 拉起 agent-runner 容器执行                       │
+│ ├─ 执行器        宿主直起 harness 进程（ADR-0021）；本地 Docker API 控栈      │
 │ ├─ CI/CD 集成    Jenkins REST API 轮询/推送 + Gitea Webhook                  │
 │ └─ 鉴权          Keycloak OIDC；boss/dev 角色 → 报告可见性过滤               │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -30,7 +30,7 @@ Manager 管"分析与洞察"，消费 CI 结果、不替代 CI（Non-Goal 见 ..
 └─────────────────────────────────────────────────────────────────────────────┘
         │ 拉起执行                │ 拉取构建结果          │ 接收 push 事件
         ▼                        ▼                      ▼
-  agent-runner 一次性容器    Jenkins（构建/测试）    Gitea / GitHub（代码源）
+  harness 进程（宿主执行）   Jenkins（构建/测试）    Gitea / GitHub（代码源）
 ```
 
 ### 2.2 技术栈机制
@@ -45,8 +45,9 @@ FastAPI + SQLAlchemy 2 + Alembic（异步、自带 OpenAPI）；APScheduler（As
   → 同步代码：git clone/pull 到缓存卷 repos/<id>/（凭证从 secret 注入，落盘前脱敏）
   → collector 采集上下文（diff/文档/需求/CI 结果），超限自动摘要分片
   → 渲染 prompt（模板变量替换）
-  → docker run aisystem/agent-runner（--rm，CPU/内存限额，网络仅限内网+LLM 出口）
-       env: LLM_API_KEY 等经 --env-file 注入；挂载: 仓库只读 + 输出卷可写
+  → 宿主直起 harness 进程（ADR-0021：命令 + 参数模板来自 agent_profile；
+       LLM_API_KEY 等经环境变量注入；仓库为宿主真实路径，无挂载翻译；
+       不可信/CI 任务可选 terminal-runtime 沙箱执行）
   → 流式回传日志(SSE)；超时/异常 → Run(failed) + 错误归因(网络/配额/解析失败)
   → output_parser 解析（约定产出为 frontmatter+Markdown，或 JSON 指令块）
   → persister：报告→reports/ 卷+元数据入库；知识卡片→ai-inbox/；索引→Qdrant
@@ -65,11 +66,13 @@ FastAPI + SQLAlchemy 2 + Alembic（异步、自带 OpenAPI）；APScheduler（As
 
 ### 2.5 部署形态
 
-Manager 作为 compose 核心服务（无 profile）：挂载 `manager_data`（报告/日志）、`repos_cache`（仓库缓存）、`/var/run/docker.sock`（拉起 agent-runner）。Caddy 加 `app.localhost → manager:8000`。
+运行拓扑（ADR-0020，推翻 ADR-0019）：Manager 不在 compose 内，而是部署在 **docker 宿主侧的 supervisor 进程**——跟随 dockerd 同环境部署（WSL 原生 dockerd → 部在 WSL；Docker Desktop → 部在 Windows；Linux/macOS → 本机），经本地 Docker API（unix socket / npipe，尊重 `DOCKER_HOST` 与显式配置）控制栈。推荐 Linux/WSL，Windows 可用但不推荐。supervisor 同时吸收引导职责：开机自启（平台原生服务管理器：systemd / launchd / 任务计划）+ 探活 + 异常时执行 `scripts/up.sh` 救栈；不维护任何跨边界会话。
 
-运行拓扑（ADR-0019）：Manager **保持容器化**，不整体搬出宿主；宿主侧仅允许一个极简引导器（开机自启 + 栈健康看门狗，异常时执行 `scripts/up.sh` 救栈），不做任何业务管理。M6 Nuitka 二进制化后可重评宿主直跑形态。
+入口与依赖：管理台仍为 `app.localhost`（Caddy 回源宿主进程或 supervisor 直监听宿主端口，落地时定）；Keycloak backchannel 走 `sso.localhost`（`KC_HOSTNAME_BACKCHANNEL_DYNAMIC` 已开）；工具 API 全经 Caddy `*.localhost` 消费，无新开端口。数据仍落 `${DATA_ROOT:-./data}`（NFR-008），supervisor 直读 `.env`。
 
-保密加固（BR-009，M6）：agent-runner 内流程代码 Nuitka 编译为二进制；内置 prompt 构建期加密为资产文件、运行期用 FERNET_KEY 解密（密钥只在 .env/secret，不进镜像层）；Manager 镜像多阶段构建，最终层不含源码。
+平台选择原则："在哪个环境跑，就用哪个环境的 docker"。Docker Desktop 仅作用户自带许可的可选运行时（NFR-001 注记），免费默认路径为 WSL/原生 dockerd（docker 须 systemd 常驻，`vmIdleTimeout=-1` 作双保险）。
+
+保密加固（BR-009，M6）：supervisor 流程代码 Nuitka 编译为独立二进制（即交付形态）；内置 prompt 构建期加密为资产文件、运行期用 FERNET_KEY 解密（密钥只在 .env/secret，不进二进制）。
 
 ## 3. 决策与备选
 
@@ -79,4 +82,5 @@ Manager 作为 compose 核心服务（无 profile）：挂载 `manager_data`（�
 | 调度器 | APScheduler 而非 Celery+Redis | ../adr/0008-apscheduler-over-celery.md |
 | 报告存储 | 文件卷 + DB 元数据 | ../adr/0009-reports-on-file-volume.md |
 | 前端 | Vue3（M1-M2 可 Jinja2/htmx 过渡） | ../adr/0010-vue3-frontend.md |
-| 运行拓扑 | 容器化 + 宿主引导器，不整体搬出 Docker | ../adr/0019-manager-runtime-topology.md |
+| 运行拓扑 | docker 宿主侧 supervisor，跟随 dockerd 同环境部署（推翻容器化+引导器） | ../adr/0020-manager-out-of-docker-supervisor.md |
+| Agent 执行位置 | 用户自装 harness，宿主执行；terminal-runtime 降为可选沙箱（部分推翻 ADR-0017） | ../adr/0021-agent-user-installed-harness.md |
