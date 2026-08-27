@@ -76,8 +76,7 @@ bash scripts/verify-chronicler.sh                        # 冒烟
 M2 代码源管理 + harness 执行器（宿主直起，ADR-0021）→ M3 内置任务（code-insight/日报/gap分析/合规/knowhow蒸馏/综合报告）
 → M4 待审闭环 → M5 CI 综合报告 → M6 supervisor Nuitka 保密打包。详见 docs/what/manager.md §里程碑。
 
-## 文档同步债（ADR-0020/0021/0022 落地后剩余）
+## 文档同步债（剩余）
 
-- `docs/why/vision.md`：定位回写（ADR-0022：产品本体为 Chronicler/supervisor，compose 栈降为可选底座）。
-- 根 `README.md`：仍描述旧“环境+Manager”定位，随仓库更名再议一并改。
-- `manager/` 目录已删除（supervisor v1 落地，ADR-0020/0023）；仓库名 AI-CICD-System 与新定位不符，更名再议。
+- 仓库名 `AI-CICD-System` 与 Chronicler 新定位不符，更名再议（ADR-0022 记录在案）。
+- 文档文件命名仍沿用 manager.md（what/how/functional），随模块更名统一改。
