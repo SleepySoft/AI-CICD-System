@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from ..auth import hash_password, require_admin
 from ..config import Cfg
 from ..db import audit, execute, q, q1
+from .. import kc_admin
 
 router = APIRouter(prefix="/api/users", tags=["users"], dependencies=[Depends(require_admin)])
 
@@ -47,6 +48,25 @@ async def create_user(body: UserBody):
                   (body.username, hash_password(body.password), body.role))
     audit("admin", "user.create", body.username)
     return {"id": uid, "username": body.username, "role": body.role}
+
+
+class ResetPasswordBody(BaseModel):
+    password: str
+    temporary: bool = True   # True=用户下次登录须改密（推荐，管理员不长期持有他人口令）
+
+
+@router.post("/{username}/reset-password")
+async def reset_password(username: str, body: ResetPasswordBody):
+    """管理员经 Keycloak Admin API 重置用户密码（SSO 找回密码的管理员通道）"""
+    if Cfg.AUTH_BACKEND != "oidc":
+        raise HTTPException(status_code=400, detail="仅 OIDC 模式可用；local 模式请删除后重建用户")
+    if len(body.password) < 6:
+        raise HTTPException(status_code=400, detail="密码至少 6 位")
+    if not q1("SELECT id FROM users WHERE username=?", (username,)):
+        raise HTTPException(status_code=404, detail="用户不存在")
+    await kc_admin.reset_password(username, body.password, body.temporary)
+    audit("admin", "user.reset_password", username, f"temporary={body.temporary}")
+    return {"ok": True, "username": username}
 
 
 @router.delete("/{uid}")

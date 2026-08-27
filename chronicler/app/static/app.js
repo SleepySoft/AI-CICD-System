@@ -29,6 +29,9 @@ createApp({
     const toolDetail = ref(null);
     const users = ref([]);
     const newUser = ref({ username: "", password: "", role: "user" });
+    const showResetPw = ref(false);
+    const resetPwUser = ref("");
+    const resetPwForm = ref({ password: "", temporary: true });
 
     const showNewProject = ref(false);
     const newProject = ref({ name: "", git_url: "", ci_url: "", description: "", overrides: "{}" });
@@ -253,6 +256,22 @@ createApp({
       } catch (e) { toast.err(e); }
       finally { acting.value = false; }
     }
+    function openResetPw(u) {
+      resetPwUser.value = u.username;
+      resetPwForm.value = { password: "", temporary: true };
+      showResetPw.value = true;
+    }
+    async function doResetPw() {
+      if (resetPwForm.value.password.length < 6) { toast.err(new Error("密码至少 6 位")); return; }
+      acting.value = true;
+      try {
+        await api(`/api/users/${resetPwUser.value}/reset-password`,
+                  { method: "POST", body: JSON.stringify(resetPwForm.value) });
+        toast.ok(`已重置 ${resetPwUser.value} 的密码`);
+        showResetPw.value = false;
+      } catch (e) { toast.err(e); }
+      finally { acting.value = false; }
+    }
     async function removeUser(u) {
       try {
         await ElementPlus.ElMessageBox.confirm(`确认删除用户 ${u.username}？`, "删除用户", { type: "warning" });
@@ -293,7 +312,7 @@ createApp({
       login, logout, onTabChange,
       loadProjects, createProject, syncProject, openOverrides, saveOverrides,
       loadRuns, openTrigger, triggerRun, openLog, openReport, stopLogPoll,
-      loadTools, ctlTool, createUser, removeUser,
+      loadTools, ctlTool, createUser, removeUser, openResetPw, doResetPw, showResetPw, resetPwUser, resetPwForm,
     };
   },
 }).use(ElementPlus).mount("#app");
