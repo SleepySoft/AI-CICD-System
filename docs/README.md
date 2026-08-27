@@ -51,6 +51,7 @@
 | ADR-0016 ATR 改 submodule | adr/0016-atr-as-submodule.md | adr | 已接受 |
 | ADR-0017 Agent 后装与登录持久化 | adr/0017-agent-lifecycle.md | adr | 已接受 |
 | ADR-0018 Agent 注册表过渡（YAML） | adr/0018-agent-registry-yaml.md | adr | 已接受 |
+| ADR-0019 Manager 运行拓扑（容器化+宿主引导器） | adr/0019-manager-runtime-topology.md | adr | 已接受 |
 | 部署与初始化 | runbooks/deploy.md | runbooks | 生效 |
 | 备份与恢复 | runbooks/backup-restore.md | runbooks | 生效 |
 | 接入新 Agent | runbooks/agent-onboarding.md | runbooks | 生效 |

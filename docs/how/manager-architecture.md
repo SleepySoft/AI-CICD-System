@@ -67,6 +67,8 @@ FastAPI + SQLAlchemy 2 + Alembic（异步、自带 OpenAPI）；APScheduler（As
 
 Manager 作为 compose 核心服务（无 profile）：挂载 `manager_data`（报告/日志）、`repos_cache`（仓库缓存）、`/var/run/docker.sock`（拉起 agent-runner）。Caddy 加 `app.localhost → manager:8000`。
 
+运行拓扑（ADR-0019）：Manager **保持容器化**，不整体搬出宿主；宿主侧仅允许一个极简引导器（开机自启 + 栈健康看门狗，异常时执行 `scripts/up.sh` 救栈），不做任何业务管理。M6 Nuitka 二进制化后可重评宿主直跑形态。
+
 保密加固（BR-009，M6）：agent-runner 内流程代码 Nuitka 编译为二进制；内置 prompt 构建期加密为资产文件、运行期用 FERNET_KEY 解密（密钥只在 .env/secret，不进镜像层）；Manager 镜像多阶段构建，最终层不含源码。
 
 ## 3. 决策与备选
@@ -77,3 +79,4 @@ Manager 作为 compose 核心服务（无 profile）：挂载 `manager_data`（�
 | 调度器 | APScheduler 而非 Celery+Redis | ../adr/0008-apscheduler-over-celery.md |
 | 报告存储 | 文件卷 + DB 元数据 | ../adr/0009-reports-on-file-volume.md |
 | 前端 | Vue3（M1-M2 可 Jinja2/htmx 过渡） | ../adr/0010-vue3-frontend.md |
+| 运行拓扑 | 容器化 + 宿主引导器，不整体搬出 Docker | ../adr/0019-manager-runtime-topology.md |
