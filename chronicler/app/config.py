@@ -18,6 +18,18 @@ class Cfg:
     SESSION_COOKIE = "chronicler_session"
     SESSION_MAX_AGE = 8 * 3600
 
+    # 站点对外地址（OIDC 回调等）
+    PUBLIC_URL = os.environ.get("CHRONICLER_PUBLIC_URL", "http://app.localhost")
+
+    # 鉴权后端（FR-MGR-017）：local（本地账密，默认）| oidc（Keycloak）
+    AUTH_BACKEND = os.environ.get("CHRONICLER_AUTH_BACKEND", "local")
+    KC_PUBLIC = os.environ.get("KC_PUBLIC_URL", "http://sso.localhost")  # 浏览器可达
+    KC_INTERNAL = os.environ.get("KC_INTERNAL_URL", "http://127.0.0.1")  # 宿主回源（经 Caddy）
+    KC_HOST_HEADER = os.environ.get("KC_HOST_HEADER", "sso.localhost")
+    KC_REALM = os.environ.get("KC_REALM", "aisystem")
+    OIDC_CLIENT_ID = os.environ.get("CHRONICLER_OIDC_CLIENT_ID", "chronicler")
+    OIDC_CLIENT_SECRET = os.environ.get("CHRONICLER_OIDC_SECRET", "")
+
     # 注册表（热更新：随包携带的只读配置，用户可在 DATA 下覆盖）
     CONFIG_DIR = Path(os.environ.get("CHRONICLER_CONFIG", PKG_ROOT / "config"))
     PROMPTS_DIR = Path(os.environ.get("CHRONICLER_PROMPTS", PKG_ROOT / "prompts"))

@@ -30,6 +30,10 @@
     <el-card style="width: 380px">
       <h2 style="text-align:center; margin-top:0">Chronicler</h2>
       <p class="muted" style="text-align:center">AI 研发任务编排与执行监督</p>
+      <template v-if="authBackend === 'oidc'">
+        <el-button type="primary" style="width:100%" @click="ssoLogin">经 Keycloak 统一登录</el-button>
+        <el-divider content-position="center"><span class="muted">或使用本地账号</span></el-divider>
+      </template>
       <el-form label-position="top" @submit.prevent>
         <el-form-item label="用户名"><el-input v-model="loginForm.username" @keyup.enter="login" /></el-form-item>
         <el-form-item label="密码"><el-input v-model="loginForm.password" type="password" show-password @keyup.enter="login" /></el-form-item>

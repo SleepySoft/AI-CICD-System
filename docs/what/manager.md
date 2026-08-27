@@ -85,9 +85,9 @@ GET    /api/health                   供 Uptime Kuma
 
 ### 2.4 权限规格（FR-MGR-008、FR-MGR-017）
 
-- v1（ADR-0023）：本地账密，admin（全部 + 配置/触发/用户管理）/ user（只读查看工程/Run/报告）两级；写操作 API 层强制 403。
-- 规划：Keycloak OIDC 作为可插拔后端接入后，角色映射 `groups` claim → `boss`/`dev`；报告 visibility 双层过滤（API 强制 + 前端守卫）。
-- 审计：登录、配置变更、触发、工具启停均落 `audit_log`。
+- 鉴权后端可插拔（ADR-0023）：`local` 本地账密（零依赖默认）/ `oidc` Keycloak（`CHRONICLER_AUTH_BACKEND` 切换，接线见 ../runbooks/deploy.md 与 scripts/wire-chronicler.sh）。
+- 角色：admin（全部 + 配置/触发/用户管理）/ user（只读）；OIDC 模式下 Keycloak groups 映射：boss→admin、其余→user，首次登录自动 provisioning 本地用户记录。
+- 审计：登录（含 OIDC）、配置变更、触发、工具启停均落 `audit_log`。
 
 ### 2.5 前端页面清单
 

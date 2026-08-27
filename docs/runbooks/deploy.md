@@ -45,11 +45,18 @@
    python3 -m venv chronicler/.venv
    chronicler/.venv/bin/pip install -r chronicler/requirements.txt
    ```
-2. 创建管理员 — 本地账密（admin/user 两角色；Keycloak OIDC 为可插拔后端预留，ADR-0023）
+2. 创建管理员 — 本地账密（admin/user 两角色；鉴权后端可插拔，ADR-0023）
    ```bash
    chronicler/.venv/bin/python -m chronicler create-admin
    ```
-3. 启动（二选一） — 监听 8600
+3. （可选）切换统一认证 — 底座含 Keycloak 时，用 OIDC 后端实现一次登录全站通：
+   ```bash
+   # .env 中设 CHRONICLER_AUTH_BACKEND=oidc 与 CHRONICLER_OIDC_SECRET，然后：
+   bash scripts/wire-chronicler.sh   # 在 Keycloak 创建 chronicler 客户端（幂等）
+   ```
+   重启 supervisor 后登录页出现「经 Keycloak 统一登录」；groups 映射 boss→admin、其余→user，
+   首次登录自动建档。Gitea/Outline 与 Chronicler 共享 Keycloak 会话，无需重复登录。
+4. 启动（二选一） — 监听 8600
    ```bash
    chronicler/.venv/bin/python -m chronicler serve   # 前台运行
    bash chronicler/scripts/install-service.sh         # 或注册 systemd 用户服务常驻

@@ -44,7 +44,7 @@
 | FR-MGR-014 | 全局资产库 | what/manager.md §数据模型 | chronicler/（M4 规划） | 待实现（M4） |
 | FR-MGR-015 | 资源能力注入（skill 化） | what/manager.md §契约要点 | chronicler/（M2 规划） | 待实现（M2） |
 | FR-MGR-016 | 任务来源适配与降级 | what/manager.md §任务类型框架 | chronicler/（M3 规划） | 待实现（M3） |
-| FR-MGR-017 | 分角色鉴权与可插拔鉴权后端 | what/manager.md §权限规格 | chronicler/app/auth.py + chronicler/app/routers/users.py（ADR-0020/0023） | scripts/verify-chronicler.sh（401 检查） |
+| FR-MGR-017 | 分角色鉴权与可插拔鉴权后端 | what/manager.md §权限规格 | chronicler/app/auth.py + routers/users.py + routers/oidc.py（local/oidc 双后端，ADR-0023） | scripts/verify-chronicler.sh（401）；scripts/wire-chronicler.sh（oidc 接线） |
 | FR-MGR-018 | 全局组件配置 | what/manager.md §数据模型 | chronicler/config/components.yaml + chronicler/app/registry.py | 人工：改 enabled 后观察 prompt 注入变化 |
 | FR-MGR-019 | Agent harness 登记（命令模板） | what/manager.md §数据模型 | chronicler/config/harness.yaml + chronicler/app/runner.py（ADR-0021） | 人工：登记 harness 后触发 Run |
 | FR-MGR-020 | 工程实体与配置覆盖 | what/manager.md §数据模型 | chronicler/app/projects.py | 人工：建工程+覆盖项触发 Run |

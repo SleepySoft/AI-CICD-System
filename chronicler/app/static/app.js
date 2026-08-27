@@ -8,6 +8,7 @@ createApp({
     const acting = ref(false);
     const loginError = ref("");
     const loginForm = ref({ username: "", password: "" });
+    const authBackend = ref("local");
     const tab = ref("home");
 
     const projects = ref([]);
@@ -75,6 +76,8 @@ createApp({
       return { running: "运行中", stopped: "已停止", absent: "未部署", unknown: "未知" }[t.status] || t.status;
     }
     const toast = { ok: m => ElementPlus.ElMessage.success(m), err: e => ElementPlus.ElMessage.error(e.message) };
+
+    function ssoLogin() { window.location.href = "/api/auth/oidc/login"; }
 
     async function login() {
       if (!loginForm.value.username || !loginForm.value.password) { loginError.value = "请输入用户名和密码"; return; }
@@ -221,13 +224,14 @@ createApp({
     }
 
     onMounted(async () => {
+      try { authBackend.value = (await api("/api/auth/method")).backend; } catch (_) {}
       try { user.value = await api("/api/auth/me"); } catch (_) { user.value = null; }
       if (user.value) loadAll();
     });
     onUnmounted(stopLogPoll);
 
     return {
-      user, loading, acting, loginError, loginForm, tab, isAdmin,
+      user, loading, acting, loginError, loginForm, authBackend, ssoLogin, tab, isAdmin,
       projects, loadingProjects, runs, loadingRuns, runFilter,
       harnesses, components, componentList, prompts,
       tools, loadingTools, groupedTools, users, newUser,

@@ -14,10 +14,16 @@ class LoginBody(BaseModel):
     password: str
 
 
+@router.get("/method")
+async def method():
+    """前端登录页据此决定展示本地表单还是 SSO 按钮"""
+    return {"backend": Cfg.AUTH_BACKEND}
+
+
 @router.post("/login")
 async def login(body: LoginBody, response: Response):
     user = q1("SELECT * FROM users WHERE username=?", (body.username,))
-    if not user or not auth.verify_password(body.password, user["password_hash"]):
+    if not user or not user["password_hash"] or not auth.verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     response.set_cookie(Cfg.SESSION_COOKIE, auth.make_session(user["username"]),
                         max_age=Cfg.SESSION_MAX_AGE, httponly=True, samesite="lax")
