@@ -8,7 +8,7 @@ createApp({
     const acting = ref(false);
     const loginError = ref("");
     const loginForm = ref({ username: "", password: "" });
-    const tab = ref("projects");
+    const tab = ref("home");
 
     const projects = ref([]);
     const loadingProjects = ref(false);
@@ -213,10 +213,10 @@ createApp({
       if (isAdmin.value) loadUsers();
     }
     function onTabChange(name) {
-      if (name === "projects") loadProjects();
+      if (name === "home") loadTools();
+      else if (name === "projects") loadProjects();
       else if (name === "runs") loadRuns();
       else if (name === "config") loadConfig();
-      else if (name === "tools") loadTools();
       else if (name === "users") loadUsers();
     }
 

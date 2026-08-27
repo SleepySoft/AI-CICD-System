@@ -1,3 +1,0 @@
-[2026-08-21T14:58:50.966Z] info: kubernetes.yaml was copied to the config folder
-[2026-08-21T15:04:49.212Z] error: Host validation failed for: portal.localhost. Hint: Set the HOMEPAGE_ALLOWED_HOSTS environment variable to allow requests from this host / port.
-[2026-08-21T15:06:43.466Z] error: Host validation failed for: portal.localhost. Hint: Set the HOMEPAGE_ALLOWED_HOSTS environment variable to allow requests from this host / port.

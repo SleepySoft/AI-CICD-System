@@ -9,7 +9,7 @@
 |---------|------|---------|---------|------|
 | FR-ENV-001 | Compose 统一编排 | what/environment.md §服务清单 | docker-compose.yml | `docker compose config -q` |
 | FR-ENV-002 | 统一域名入口 | what/environment.md §域名契约 | caddy/Caddyfile | scripts/verify.sh |
-| FR-ENV-003 | 统一门户导航 | what/environment.md §服务清单 | homepage/config/ | 人工：门户按组显隐 |
+| FR-ENV-003 | 统一门户导航 | what/environment.md §服务清单 | chronicler 首页（tools.yaml 注册表驱动，Homepage 已退役） | 人工：登录 Chronicler 首页看入口与状态 |
 | FR-ENV-004 | 状态监控 | what/environment.md §服务清单 | docker-compose.yml(monitor profile) | 人工：Uptime Kuma 面板 |
 | FR-ENV-005 | SSO 统一认证 | what/environment.md §SSO 契约 | keycloak/realm/ | scripts/check-kc.sh |
 | FR-CI-001 | push 自动触发流水线 | how/images-toolchain.md | jenkins/ + Gitea webhook | 人工：push 触发一次构建 |

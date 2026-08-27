@@ -173,19 +173,7 @@ services:
       start_period: 90s
     networks: [aisystem]
 
-  # ----------------------------------------------------------
-  # 统一门户：Homepage
-  # ----------------------------------------------------------
-  homepage:
-    image: ghcr.io/gethomepage/homepage:latest
-    restart: unless-stopped
-    environment:
-      <<: *common-env
-      # Homepage v1+ 需要显式声明允许的 Host（防 DNS rebinding）
-      HOMEPAGE_ALLOWED_HOSTS: portal.${BASE_DOMAIN:-localhost},localhost,127.0.0.1
-    volumes:
-      - ./homepage/config:/app/config
-    networks: [aisystem]
+  # （统一门户已集成进 Chronicler 首页，Homepage 服务退役）
 
   # ==========================================================
   # ATR 终端运行时（sandbox profile：可选隔离沙箱，ADR-0021）

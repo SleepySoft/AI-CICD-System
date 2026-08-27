@@ -13,10 +13,6 @@ http://term.localhost {
 	reverse_proxy terminal-runtime:18650
 }
 
-http://portal.localhost {
-	reverse_proxy homepage:3000
-}
-
 http://git.localhost {
 	reverse_proxy gitea:3000
 }

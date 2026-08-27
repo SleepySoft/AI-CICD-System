@@ -1,11 +1,6 @@
 # 工具面板注册表（FR-MGR-001，自 manager/tools.yaml 迁移）
 # name 唯一；container 为 docker 容器名（admin 可启停）；url 为浏览器跳转入口
 tools:
-  - name: portal
-    group: 入口
-    desc: 统一门户导航
-    url: http://portal.localhost
-    container: aisystem-homepage-1
   - name: gitea
     group: 研发
     desc: 代码托管

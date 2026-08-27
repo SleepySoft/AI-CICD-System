@@ -51,6 +51,33 @@
     </div>
     <div class="main">
       <el-tabs v-model="tab" @tab-change="onTabChange">
+        <!-- ============ 首页（统一门户导航，吸收原 homepage 职责） ============ -->
+        <el-tab-pane label="首页" name="home">
+          <div style="margin-bottom: 8px">
+            <el-button size="small" @click="loadTools" :loading="loadingTools">刷新状态</el-button>
+          </div>
+          <div v-for="(items, group) in groupedTools" :key="group">
+            <div class="group-title">{{ group }}</div>
+            <el-row :gutter="14">
+              <el-col :span="8" v-for="t in items" :key="t.name" style="margin-bottom:14px">
+                <div class="tool-card">
+                  <div class="tool-name">
+                    <span class="dot" :class="t.status"></span>{{ t.desc || t.name }}
+                  </div>
+                  <div class="tool-desc">{{ t.name }} · {{ toolStatusText(t) }}</div>
+                  <el-button v-if="t.url" size="small" type="primary" plain @click="open(t.url)">打开</el-button>
+                  <template v-if="isAdmin">
+                    <el-button v-if="t.status==='stopped'" size="small" type="success" plain @click="ctlTool(t,'start')">启动</el-button>
+                    <el-button v-if="t.status==='running'" size="small" type="warning" plain @click="ctlTool(t,'stop')">停止</el-button>
+                    <el-button v-if="t.status==='running'" size="small" plain @click="ctlTool(t,'restart')">重启</el-button>
+                  </template>
+                </div>
+              </el-col>
+            </el-row>
+          </div>
+          <p v-if="!tools.length" class="muted">暂无工具</p>
+        </el-tab-pane>
+
         <!-- ============ 工程 ============ -->
         <el-tab-pane label="工程" name="projects">
           <div style="margin-bottom: 8px">
@@ -151,33 +178,6 @@
             <el-table-column prop="size" label="大小(字节)" width="120" />
           </el-table>
           <p class="muted" style="margin-top:16px">配置为 YAML 文件，改文件即热生效。</p>
-        </el-tab-pane>
-
-        <!-- ============ 工具 ============ -->
-        <el-tab-pane label="工具" name="tools">
-          <div style="margin-bottom: 8px">
-            <el-button size="small" @click="loadTools" :loading="loadingTools">刷新状态</el-button>
-          </div>
-          <div v-for="(items, group) in groupedTools" :key="group">
-            <div class="group-title">{{ group }}</div>
-            <el-row :gutter="14">
-              <el-col :span="8" v-for="t in items" :key="t.name" style="margin-bottom:14px">
-                <div class="tool-card">
-                  <div class="tool-name">
-                    <span class="dot" :class="t.status"></span>{{ t.desc || t.name }}
-                  </div>
-                  <div class="tool-desc">{{ t.name }} · {{ toolStatusText(t) }}</div>
-                  <el-button v-if="t.url" size="small" type="primary" plain @click="open(t.url)">打开</el-button>
-                  <template v-if="isAdmin">
-                    <el-button v-if="t.status==='stopped'" size="small" type="success" plain @click="ctlTool(t,'start')">启动</el-button>
-                    <el-button v-if="t.status==='running'" size="small" type="warning" plain @click="ctlTool(t,'stop')">停止</el-button>
-                    <el-button v-if="t.status==='running'" size="small" plain @click="ctlTool(t,'restart')">重启</el-button>
-                  </template>
-                </div>
-              </el-col>
-            </el-row>
-          </div>
-          <p v-if="!tools.length" class="muted">暂无工具</p>
         </el-tab-pane>
 
         <!-- ============ 用户（admin） ============ -->
