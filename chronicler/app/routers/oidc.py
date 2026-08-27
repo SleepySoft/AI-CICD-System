@@ -43,9 +43,14 @@ async def oidc_login():
 
 
 @router.get("/callback")
-async def oidc_callback(code: str, state: str):
+async def oidc_callback(code: str | None = None, state: str = "",
+                        error: str | None = None, error_description: str | None = None):
     if Cfg.AUTH_BACKEND != "oidc":
         raise HTTPException(status_code=400, detail="未启用 OIDC 后端")
+    if error or not code:
+        # Keycloak 拒绝时回跳 error 参数（如 invalid_scope），友好呈现而非 422
+        raise HTTPException(status_code=401,
+                            detail=f"OIDC 授权失败：{error or '缺少 code'}（{error_description or ''}）")
     try:
         _state.loads(state, max_age=600)
     except BadSignature:
