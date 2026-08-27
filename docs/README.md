@@ -54,6 +54,7 @@
 | ADR-0019 Manager 运行拓扑（容器化+宿主引导器） | adr/0019-manager-runtime-topology.md | adr | 已被 ADR-0020 推翻 |
 | ADR-0020 Manager 出容器为宿主侧 supervisor | adr/0020-manager-out-of-docker-supervisor.md | adr | 已接受 |
 | ADR-0021 Agent 用户自装 harness 模型 | adr/0021-agent-user-installed-harness.md | adr | 已接受 |
+| ADR-0022 产品定位与命名 Chronicler | adr/0022-product-positioning-chronicler.md | adr | 已接受 |
 | 部署与初始化 | runbooks/deploy.md | runbooks | 生效 |
 | 备份与恢复 | runbooks/backup-restore.md | runbooks | 生效 |
 | 接入新 Agent | runbooks/agent-onboarding.md | runbooks | 生效 |
