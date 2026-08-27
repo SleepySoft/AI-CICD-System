@@ -44,7 +44,7 @@ FastAPI + SQLAlchemy 2 + Alembic（异步、自带 OpenAPI）；APScheduler（As
   → 创建 Run(queued)，冻结输入快照(commit range、prompt 版本、CI 上下文)
   → 同步代码：git clone/pull 到缓存卷 repos/<id>/（凭证从 secret 注入，落盘前脱敏）
   → collector 采集上下文（diff/文档/需求/CI 结果），超限自动摘要分片
-  → 渲染 prompt（模板变量替换）
+  → 渲染 prompt（模板变量替换 + 已配置资源能力(skill)的访问途径注入，FR-MGR-015）
   → 宿主直起 harness 进程（ADR-0021：命令 + 参数模板来自 agent_profile；
        LLM_API_KEY 等经环境变量注入；仓库为宿主真实路径，无挂载翻译；
        不可信/CI 任务可选 terminal-runtime 沙箱执行）

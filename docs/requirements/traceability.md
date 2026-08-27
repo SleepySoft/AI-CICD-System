@@ -1,6 +1,6 @@
 # 追溯矩阵
 
-> 版本：v1.1 · 日期：2026-08-27 · 状态：生效
+> 版本：v1.2 · 日期：2026-08-27 · 状态：生效
 > 定位：需求 ID ↔ 设计章节 ↔ 实现位置 ↔ 验证手段。Agent 做 gap 分析的输入；改代码必须同步本表。
 
 ## 功能需求（FR）
@@ -39,6 +39,11 @@
 | FR-MGR-009 | 待审闭环 | what/manager.md §数据模型 | manager/（M4 规划） | 待实现（M4） |
 | FR-MGR-010 | CI 结果消费 | what/manager.md §数据模型 | manager/（M5 规划） | 待实现（M5） |
 | FR-MGR-011 | Prompt 库版本化 | what/manager.md §数据模型 | manager/（M3 规划） | 待实现（M3） |
+| FR-MGR-012 | 项目全景仪表盘 | what/manager.md §前端页面 | manager/（M3 规划） | 待实现（M3） |
+| FR-MGR-013 | 项目影子库 | what/manager.md §数据模型 | manager/（M4 规划） | 待实现（M4） |
+| FR-MGR-014 | 全局资产库 | what/manager.md §数据模型 | manager/（M4 规划） | 待实现（M4） |
+| FR-MGR-015 | 资源能力注入（skill 化） | what/manager.md §契约要点 | manager/（M2 规划） | 待实现（M2） |
+| FR-MGR-016 | 任务来源适配与降级 | what/manager.md §任务类型框架 | manager/（M3 规划） | 待实现（M3） |
 | FR-TASK-001 | 任务前端提交 | what/task-mgmt.md §角色分工 | docker-compose.yml(requirements profile) | 人工：建包后 API 检索 |
 | FR-TASK-002 | AI 任务领取 | what/task-mgmt.md §API 契约 | .agents/skills/openproject/（Manager M2 起自动化） | 人工：按 skill 领任务置 in progress |
 | FR-TASK-003 | AI 状态回写 | what/task-mgmt.md §状态机 | .agents/skills/openproject/ + OpenProject workflow 配置 | 人工：回写成功且置 closed 被拒 |
