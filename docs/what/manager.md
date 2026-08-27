@@ -87,6 +87,7 @@ GET    /api/health                   供 Uptime Kuma
 
 - 鉴权后端可插拔（ADR-0023）：`local` 本地账密（零依赖默认）/ `oidc` Keycloak（`CHRONICLER_AUTH_BACKEND` 切换，接线见 ../runbooks/deploy.md 与 scripts/wire-chronicler.sh）。
 - 角色：admin（全部 + 配置/触发/用户管理）/ user（只读）；OIDC 模式下 Keycloak groups 映射：boss→admin、其余→user，首次登录自动 provisioning 本地用户记录。
+- 账号事实源唯一：OIDC 模式下本地密码登录仅 admin 应急可用（登录页入口收起于「本地应急账号登录」链接），本地表为 OIDC 首次登录的影子记录、只读；local 模式下本地账号全功能。
 - 审计：登录（含 OIDC）、配置变更、触发、工具启停均落 `audit_log`。
 
 ### 2.5 前端页面清单

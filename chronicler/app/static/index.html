@@ -32,9 +32,13 @@
       <p class="muted" style="text-align:center">AI 研发任务编排与执行监督</p>
       <template v-if="authBackend === 'oidc'">
         <el-button type="primary" style="width:100%" @click="ssoLogin">经 Keycloak 统一登录</el-button>
-        <el-divider content-position="center"><span class="muted">或使用本地账号</span></el-divider>
+        <div style="text-align:center; margin-top:12px">
+          <el-link type="info" size="small" @click="showLocalLogin = !showLocalLogin">
+            {{ showLocalLogin ? '收起' : '本地应急账号登录' }}
+          </el-link>
+        </div>
       </template>
-      <el-form label-position="top" @submit.prevent>
+      <el-form v-if="authBackend !== 'oidc' || showLocalLogin" label-position="top" @submit.prevent style="margin-top:8px">
         <el-form-item label="用户名"><el-input v-model="loginForm.username" @keyup.enter="login" /></el-form-item>
         <el-form-item label="密码"><el-input v-model="loginForm.password" type="password" show-password @keyup.enter="login" /></el-form-item>
         <el-button type="primary" style="width:100%" @click="login" :loading="loading">登录</el-button>

@@ -9,6 +9,7 @@ createApp({
     const loginError = ref("");
     const loginForm = ref({ username: "", password: "" });
     const authBackend = ref("local");
+    const showLocalLogin = ref(false);
     const tab = ref("home");
 
     const projects = ref([]);
@@ -231,7 +232,7 @@ createApp({
     onUnmounted(stopLogPoll);
 
     return {
-      user, loading, acting, loginError, loginForm, authBackend, ssoLogin, tab, isAdmin,
+      user, loading, acting, loginError, loginForm, authBackend, ssoLogin, showLocalLogin, tab, isAdmin,
       projects, loadingProjects, runs, loadingRuns, runFilter,
       harnesses, components, componentList, prompts,
       tools, loadingTools, groupedTools, users, newUser,

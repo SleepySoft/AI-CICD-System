@@ -25,6 +25,9 @@ async def login(body: LoginBody, response: Response):
     user = q1("SELECT * FROM users WHERE username=?", (body.username,))
     if not user or not user["password_hash"] or not auth.verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
+    if Cfg.AUTH_BACKEND == "oidc" and user["role"] != "admin":
+        # 账号事实源唯一：OIDC 模式下本地密码仅 admin 应急可用
+        raise HTTPException(status_code=401, detail="请使用 Keycloak 统一登录（本地密码仅 admin 应急可用）")
     response.set_cookie(Cfg.SESSION_COOKIE, auth.make_session(user["username"]),
                         max_age=Cfg.SESSION_MAX_AGE, httponly=True, samesite="lax")
     audit(user["username"], "login")
