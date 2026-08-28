@@ -61,7 +61,7 @@ bash scripts/verify-chronicler.sh    # WSL；Windows 用浏览器访问 http://1
 
 | 目标 | 方法 |
 |------|------|
-| 断点调试 | supervisor 是普通本地进程（ADR-0020 的红利）：VS Code/PyCharm 直接 debug `chronicler/__main__.py`，或 `python -m debugpy --listen 5678 -m chronicler serve` |
+| 断点调试 | supervisor 是普通本地进程（ADR-0020 的红利）：PyCharm/VS Code 直接调试 `chronicler/__main__.py`（已内置包上下文垫片，脚本模式也能跑）；更规范的做法是运行配置选 **Module name: `chronicler`**（等价 `python -m chronicler`） |
 | 热重载 | `uvicorn chronicler.app.main:app --reload --port 8600`（改 Python 即重启） |
 | 前端 | 改 `chronicler/app/static/*` 后**刷新浏览器即可**，无需重启 |
 | 配置 | `chronicler/config/*.yaml` 与 `tools.d/*.yaml` 改文件即热生效；`data/chronicler/config/` 同名文件覆盖内置 |
