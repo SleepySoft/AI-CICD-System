@@ -56,6 +56,7 @@
 | ADR-0021 Agent 用户自装 harness 模型 | adr/0021-agent-user-installed-harness.md | adr | 已接受 |
 | ADR-0022 产品定位与命名 Chronicler | adr/0022-product-positioning-chronicler.md | adr | 已接受 |
 | ADR-0023 supervisor v1 形态（SQLite+本地账密） | adr/0023-supervisor-v1-form.md | adr | 已接受 |
+| ADR-0024 组件即 SKILL（渐进披露注入） | adr/0024-component-as-skill.md | adr | 已接受 |
 | 部署与初始化 | runbooks/deploy.md | runbooks | 生效 |
 | 备份与恢复 | runbooks/backup-restore.md | runbooks | 生效 |
 | 接入新 Agent | runbooks/agent-onboarding.md | runbooks | 生效 |
