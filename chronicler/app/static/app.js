@@ -27,6 +27,11 @@ createApp({
     const toolLogText = ref("");
     const showToolDetail = ref(false);
     const toolDetail = ref(null);
+    const showDeploy = ref(false);
+    const deployName = ref("");
+    const deployState = ref("idle");
+    const deployLines = ref([]);
+    let deployTimer = null;
     const users = ref([]);
     const newUser = ref({ username: "", password: "", role: "user" });
     const showResetPw = ref(false);
@@ -195,6 +200,7 @@ createApp({
       finally { loadingTools.value = false; }
     }
     async function ctlTool(t, action) {
+      if (action === "deploy") { openDeploy(t); return; }
       if (t.critical && action !== "start") {
         try {
           await ElementPlus.ElMessageBox.confirm(
@@ -235,6 +241,23 @@ createApp({
       try { toolDetail.value = await api(`/api/tools/${t.name}/detail`); }
       catch (e) { toast.err(e); showToolDetail.value = false; }
     }
+    async function openDeploy(t) {
+      showDeploy.value = true; deployName.value = t.name;
+      deployState.value = "running"; deployLines.value = [];
+      try { await api(`/api/tools/${t.name}/deploy`, { method: "POST" }); }
+      catch (e) { toast.err(e); }
+      pollDeploy();
+    }
+    async function pollDeploy() {
+      if (!showDeploy.value) return;
+      try {
+        const r = await api(`/api/tools/${deployName.value}/deploy-log`);
+        deployState.value = r.state; deployLines.value = r.lines;
+        if (r.state === "running") deployTimer = setTimeout(pollDeploy, 1500);
+        else { loadTools(); if (r.state === "done") toast.ok(`${deployName.value} 部署完成`); }
+      } catch (e) { /* 轮询失败下轮再试 */ deployTimer = setTimeout(pollDeploy, 3000); }
+    }
+    function closeDeploy() { showDeploy.value = false; if (deployTimer) clearTimeout(deployTimer); loadTools(); }
     function fmtUptime(sec) {
       if (sec == null) return "-";
       const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
@@ -306,6 +329,7 @@ createApp({
       harnesses, components, componentList, prompts,
       tools, loadingTools, groupedTools, users, newUser,
       showToolLog, toolLogName, toolLogText, showToolDetail, toolDetail,
+      showDeploy, deployName, deployState, deployLines, openDeploy, closeDeploy,
       toggleAutostart, openToolLogs, refreshToolLogs, openToolDetail, fmtUptime, fmtPorts,
       showNewProject, newProject, showOverrides, editProject, overridesText,
       showTrigger, triggerForm, showLog, logRunId, logText, showReport, reportRunId, reportText,

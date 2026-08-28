@@ -38,6 +38,13 @@ async def logs(name: str, tail: int = 300, user: dict = Depends(current_user)):
     return tools.tool_logs(name, tail)
 
 
+@router.get("/{name}/deploy-log")
+async def deploy_log(name: str, user: dict = Depends(current_user)):
+    """部署实时进度（state: idle|running|done|error + 最近 200 行输出）"""
+    tools.get_tool(name)
+    return tools.deploy_status(name)
+
+
 @router.get("/{name}/detail")
 async def detail(name: str, user: dict = Depends(current_user)):
     return tools.tool_detail(name)

@@ -5,6 +5,7 @@ data/chronicler/config/tools.d/*.yaml 为用户目录（同名覆盖内置）。
 自启开关持久化在 data/chronicler/config/autostart.yaml（运行时覆盖层）。
 docker 控制走本地 socket（ADR-0020：supervisor 与 dockerd 同环境）。
 """
+import threading
 import time
 
 import docker
@@ -171,11 +172,8 @@ def _get_container(tool: dict):
 def control_tool(name: str, action: str) -> dict:
     tool = get_tool(name)
     if action == "deploy":
-        # 部署未创建的组件：ensure_running 内部经 docker compose up -d 现场创建
-        result = ensure_running(tool)
-        if result == "error":
-            raise HTTPException(status_code=502, detail="部署失败，详见 supervisor 日志/审计")
-        return {"ok": True, "name": name, "action": action, "via": result}
+        start_deploy(tool)  # 异步：前端轮询 deploy-log 看实时进度
+        return {"ok": True, "name": name, "action": action, "via": "async"}
     c = _get_container(tool)
     if action == "start":
         c.start()
@@ -186,6 +184,61 @@ def control_tool(name: str, action: str) -> dict:
     else:
         raise HTTPException(status_code=400, detail="不支持的操作")
     return {"ok": True, "name": name, "action": action}
+
+
+# ---------- 异步部署（实时进度） ----------
+
+_deploy_tasks: dict = {}
+_deploy_lock = threading.Lock()
+
+
+def start_deploy(tool: dict):
+    """后台线程执行 compose up -d，输出行实时收集供前端轮询"""
+    name = tool["name"]
+    with _deploy_lock:
+        task = _deploy_tasks.get(name)
+        if task and task["state"] == "running":
+            raise HTTPException(status_code=409, detail="该组件正在部署中")
+        _deploy_tasks[name] = {"state": "running", "lines": []}
+    threading.Thread(target=_deploy_worker, args=(tool,), daemon=True).start()
+
+
+def _deploy_worker(tool: dict):
+    import subprocess as sp
+    name = tool["name"]
+    task = _deploy_tasks[name]
+
+    def emit(line: str):
+        task["lines"].append(line)
+        del task["lines"][:-200]  # 只保留最近 200 行
+
+    service = tool.get("compose_service") or name
+    emit(f"$ docker compose up -d {service}")
+    try:
+        proc = sp.Popen(["docker", "compose", "up", "-d", service],
+                        cwd=str(PKG_ROOT.parent), stdout=sp.PIPE, stderr=sp.STDOUT,
+                        encoding="utf-8", errors="replace")
+        for line in proc.stdout:
+            emit(line.rstrip())
+        proc.wait(timeout=900)
+        if proc.returncode == 0:
+            emit("✔ 部署完成")
+            task["state"] = "done"
+            from .db import audit
+            audit("supervisor", "tool.deploy", name)
+        else:
+            emit(f"✘ 部署失败（exit {proc.returncode}）")
+            task["state"] = "error"
+    except Exception as e:  # noqa: BLE001 - 部署线程兜底
+        emit(f"✘ {type(e).__name__}: {e}")
+        task["state"] = "error"
+
+
+def deploy_status(name: str) -> dict:
+    task = _deploy_tasks.get(name)
+    if not task:
+        return {"state": "idle", "lines": []}
+    return {"state": task["state"], "lines": task["lines"]}
 
 
 def tool_logs(name: str, tail: int = 300) -> str:

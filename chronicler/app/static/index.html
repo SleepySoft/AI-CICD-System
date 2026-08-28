@@ -308,6 +308,18 @@
       </template>
     </el-dialog>
 
+    <!-- 组件部署（实时进度） -->
+    <el-dialog v-model="showDeploy" :title="'部署 ' + deployName" width="70%" top="8vh" @close="closeDeploy">
+      <template #header>
+        <span>部署 {{ deployName }}</span>
+        <el-tag :type="deployState === 'running' ? 'primary' : (deployState === 'done' ? 'success' : 'danger')"
+                size="small" style="margin-left:10px">
+          {{ { running: '部署中', done: '完成', error: '失败', idle: '空闲' }[deployState] }}
+        </el-tag>
+      </template>
+      <pre class="log-view">{{ deployLines.join('\n') || '启动中…' }}</pre>
+    </el-dialog>
+
     <!-- 组件日志 -->
     <el-dialog v-model="showToolLog" :title="toolLogName + ' 日志'" width="80%" top="6vh">
       <template #header><span>{{ toolLogName }} 日志</span>
