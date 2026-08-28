@@ -65,12 +65,10 @@ def sync_project(pid: int) -> dict:
     dest = repo_dir(pid)
     try:
         if dest.is_dir():
-            r = subprocess.run(["git", "-C", str(dest), "fetch", "--all", "--prune"],
-                               capture_output=True, text=True, timeout=300)
+            r = _git(["-C", str(dest), "fetch", "--all", "--prune"], timeout=300)
         else:
             dest.parent.mkdir(parents=True, exist_ok=True)
-            r = subprocess.run(["git", "clone", p["git_url"], str(dest)],
-                               capture_output=True, text=True, timeout=600)
+            r = _git(["clone", p["git_url"], str(dest)], timeout=600)
         if r.returncode != 0:
             raise HTTPException(status_code=502, detail=f"git 同步失败：{r.stderr.strip()[:500]}")
     except subprocess.TimeoutExpired:
@@ -78,19 +76,23 @@ def sync_project(pid: int) -> dict:
     return {"ok": True, "last_commit": _last_commit(pid)}
 
 
+def _git(args: list[str], timeout: int = 120) -> subprocess.CompletedProcess:
+    """统一 git 调用：显式 UTF-8 解码（Windows 默认 GBK 遇到 UTF-8 提交信息会炸）"""
+    return subprocess.run(["git", *args], capture_output=True,
+                          encoding="utf-8", errors="replace", timeout=timeout)
+
+
 def _last_commit(pid: int) -> str | None:
-    r = subprocess.run(["git", "-C", str(repo_dir(pid)), "log", "-1", "--format=%h %s"],
-                       capture_output=True, text=True)
+    r = _git(["-C", str(repo_dir(pid)), "log", "-1", "--format=%h %s"])
     return r.stdout.strip() if r.returncode == 0 else None
 
 
 def head_commit(pid: int) -> str:
-    r = subprocess.run(["git", "-C", str(repo_dir(pid)), "rev-parse", "HEAD"],
-                       capture_output=True, text=True)
+    r = _git(["-C", str(repo_dir(pid)), "rev-parse", "HEAD"])
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
 def recent_log(pid: int, n: int = 30) -> str:
-    r = subprocess.run(["git", "-C", str(repo_dir(pid)), "log", f"-{n}", "--format=%h %ad %an %s",
-                        "--date=short"], capture_output=True, text=True)
+    r = _git(["-C", str(repo_dir(pid)), "log", f"-{n}", "--format=%h %ad %an %s",
+              "--date=short"])
     return r.stdout.strip()
