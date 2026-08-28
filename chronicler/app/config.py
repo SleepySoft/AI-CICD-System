@@ -1,8 +1,26 @@
-"""全局配置：全部来自环境变量（ADR-0020：supervisor 运行于 docker 宿主侧）"""
+"""全局配置：进程环境变量优先，缺省回落仓库根 .env（ADR-0020：supervisor 运行于 docker 宿主侧）
+
+IDE 调试/直接运行时无需手动 source .env——本模块导入时自动加载（不覆盖已有环境变量）。
+"""
 import os
 from pathlib import Path
 
 PKG_ROOT = Path(__file__).resolve().parent.parent  # chronicler/
+
+
+def _load_dotenv():
+    env_file = PKG_ROOT.parent / ".env"
+    if not env_file.is_file():
+        return
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        os.environ.setdefault(k.strip(), v.strip())  # 已有环境变量优先
+
+
+_load_dotenv()
 
 
 class Cfg:
