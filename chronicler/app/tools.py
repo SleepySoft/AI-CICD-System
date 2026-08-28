@@ -11,7 +11,7 @@ import docker
 import yaml
 from fastapi import HTTPException
 
-from .config import Cfg
+from .config import PKG_ROOT, Cfg
 
 _docker = None
 
@@ -58,7 +58,7 @@ def get_tool(name: str) -> dict:
     return tool
 
 
-# ---------- 自启开关 ----------
+# ---------- 自启开关与启动拉起 ----------
 
 def _autostart_path():
     p = Cfg.DATA / "config" / "autostart.yaml"
@@ -83,21 +83,45 @@ def set_autostart(name: str, enabled: bool) -> dict:
     return {"ok": True, "name": name, "autostart": bool(enabled), "critical": tool["critical"]}
 
 
-def autostart_boot():
-    """supervisor 启动钩子：拉起标记自启但已停止的 docker 组件（FR-MGR-022）"""
+def ensure_running(tool: dict) -> str:
+    """确保组件运行：running→跳过；stopped→docker start；absent→compose up -d 现场创建
+    返回动作：skip/start/compose-up/error"""
+    import subprocess
     from .db import audit
-    for t in load_tools():
-        if not (t["autostart"] and t["driver"] == "docker" and t.get("container")):
-            continue
+    name, container = tool["name"], tool.get("container")
+    if tool["driver"] != "docker" or not container:
+        return "skip"
+    try:
+        c = _client().containers.get(container)
+        if c.status == "running":
+            return "skip"
+        c.start()
+        audit("supervisor", "tool.autostart", name)
+        return "start"
+    except docker.errors.NotFound:
+        service = tool.get("compose_service") or name
         try:
-            c = _client().containers.get(t["container"])
-            if c.status != "running":
-                c.start()
-                audit("supervisor", "tool.autostart", t["name"])
-        except docker.errors.NotFound:
-            continue  # 未部署（profile 未启用）跳过
-        except docker.errors.DockerException as e:
-            audit("supervisor", "tool.autostart_failed", t["name"], str(e)[:200])
+            r = subprocess.run(["docker", "compose", "up", "-d", service],
+                               cwd=str(PKG_ROOT.parent), capture_output=True,
+                               encoding="utf-8", errors="replace", timeout=600)
+            if r.returncode == 0:
+                audit("supervisor", "tool.autostart_compose", name)
+                return "compose-up"
+            audit("supervisor", "tool.autostart_failed", name, r.stderr.strip()[:200])
+        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+            audit("supervisor", "tool.autostart_failed", name, str(e)[:200])
+        return "error"
+    except docker.errors.DockerException as e:
+        audit("supervisor", "tool.autostart_failed", name, str(e)[:200])
+        return "error"
+
+
+def autostart_boot():
+    """supervisor 启动钩子（后台线程）：拉起所有标记自启的组件（FR-MGR-022）
+    缺容器时经 docker compose up -d <service> 现场创建——compose 可按名单显式拉起 profile 服务。"""
+    for t in load_tools():
+        if t["autostart"]:
+            ensure_running(t)
 
 
 # ---------- 状态 / 启停 / 日志 / 详情 ----------

@@ -15,9 +15,10 @@ db.init()
 
 @app.on_event("startup")
 def _autostart_boot():
-    """启动钩子：拉起标记自启但已停止的组件（FR-MGR-022）"""
+    """启动钩子（后台线程，不阻塞服务就绪）：拉起标记自启的组件（FR-MGR-022）"""
+    import threading
     from .tools import autostart_boot
-    autostart_boot()
+    threading.Thread(target=autostart_boot, daemon=True).start()
 
 
 for r in (auth.router, oidc.router, users.router, projects.router, runs.router, config.router, tools.router):
