@@ -21,3 +21,4 @@ homepage/config/kubernetes.yaml
 
 # Chronicler host-side venv (ADR-0020)
 chronicler/.venv/
+chronicler/.venv-win/

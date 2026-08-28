@@ -8,13 +8,17 @@ Chronicler 做什么：登记工程（一个 git 链接）→ 用你自己装好
 
 ## 快速开始
 
-### 1. supervisor（产品本体，WSL/Linux 宿主）
+### 1. supervisor（产品本体，跟随 dockerd 同环境：WSL/Linux 或 Windows）
 
 ```bash
-python3 -m venv chronicler/.venv
-chronicler/.venv/bin/pip install -r chronicler/requirements.txt
+# WSL/Linux：
+python3 -m venv chronicler/.venv && chronicler/.venv/bin/pip install -r chronicler/requirements.txt
 chronicler/.venv/bin/python -m chronicler create-admin   # 首次：建管理员
-chronicler/.venv/bin/python -m chronicler serve          # 监听 8600；或 install-service.sh 注册 systemd
+chronicler/.venv/bin/python -m chronicler serve          # 或 install-service.sh 注册 systemd
+
+# Windows（Docker Desktop 场景）：
+py -m venv chronicler\.venv-win; chronicler\.venv-win\Scripts\pip install -r chronicler\requirements.txt
+powershell -File scripts\start-chronicler.ps1
 ```
 
 无底座时直接访问 `http://127.0.0.1:8600`（本地账密登录）。

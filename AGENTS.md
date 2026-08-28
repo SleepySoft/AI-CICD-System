@@ -45,18 +45,23 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
 
 ## 部署/验证
 
+底座（WSL 或 Windows Docker Desktop 均可，ADR-0020“跟随 dockerd 同环境”；本机当前部署在 **Windows Docker Desktop**）：
+
 ```bash
 bash scripts/up.sh                # 底座一键：起核心栈 → SSO 接线 → 冒烟验证（幂等）
 ```
 
-supervisor（产品本体，宿主侧）：
+supervisor（产品本体，跟随 dockerd 同环境）：
 
 ```bash
-cd /mnt/c/D/code/AI-CICD-System
+# WSL/Linux:
 python3 -m venv chronicler/.venv && chronicler/.venv/bin/pip install -r chronicler/requirements.txt
 chronicler/.venv/bin/python -m chronicler create-admin   # 首次：建管理员
 chronicler/.venv/bin/python -m chronicler serve          # 或 bash chronicler/scripts/install-service.sh（systemd）
-bash scripts/verify-chronicler.sh                        # 冒烟
+
+# Windows（本机当前）：
+py -m venv chronicler\.venv-win; chronicler\.venv-win\Scripts\pip install -r chronicler\requirements.txt
+powershell -File scripts\start-chronicler.ps1            # 读 .env 后启动（8600）
 ```
 
 详见 docs/runbooks/deploy.md。
