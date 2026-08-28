@@ -24,10 +24,7 @@ prompt_template    Prompt 库：name, scope(system|task), content(支持 {{变�
                    builtin(bool), updated_by, updated_at
 task_def           任务定义：name, type(见 §2.3), repo_ids[], agent_id, prompt_id,
                    schedule_cron, enabled, params(JSON), output_visibility(dev|boss)
-task_run           一次执行：task_id, status(queued|running|success|failed|canceled),
-                   trigger(cron|manual|webhook), started_at, finished_at, input_snapshot(JSON),
-                   runner_container, log_path, error, ci_context(JSON, 关联的 Jenkins 构建),
-                   openproject_id(关联的 OpenProject 工作包，可空，FR-TASK-002/003)
+task_run           一次执行：详细字段见 §2.1.1 Run 档案契约（FR-MGR-005）
 report             报告：run_id, title, type, visibility, md_path, summary, created_at,
                    reviewed(bool), reviewer
 review_item        待审区条目：run_id, kind(knowhow|doc|common-module|...),
@@ -40,7 +37,59 @@ audit_log          审计：actor, action, target, detail, at
 
 契约要点：
 
+#### 2.1.1 Run 档案契约（FR-MGR-005，一切皆 Run）
+
+任何一次执行（无论触发方式、无论成败）产生完整档案，分三段记录。标注【v1】= 已实现，其余为规划：
+
+**A. 输入快照（执行前冻结，此后不可变）**
+
+```
+run_id             档案 ID                                    【v1】
+task_type          任务种类（code-insight/daily-report/…）     【v1】
+trigger            manual|cron|webhook                        【v1】（v1 仅 manual）
+created_by         触发人（审计追溯）                          【v1】
+queued_at          入队时间                                    【v1】
+project            工程 id/name/git_url                        【v1】
+repo_base_commit   分析基于的提交 SHA（全量，非短 hash）        【v1】
+repo_status        工作区是否脏（有未提交改动需警示）
+harness            name + 解析后的完整启动命令 + CLI 版本      【v1】（CLI 版本待补）
+prompt             模板版本 hash + 渲染后全文路径               【v1】
+overrides          工程级覆盖项（harness/prompt/策略）          【v1】
+components         注入的资源能力清单（SKILL 名 + 版本/hash）   【v1】（仅名单，hash 待补）
+extra_prompt       触发时附加指令                              【v1】
+ci_context         同期 Jenkins 构建号/结果（FR-MGR-010）
+openproject_id     关联的 OpenProject 工作包（FR-TASK-002/003）
+```
+
+**B. 执行过程（随状态机流转追加）**
+
+```
+status             queued|running|success|failed|canceled     【v1】
+started_at / finished_at / duration_sec                        【v1】
+runner_env         执行环境：宿主平台、supervisor 版本
+log_path           完整 stdout/stderr 日志路径                 【v1】
+token_usage        prompt/completion token 用量与耗时（harness 能提供时）
+error / error_class 失败原因与归类（网络/配额/解析/超时）        【v1】（归类待补）
+```
+
+**C. 产物清单（执行后补记——“生成/更新了什么，落在哪个提交”）**
+
+```
+artifacts[]        每个产物：kind(report|doc|knowhow|code-snippet)、path、
+                   action(created|updated|deleted)、size_bytes
+artifact_commit    产物落入 git 的提交 SHA（报告库/shadow 库/目标仓库）
+review_refs[]      关联的待审区条目（FR-MGR-009）
+asset_refs[]       上升入资产库的条目（FR-MGR-013/014）
+```
+
+规约：
+
+- **A 段只写一次**：状态流转只允许追加 B/C 段；A 段任何字段不得被后续修改（可复现性的根基）。
+- **产物必须落到可引用的提交**：产物是 git 内容时，artifact_commit 必填；文件路径产物至少记 path+action。
+- **失败也要有档案**：failed 的 Run 同样冻结 A 段、记录 B 段错误归类，C 段可为空但字段存在。
+
 - **prompt_template 版本化**（FR-MGR-011）：任务记录 prompt 版本，Run 可复现。
+- **Run 档案契约**（FR-MGR-005）：输入快照/执行过程/产物清单三段式，见 §2.1.1。
 - **密钥不落明文**（NFR-002）：`api_key_ref` 指向 Docker secret 或加密列（Fernet，密钥来自 .env）。
 - **CI 上下文入 Run**（FR-MGR-010）：`ci_context` 记录同期 Jenkins 构建号/结果。
 - **Agent 用户自装 harness**（ADR-0021，部分推翻 ADR-0017）：CLI 由用户在 supervisor 所在宿主自行安装与登录，supervisor 只登记命令模板（`command` + 参数），不接管安装与版本锁定；会话经 ATR 抽象尽力持久（harness 不支持持久会话则一次性 + resume 续接，语义 TBD）；terminal-runtime 保留为可选隔离沙箱（CI/不可信任务）。endpoint 抽象（`base_url` + key）与登录态复用约定沿用 ADR-0017 未推翻部分。
