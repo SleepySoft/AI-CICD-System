@@ -15,7 +15,6 @@ After=docker.socket
 [Service]
 WorkingDirectory=$REPO
 Environment=PYTHONUNBUFFERED=1
-EnvironmentFile=-$REPO/.env
 ExecStart=$ROOT/.venv/bin/python -m chronicler serve
 Restart=on-failure
 RestartSec=5

@@ -25,20 +25,18 @@ docker compose up -d
 cd /mnt/c/D/code/AI-CICD-System && docker compose up -d
 ```
 
-### 2. 启动 supervisor（前台，日志直接打到终端，调试首选）
+### 2. 启动 supervisor（唯一入口，行为处处一致）
 
-环境变量：`.env` 由 chronicler/app/config.py **自动加载**（已存在的进程环境变量优先），
-IDE 调试/直接运行无需手动 source；`scripts/start-chronicler.ps1` 仅为兼容保留。
+`.env` 由 chronicler/app/config.py **自动加载**（已存在的进程环境变量优先），
+无论怎么启动行为都一致；脚本/服务只是同一命令的壳：
 
 ```powershell
-# Windows
-cd C:\D\code\AI-CICD-System
+# Windows（调试：前台跑；常驻：把 scripts\start-chronicler.ps1 加入开机启动项）
 chronicler\.venv-win\Scripts\python -m chronicler serve
 ```
 
 ```bash
-# WSL/Linux
-cd /mnt/c/D/code/AI-CICD-System
+# WSL/Linux（常驻：bash chronicler/scripts/install-service.sh 注册 systemd）
 chronicler/.venv/bin/python -m chronicler serve
 ```
 
