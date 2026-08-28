@@ -116,9 +116,19 @@ def ensure_running(tool: dict) -> str:
         return "error"
 
 
-def autostart_boot():
+def autostart_boot(max_wait_sec: int = 600, interval: int = 20):
     """supervisor 启动钩子（后台线程）：拉起所有标记自启的组件（FR-MGR-022）
-    缺容器时经 docker compose up -d <service> 现场创建——compose 可按名单显式拉起 profile 服务。"""
+    dockerd 未就绪（如 Docker Desktop 未启动/启动慢）时每 20s 重试至多 10 分钟，
+    而不是一次性放弃——supervisor 通常比 dockerd 先活。"""
+    deadline = time.time() + max_wait_sec
+    while True:
+        try:
+            _client().ping()
+            break
+        except docker.errors.DockerException:
+            if time.time() > deadline:
+                return
+            time.sleep(interval)
     for t in load_tools():
         if t["autostart"]:
             ensure_running(t)

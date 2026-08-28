@@ -77,6 +77,8 @@ powershell -File scripts\start-chronicler.ps1            # 读 .env 后启动（
 - PowerShell 内联 wsl 命令避免 `$()`/`*` 转义问题 → 写成 scripts/*.sh 再执行。
 - Windows 侧 Python subprocess 捕获输出必须显式 `encoding="utf-8", errors="replace"`
   （`text=True` 用 GBK 解码，遇 UTF-8 提交信息 stdout 变 None，2026-08-27 实测）。
+- Windows 部署时 Docker Desktop 需随登录自启（Settings → General → Start when you sign in），
+  否则栈和 SSO 全不可用；supervisor 自启钩子已带 dockerd 就绪重试（10 分钟窗口）兜底启动慢的场景。
 
 ## 路线图（Manager）
 
