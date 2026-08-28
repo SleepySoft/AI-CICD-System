@@ -1,0 +1,83 @@
+# Runbook: 手动启动与调试 Chronicler
+
+> 版本：v1.0 · 日期：2026-08-27 · 状态：生效
+> 适用：本机（Windows Docker Desktop 或 WSL）开发/调试 supervisor 与底座
+> 关联：chronicler/、scripts/up.sh、scripts/start-chronicler.ps1、ADR-0020/0023
+
+## 目的
+
+脱离 systemd/开机自启，手动拉起全系统并具备断点调试能力；知道日志在哪、改了代码怎么生效。
+
+## 步骤
+
+### 1. 启动底座（可选，需要统一认证/组件时才起）
+
+```powershell
+# Windows（Docker Desktop 需已启动）
+cd C:\D\code\AI-CICD-System
+docker compose up -d
+```
+
+```bash
+# WSL
+cd /mnt/c/D/code/AI-CICD-System && docker compose up -d
+```
+
+### 2. 启动 supervisor（前台，日志直接打到终端，调试首选）
+
+```powershell
+# Windows
+cd C:\D\code\AI-CICD-System
+chronicler\.venv-win\Scripts\python -m chronicler serve
+```
+
+```bash
+# WSL/Linux
+cd /mnt/c/D/code/AI-CICD-System
+chronicler/.venv/bin/python -m chronicler serve
+```
+
+带 `.env` 环境变量（OIDC/密钥需要）：
+
+```powershell
+powershell -File scripts\start-chronicler.ps1   # Windows：读 .env 后启动
+```
+
+```bash
+set -a; . ./.env; set +a; chronicler/.venv/bin/python -m chronicler serve   # WSL
+```
+
+### 3. 验证
+
+```bash
+bash scripts/verify-chronicler.sh    # WSL；Windows 用浏览器访问 http://127.0.0.1:8600/api/health
+```
+
+预期：`{"ok":true,"service":"chronicler",...}`；有底座时 `http://app.localhost` 200。
+
+## 调试要点
+
+| 目标 | 方法 |
+|------|------|
+| 断点调试 | supervisor 是普通本地进程（ADR-0020 的红利）：VS Code/PyCharm 直接 debug `chronicler/__main__.py`，或 `python -m debugpy --listen 5678 -m chronicler serve` |
+| 热重载 | `uvicorn chronicler.app.main:app --reload --port 8600`（改 Python 即重启） |
+| 前端 | 改 `chronicler/app/static/*` 后**刷新浏览器即可**，无需重启 |
+| 配置 | `chronicler/config/*.yaml` 与 `tools.d/*.yaml` 改文件即热生效；`data/chronicler/config/` 同名文件覆盖内置 |
+| 服务日志 | 前台终端直接看；后台启动的在 `data/chronicler/supervisor.log` |
+| Run 日志 | `data/chronicler/runs/<run_id>/run.log`（或页面「任务」→ 日志） |
+| 容器日志 | 首页组件卡片「日志」按钮，或 `docker logs aisystem-<name>-1` |
+| 数据库 | `data/chronicler/chronicler.db`（SQLite，可用 `sqlite3` 或 DBeaver 直查） |
+
+## 常见问题
+
+| 现象 | 原因 | 处置 |
+|------|------|------|
+| 页面 500 且日志有 UnicodeDecodeError | Windows GBK 解码坑 | 确认代码已含 `encoding="utf-8"` 修复（AGENTS.md 已知环境坑） |
+| OIDC 登录 token 交换失败 | 代理拦截 127.0.0.1 | 确认进程走 trust_env=False；shell 里测试用 `curl --noproxy '*'` |
+| app.localhost 502 | supervisor 没起或 Caddy 未重载 | 先验 127.0.0.1:8600 直连；再 `docker compose up -d caddy` |
+| 改了代码不生效 | 后台旧进程还在 | 停掉 8600 端口的旧进程再启动（Windows：`Get-NetTCPConnection -LocalPort 8600` 找 PID） |
+| 容器全部消失 | Docker Desktop 未启动 | 启动 Docker Desktop 后 `docker compose up -d`（restart 策略自动恢复） |
+
+## 回滚（如适用）
+
+调试出问题想回到干净状态：`docker compose restart`（底座）；supervisor 直接 Ctrl+C 重启进程即可，数据都在 `data/chronicler/` 不受影响。
