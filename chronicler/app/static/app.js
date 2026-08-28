@@ -202,6 +202,7 @@ createApp({
             "关键组件操作", { type: "warning", confirmButtonText: "确认执行", cancelButtonText: "取消" });
         } catch (_) { return; }
       }
+      if (action === "deploy") toast.ok(`${t.name} 部署中（首次需拉取镜像，可能数分钟）…`);
       try {
         await api(`/api/tools/${t.name}/${action}`, { method: "POST" });
         toast.ok(`${t.name} ${action} 已执行`); setTimeout(loadTools, 1500);

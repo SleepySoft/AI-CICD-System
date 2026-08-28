@@ -81,6 +81,7 @@
                   <el-button size="small" text @click="openToolLogs(t)">日志</el-button>
                   <el-button size="small" text @click="openToolDetail(t)">详情</el-button>
                   <template v-if="isAdmin && t.driver==='docker'">
+                    <el-button v-if="t.status==='absent'" size="small" type="primary" plain @click="ctlTool(t,'deploy')">部署</el-button>
                     <el-button v-if="t.status==='stopped'" size="small" type="success" plain @click="ctlTool(t,'start')">启动</el-button>
                     <el-button v-if="t.status==='running'" size="small" type="warning" plain @click="ctlTool(t,'stop')">停止</el-button>
                     <el-button v-if="t.status==='running'" size="small" plain @click="ctlTool(t,'restart')">重启</el-button>

@@ -169,7 +169,14 @@ def _get_container(tool: dict):
 
 
 def control_tool(name: str, action: str) -> dict:
-    c = _get_container(get_tool(name))
+    tool = get_tool(name)
+    if action == "deploy":
+        # 部署未创建的组件：ensure_running 内部经 docker compose up -d 现场创建
+        result = ensure_running(tool)
+        if result == "error":
+            raise HTTPException(status_code=502, detail="部署失败，详见 supervisor 日志/审计")
+        return {"ok": True, "name": name, "action": action, "via": result}
+    c = _get_container(tool)
     if action == "start":
         c.start()
     elif action == "stop":
