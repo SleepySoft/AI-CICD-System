@@ -17,6 +17,7 @@
       "username": "boss",
       "enabled": true,
       "email": "boss@aisystem.local",
+      "emailVerified": true,
       "firstName": "Boss",
       "groups": ["/boss"],
       "credentials": [
@@ -27,6 +28,7 @@
       "username": "dev",
       "enabled": true,
       "email": "dev@aisystem.local",
+      "emailVerified": true,
       "firstName": "Developer",
       "groups": ["/dev"],
       "credentials": [
