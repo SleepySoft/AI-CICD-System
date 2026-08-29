@@ -39,8 +39,8 @@
         </div>
       </template>
       <el-form v-if="authBackend !== 'oidc' || showLocalLogin" label-position="top" @submit.prevent style="margin-top:8px">
-        <el-form-item label="用户名"><el-input v-model="loginForm.username" @keyup.enter="login" /></el-form-item>
-        <el-form-item label="密码"><el-input v-model="loginForm.password" type="password" show-password @keyup.enter="login" /></el-form-item>
+        <el-form-item label="用户名"><el-input v-model="loginForm.username" @keyup.enter="login"></el-input></el-form-item>
+        <el-form-item label="密码"><el-input v-model="loginForm.password" type="password" show-password @keyup.enter="login"></el-input></el-form-item>
         <el-button type="primary" style="width:100%" @click="login" :loading="loading">登录</el-button>
       </el-form>
       <p v-if="loginError" style="color:#f56c6c; font-size:12px">{{ loginError }}</p>
@@ -73,7 +73,7 @@
                     <span class="dot" :class="t.status"></span>{{ t.desc || t.name }}
                     <el-tag v-if="t.critical" size="small" type="danger" effect="plain">关键</el-tag>
                     <span v-if="isAdmin && t.driver==='docker'" style="margin-left:auto; font-size:12px; color:#909399">
-                      自启 <el-switch :model-value="t.autostart" size="small" @change="v => toggleAutostart(t, v)" />
+                      自启 <el-switch :model-value="t.autostart" size="small" @change="v => toggleAutostart(t, v)"></el-switch>
                     </span>
                   </div>
                   <div class="tool-desc">{{ t.name }} · {{ toolStatusText(t) }}</div>
@@ -100,9 +100,9 @@
             <el-button v-if="isAdmin" size="small" type="primary" @click="showNewProject = true">新建工程</el-button>
           </div>
           <el-table :data="projects" size="small" style="width:100%">
-            <el-table-column prop="name" label="名称" width="160" />
-            <el-table-column prop="git_url" label="Git 地址" show-overflow-tooltip />
-            <el-table-column prop="last_commit" label="最近提交" width="120" show-overflow-tooltip />
+            <el-table-column prop="name" label="名称" width="160"></el-table-column>
+            <el-table-column prop="git_url" label="Git 地址" show-overflow-tooltip></el-table-column>
+            <el-table-column prop="last_commit" label="最近提交" width="120" show-overflow-tooltip></el-table-column>
             <el-table-column label="已同步" width="80">
               <template #default="{ row }">
                 <el-tag :type="row.synced ? 'success' : 'warning'" size="small">{{ row.synced ? '是' : '否' }}</el-tag>
@@ -125,27 +125,27 @@
         <el-tab-pane label="任务" name="runs">
           <div style="margin-bottom: 8px; display:flex; gap:10px; align-items:center">
             <el-select v-model="runFilter" placeholder="全部工程" clearable size="small" style="width:200px" @change="loadRuns">
-              <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
+              <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id"></el-option>
             </el-select>
             <el-button size="small" @click="loadRuns" :loading="loadingRuns">刷新</el-button>
             <el-button v-if="isAdmin" size="small" type="primary" @click="openTrigger">触发任务</el-button>
           </div>
           <el-table :data="runs" size="small" style="width:100%">
-            <el-table-column prop="id" label="ID" width="70" />
+            <el-table-column prop="id" label="ID" width="70"></el-table-column>
             <el-table-column label="工程" width="140">
               <template #default="{ row }">{{ projectName(row.project_id) }}</template>
             </el-table-column>
-            <el-table-column prop="task_type" label="任务类型" width="140" />
+            <el-table-column prop="task_type" label="任务类型" width="140"></el-table-column>
             <el-table-column label="状态" width="90">
               <template #default="{ row }">
                 <el-tag :type="runTagType(row.status)" size="small">{{ runStatusText(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="harness" label="Harness" width="110" show-overflow-tooltip />
+            <el-table-column prop="harness" label="Harness" width="110" show-overflow-tooltip></el-table-column>
             <el-table-column label="开始时间" width="160">
               <template #default="{ row }">{{ fmtTime(row.started_at) }}</template>
             </el-table-column>
-            <el-table-column prop="error" label="错误" show-overflow-tooltip />
+            <el-table-column prop="error" label="错误" show-overflow-tooltip></el-table-column>
             <el-table-column label="操作" width="130">
               <template #default="{ row }">
                 <el-button size="small" text type="primary" @click="openLog(row)">日志</el-button>
@@ -172,25 +172,25 @@
           </div>
           <div class="group-title">组件</div>
           <el-table :data="componentList" size="small" style="width:100%">
-            <el-table-column prop="name" label="名称" width="160" />
+            <el-table-column prop="name" label="名称" width="160"></el-table-column>
             <el-table-column label="启用" width="80">
               <template #default="{ row }">
                 <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '停用' }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="url" label="地址" width="260" show-overflow-tooltip />
-            <el-table-column prop="note" label="备注" show-overflow-tooltip />
+            <el-table-column prop="url" label="地址" width="260" show-overflow-tooltip></el-table-column>
+            <el-table-column prop="note" label="备注" show-overflow-tooltip></el-table-column>
           </el-table>
           <div class="group-title">提示词</div>
           <el-table :data="prompts" size="small" style="width:100%">
-            <el-table-column prop="task_type" label="任务类型" width="200" />
-            <el-table-column prop="version" label="版本" width="120" />
+            <el-table-column prop="task_type" label="任务类型" width="200"></el-table-column>
+            <el-table-column prop="version" label="版本" width="120"></el-table-column>
             <el-table-column label="已被覆盖" width="100">
               <template #default="{ row }">
                 <el-tag :type="row.overridden ? 'warning' : 'info'" size="small">{{ row.overridden ? '是' : '否' }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="size" label="大小(字节)" width="120" />
+            <el-table-column prop="size" label="大小(字节)" width="120"></el-table-column>
           </el-table>
           <p class="muted" style="margin-top:16px">配置为 YAML 文件，改文件即热生效。</p>
         </el-tab-pane>
@@ -198,23 +198,23 @@
         <!-- ============ 用户（admin） ============ -->
         <el-tab-pane v-if="isAdmin" label="用户" name="users">
           <el-alert v-if="authBackend === 'oidc'" type="info" :closable="false" style="margin-bottom:12px"
-                    title="账号由 Keycloak 统一管理：请到 sso.localhost/admin 增删用户与调整分组（boss 组 = 本系统 admin）。下表为首次登录自动建档的同步记录，仅可查看。" />
+                    title="账号由 Keycloak 统一管理：请到 sso.localhost/admin 增删用户与调整分组（boss 组 = 本系统 admin）。下表为首次登录自动建档的同步记录，仅可查看。"></el-alert>
           <div v-if="authBackend !== 'oidc'" class="card-box" style="max-width:560px">
             <div class="tool-name" style="margin-bottom:10px">新建用户</div>
             <el-form inline size="small">
-              <el-form-item><el-input v-model="newUser.username" placeholder="用户名" /></el-form-item>
-              <el-form-item><el-input v-model="newUser.password" type="password" placeholder="密码" /></el-form-item>
+              <el-form-item><el-input v-model="newUser.username" placeholder="用户名"></el-input></el-form-item>
+              <el-form-item><el-input v-model="newUser.password" type="password" placeholder="密码"></el-input></el-form-item>
               <el-form-item>
                 <el-select v-model="newUser.role" style="width:110px">
-                  <el-option label="admin" value="admin" /><el-option label="user" value="user" />
+                  <el-option label="admin" value="admin"></el-option><el-option label="user" value="user"></el-option>
                 </el-select>
               </el-form-item>
               <el-form-item><el-button type="primary" @click="createUser" :loading="acting">创建</el-button></el-form-item>
             </el-form>
           </div>
           <el-table :data="users" size="small" style="width:100%">
-            <el-table-column prop="id" label="ID" width="70" />
-            <el-table-column prop="username" label="用户名" width="200" />
+            <el-table-column prop="id" label="ID" width="70"></el-table-column>
+            <el-table-column prop="username" label="用户名" width="200"></el-table-column>
             <el-table-column label="角色" width="120">
               <template #default="{ row }">
                 <el-tag :type="row.role==='admin' ? 'danger' : 'info'" size="small" effect="plain">{{ row.role }}</el-tag>
@@ -242,16 +242,16 @@
     <!-- 新建工程 -->
     <el-dialog v-model="showNewProject" title="新建工程" width="560px">
       <el-form label-position="top" size="small">
-        <el-form-item label="名称（小写字母/数字/-/_）"><el-input v-model="newProject.name" placeholder="my-project" /></el-form-item>
-        <el-form-item label="Git 地址（工程核心：任意 git 远端或本地路径）"><el-input v-model="newProject.git_url" placeholder="http://git.localhost/team/repo.git 或 C:\\path\\to\\repo" /></el-form-item>
-        <el-form-item label="默认分支（留空=远端默认）"><el-input v-model="newProject.default_branch" placeholder="main" /></el-form-item>
-        <el-form-item label="CI 项目链接（可选，复杂项目关联 Jenkins job 等）"><el-input v-model="newProject.ci_url" placeholder="http://ci.localhost/job/xxx" /></el-form-item>
+        <el-form-item label="名称（小写字母/数字/-/_）"><el-input v-model="newProject.name" placeholder="my-project"></el-input></el-form-item>
+        <el-form-item label="Git 地址（工程核心：任意 git 远端或本地路径）"><el-input v-model="newProject.git_url" placeholder="http://git.localhost/team/repo.git 或 C:\\path\\to\\repo"></el-input></el-form-item>
+        <el-form-item label="默认分支（留空=远端默认）"><el-input v-model="newProject.default_branch" placeholder="main"></el-input></el-form-item>
+        <el-form-item label="CI 项目链接（可选，复杂项目关联 Jenkins job 等）"><el-input v-model="newProject.ci_url" placeholder="http://ci.localhost/job/xxx"></el-input></el-form-item>
         <el-form-item label="Agent harness 覆盖（留空=全局默认）">
           <el-select v-model="newProject.harness" clearable placeholder="全局默认" style="width:100%">
-            <el-option v-for="h in harnesses" :key="h.name" :label="h.name + ' — ' + h.desc" :value="h.name" />
+            <el-option v-for="h in harnesses" :key="h.name" :label="h.name + ' — ' + h.desc" :value="h.name"></el-option>
           </el-select>
         </el-form-item>
-        <el-form-item label="描述"><el-input v-model="newProject.description" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item label="描述"><el-input v-model="newProject.description" type="textarea" :rows="2"></el-input></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showNewProject = false">取消</el-button>
@@ -264,11 +264,11 @@
       <el-form label-position="top" size="small">
         <el-form-item label="Agent harness 覆盖">
           <el-select v-model="overridesHarness" clearable placeholder="全局默认" style="width:100%">
-            <el-option v-for="h in harnesses" :key="h.name" :label="h.name + ' — ' + h.desc" :value="h.name" />
+            <el-option v-for="h in harnesses" :key="h.name" :label="h.name + ' — ' + h.desc" :value="h.name"></el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="高级覆盖项（JSON，如分析策略 prompt_pack 等）">
-          <el-input v-model="overridesText" type="textarea" :rows="6" placeholder="{}" />
+          <el-input v-model="overridesText" type="textarea" :rows="6" placeholder="{}"></el-input>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -282,15 +282,15 @@
       <el-form label-position="top" size="small">
         <el-form-item label="工程">
           <el-select v-model="triggerForm.project_id" style="width:100%">
-            <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
+            <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id"></el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="任务类型">
           <el-select v-model="triggerForm.task_type" style="width:100%">
-            <el-option v-for="p in prompts" :key="p.task_type" :label="p.task_type + '（' + p.version + '）'" :value="p.task_type" />
+            <el-option v-for="p in prompts" :key="p.task_type" :label="p.task_type + '（' + p.version + '）'" :value="p.task_type"></el-option>
           </el-select>
         </el-form-item>
-        <el-form-item label="附加提示（可选）"><el-input v-model="triggerForm.extra_prompt" type="textarea" :rows="4" /></el-form-item>
+        <el-form-item label="附加提示（可选）"><el-input v-model="triggerForm.extra_prompt" type="textarea" :rows="4"></el-input></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showTrigger = false">取消</el-button>
@@ -312,7 +312,7 @@
     <el-dialog v-model="showResetPw" :title="'重置密码 - ' + resetPwUser" width="420px">
       <el-form label-position="top" size="small">
         <el-form-item label="新密码（至少 6 位）">
-          <el-input v-model="resetPwForm.password" type="password" show-password />
+          <el-input v-model="resetPwForm.password" type="password" show-password></el-input>
         </el-form-item>
         <el-checkbox v-model="resetPwForm.temporary">临时密码（用户下次登录须改密，推荐）</el-checkbox>
       </el-form>
