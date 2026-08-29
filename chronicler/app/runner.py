@@ -126,7 +126,6 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "")
         raise RuntimeError(f"harness {harness_name} 声明为持久会话，v1 暂不支持（ADR-0021 TBD）")
 
     template, prompt_version = registry.load_prompt(task_type)
-    prompt = _render_prompt(template, project, {"extra": extra_prompt})
 
     # A 段输入快照（§2.1.1，执行前冻结）
     snapshot = {
@@ -146,6 +145,13 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "")
         " VALUES (?,?,?,?,?,?,?,?,?)",
         (project_id, task_type, "queued", harness_name, prompt_version,
          dumps(snapshot), actor, time.time(), _runner_env()))
+    # prompt 在 run_id 分配后渲染（需要 {{report_file}}/{{prompt_file}} 等运行路径变量）
+    run_dir = Cfg.runs_dir() / str(run_id)
+    prompt = _render_prompt(template, project, {
+        "extra": extra_prompt,
+        "report_file": str(run_dir / "report.md"),
+        "prompt_file": str(run_dir / "prompt.md"),
+    })
     threading.Thread(target=_run, args=(run_id, harness, prompt), daemon=True).start()
     return get_run(run_id)
 
@@ -170,14 +176,16 @@ def _run(run_id: int, harness: dict, prompt: str):
     execute("UPDATE task_runs SET status='running', log_path=? WHERE id=?",
             (str(log_file), run_id))
     try:
+        stdin_data = prompt if harness.get("stdin_prompt") else None
         with open(log_file, "w", encoding="utf-8") as log:
             log.write(f"$ {command}\n\n")
             log.flush()
             proc = subprocess.run(command, shell=True, cwd=str(repo), env=env,
+                                  input=stdin_data, text=bool(stdin_data),
                                   stdout=log, stderr=subprocess.STDOUT,
                                   timeout=harness.get("timeout_sec", 1800))
+        artifacts = []
         if proc.returncode == 0:
-            artifacts = []
             if report_file.is_file():
                 artifacts.append(_publish(run, report_file))
             _, shadow_arts = _commit_shadow(run)  # FR-MGR-013：shadow 库变更入库并记 artifact_commit

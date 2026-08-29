@@ -17,11 +17,22 @@ harnesses:
       OPENAI_API_KEY: "${LLM_API_KEY}"
     timeout_sec: 1800
   - name: kimi
-    desc: Kimi CLI（按本机实际安装调整命令模板）
-    command_template: "kimi --yolo -p {prompt_file}"
+    desc: Kimi CLI（本机已装已登录；print 非交互模式，prompt 经 stdin 传入）
+    command_template: "kimi --print --output-format text --input-format text -w {repo_dir}"
+    stdin_prompt: true            # prompt 全文经 stdin 管道传入（--input-format text 要求）
     session: once
     env:
-      MOONSHOT_API_KEY: "${LLM_API_KEY}"
+      PYTHONUTF8: "1"             # kimi 是 Python 应用；Windows GBK 控制台会炸（实测 U+2212）
+      PYTHONIOENCODING: "utf-8"
+    timeout_sec: 1800
+  - name: kimi-continue
+    desc: Kimi CLI 续会话模式（--continue：延续该工程目录的上次会话，保持上下文）
+    command_template: "kimi --print --output-format text --input-format text --continue -w {repo_dir}"
+    stdin_prompt: true
+    session: once                 # 进程一次性；上下文由 kimi 自身会话存储续接（ADR-0021 resume 语义落地）
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
     timeout_sec: 1800
   - name: shell
     desc: 冒烟测试用假 harness：不做 AI 调用，把 prompt 原样写成报告（跨平台 python 一行）
