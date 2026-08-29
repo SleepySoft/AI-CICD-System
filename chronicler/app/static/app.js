@@ -137,6 +137,15 @@ createApp({
       try { await api(`/api/projects/${p.id}/sync`, { method: "POST" }); toast.ok(`已触发同步：${p.name}`); setTimeout(loadProjects, 2000); }
       catch (e) { toast.err(e); }
     }
+    async function resetClone(p) {
+      try {
+        await ElementPlus.ElMessageBox.confirm(
+          `将删除 ${p.name} 的工作空间克隆并重新拉取（档案与报告不受影响），继续？`,
+          "重置克隆", { type: "warning", confirmButtonText: "重置", cancelButtonText: "取消" });
+        await api(`/api/projects/${p.id}/reset-clone`, { method: "POST" });
+        toast.ok("已重置并重新拉取"); setTimeout(loadProjects, 2000);
+      } catch (e) { if (e !== "cancel" && e?.message) toast.err(e); }
+    }
     function openEdit(p) {
       editProject.value = p;
       editForm.value = {
@@ -359,7 +368,7 @@ createApp({
       showTrigger, triggerForm, showLog, logRunId, logText, showReport, reportRunId, reportText,
       fmtTime, open, projectName, runStatusText, runTagType, toolStatusText,
       login, logout, onTabChange,
-      loadProjects, createProject, syncProject, openEdit, saveEdit, removeProject,
+      loadProjects, createProject, syncProject, resetClone, openEdit, saveEdit, removeProject,
       loadRuns, openTrigger, triggerRun, openLog, openReport, stopLogPoll,
       loadTools, ctlTool, createUser, removeUser, openResetPw, doResetPw, showResetPw, resetPwUser, resetPwForm,
     };
