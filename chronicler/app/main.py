@@ -10,6 +10,15 @@ from .routers import auth, config, oidc, projects, runs, tools, users
 
 app = FastAPI(title="Chronicler", docs_url=None, redoc_url=None)
 
+
+@app.middleware("http")
+async def no_cache_static(request, call_next):
+    """静态资源禁用缓存（前端无构建步骤，文件名不带指纹，靠 no-store 防陈旧）"""
+    resp = await call_next(request)
+    if not request.url.path.startswith("/api/"):
+        resp.headers["Cache-Control"] = "no-store"
+    return resp
+
 db.init()
 
 

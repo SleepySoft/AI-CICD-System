@@ -40,10 +40,10 @@ createApp({
 
     const showNewProject = ref(false);
     const newProject = ref({ name: "", git_url: "", default_branch: "", ci_url: "", description: "", harness: "" });
-    const showOverrides = ref(false);
+    const showEdit = ref(false);
     const editProject = ref(null);
-    const overridesText = ref("");
-    const overridesHarness = ref("");
+    const editForm = ref({ git_url: "", default_branch: "", ci_url: "", shadow_repo: "",
+                           description: "", harness: "", showAdv: false, overridesText: "{}" });
     const showTrigger = ref(false);
     const triggerForm = ref({ project_id: null, task_type: "", extra_prompt: "" });
     const showLog = ref(false);
@@ -137,24 +137,39 @@ createApp({
       try { await api(`/api/projects/${p.id}/sync`, { method: "POST" }); toast.ok(`已触发同步：${p.name}`); setTimeout(loadProjects, 2000); }
       catch (e) { toast.err(e); }
     }
-    function openOverrides(p) {
+    function openEdit(p) {
       editProject.value = p;
-      overridesHarness.value = p.overrides?.harness || "";
-      overridesText.value = JSON.stringify(p.overrides ?? {}, null, 2);
-      showOverrides.value = true;
+      editForm.value = {
+        git_url: p.git_url || "", default_branch: p.default_branch || "",
+        ci_url: p.ci_url || "", shadow_repo: p.shadow_repo || "",
+        description: p.description || "", harness: p.overrides?.harness || "",
+        showAdv: false, overridesText: JSON.stringify(p.overrides ?? {}, null, 2),
+      };
+      showEdit.value = true;
     }
-    async function saveOverrides() {
+    async function saveEdit() {
       acting.value = true;
       try {
-        const overrides = parseJson(overridesText.value, "覆盖项");
-        if (overridesHarness.value) overrides.harness = overridesHarness.value;
+        const overrides = parseJson(editForm.value.overridesText, "覆盖项");
+        if (editForm.value.harness) overrides.harness = editForm.value.harness;
         else delete overrides.harness;
         await api(`/api/projects/${editProject.value.id}`, {
-          method: "PATCH", body: JSON.stringify({ overrides }),
+          method: "PATCH",
+          body: JSON.stringify({ git_url: editForm.value.git_url, default_branch: editForm.value.default_branch,
+                                 ci_url: editForm.value.ci_url, shadow_repo: editForm.value.shadow_repo,
+                                 description: editForm.value.description, overrides }),
         });
-        toast.ok("工程设置已保存"); showOverrides.value = false; loadProjects();
+        toast.ok("工程设置已保存"); showEdit.value = false; loadProjects();
       } catch (e) { toast.err(e); }
       finally { acting.value = false; }
+    }
+    async function removeProject(p) {
+      try {
+        await ElementPlus.ElMessageBox.confirm(
+          `确认删除工程 ${p.name}？将同时删除本地克隆（runs/报告保留）。`, "删除工程", { type: "warning" });
+        await api(`/api/projects/${p.id}`, { method: "DELETE" });
+        toast.ok("已删除"); loadProjects();
+      } catch (e) { if (e !== "cancel" && e?.message) toast.err(e); }
     }
 
     async function loadRuns() {
@@ -340,11 +355,11 @@ createApp({
       showToolLog, toolLogName, toolLogText, showToolDetail, toolDetail,
       showDeploy, deployName, deployState, deployLines, openDeploy, closeDeploy,
       toggleAutostart, openToolLogs, refreshToolLogs, openToolDetail, fmtUptime, fmtPorts,
-      showNewProject, newProject, showOverrides, editProject, overridesText,
+      showNewProject, newProject, showEdit, editProject, editForm,
       showTrigger, triggerForm, showLog, logRunId, logText, showReport, reportRunId, reportText,
       fmtTime, open, projectName, runStatusText, runTagType, toolStatusText,
       login, logout, onTabChange,
-      loadProjects, createProject, syncProject, openOverrides, saveOverrides,
+      loadProjects, createProject, syncProject, openEdit, saveEdit, removeProject,
       loadRuns, openTrigger, triggerRun, openLog, openReport, stopLogPoll,
       loadTools, ctlTool, createUser, removeUser, openResetPw, doResetPw, showResetPw, resetPwUser, resetPwForm,
     };

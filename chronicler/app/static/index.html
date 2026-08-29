@@ -111,10 +111,11 @@
             <el-table-column label="创建时间" width="160">
               <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
             </el-table-column>
-            <el-table-column v-if="isAdmin" label="操作" width="200">
+            <el-table-column v-if="isAdmin" label="操作" width="220">
               <template #default="{ row }">
                 <el-button size="small" text type="primary" @click="syncProject(row)">同步</el-button>
-                <el-button size="small" text @click="openOverrides(row)">覆盖项</el-button>
+                <el-button size="small" text @click="openEdit(row)">设置</el-button>
+                <el-button size="small" text type="danger" @click="removeProject(row)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -259,21 +260,29 @@
       </template>
     </el-dialog>
 
-    <!-- 编辑覆盖项 -->
-    <el-dialog v-model="showOverrides" :title="'工程设置 - ' + (editProject?.name || '')" width="560px">
+    <!-- 工程设置（全字段表单；高级覆盖项 JSON 收起） -->
+    <el-dialog v-model="showEdit" :title="'工程设置 - ' + (editProject?.name || '')" width="560px">
       <el-form label-position="top" size="small">
+        <el-form-item label="Git 地址"><el-input v-model="editForm.git_url"></el-input></el-form-item>
+        <el-form-item label="默认分支（留空=远端默认）"><el-input v-model="editForm.default_branch"></el-input></el-form-item>
+        <el-form-item label="CI 项目链接"><el-input v-model="editForm.ci_url" placeholder="http://ci.localhost/job/xxx/job/main"></el-input></el-form-item>
+        <el-form-item label="Shadow 库地址（留空=自动本地建库；FR-MGR-013）"><el-input v-model="editForm.shadow_repo" placeholder="http://git.localhost/<owner>/<name>-shadow.git"></el-input></el-form-item>
+        <el-form-item label="描述"><el-input v-model="editForm.description" type="textarea" :rows="2"></el-input></el-form-item>
         <el-form-item label="Agent harness 覆盖">
-          <el-select v-model="overridesHarness" clearable placeholder="全局默认" style="width:100%">
+          <el-select v-model="editForm.harness" clearable placeholder="全局默认" style="width:100%">
             <el-option v-for="h in harnesses" :key="h.name" :label="h.name + ' — ' + h.desc" :value="h.name"></el-option>
           </el-select>
         </el-form-item>
-        <el-form-item label="高级覆盖项（JSON，如分析策略 prompt_pack 等）">
-          <el-input v-model="overridesText" type="textarea" :rows="6" placeholder="{}"></el-input>
+        <el-form-item>
+          <el-checkbox v-model="editForm.showAdv">高级覆盖项（JSON，如分析策略）</el-checkbox>
+        </el-form-item>
+        <el-form-item v-if="editForm.showAdv">
+          <el-input v-model="editForm.overridesText" type="textarea" :rows="6" placeholder="{}"></el-input>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showOverrides = false">取消</el-button>
-        <el-button type="primary" @click="saveOverrides" :loading="acting">保存</el-button>
+        <el-button @click="showEdit = false">取消</el-button>
+        <el-button type="primary" @click="saveEdit" :loading="acting">保存</el-button>
       </template>
     </el-dialog>
 
@@ -362,6 +371,6 @@
 
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://unpkg.com/element-plus/dist/index.full.min.js"></script>
-<script src="/app.js"></script>
+<script src="/app.js?v=3"></script>
 </body>
 </html>

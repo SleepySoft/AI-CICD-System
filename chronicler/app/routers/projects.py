@@ -53,6 +53,16 @@ async def update(pid: int, body: ProjectPatch, user: dict = Depends(require_admi
     return p
 
 
+@router.delete("/{pid}")
+async def delete(pid: int, user: dict = Depends(require_admin)):
+    import shutil
+    p = projects.get_project(pid)
+    projects.execute("DELETE FROM projects WHERE id=?", (pid,))
+    shutil.rmtree(projects.repo_dir(pid), ignore_errors=True)  # 清理本地克隆
+    audit(user["username"], "project.delete", p["name"])
+    return {"ok": True}
+
+
 @router.post("/{pid}/sync")
 async def sync(pid: int, user: dict = Depends(require_admin)):
     result = projects.sync_project(pid)
