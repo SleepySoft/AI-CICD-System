@@ -28,9 +28,11 @@ class Cfg:
     HOST = os.environ.get("CHRONICLER_HOST", "0.0.0.0")
     PORT = int(os.environ.get("CHRONICLER_PORT", "8600"))
 
-    # 数据根（NFR-008 + ADR-0026 二分）：私有侧存 db/repos/runs，公开侧存 reports
+    # 数据根（NFR-008 + ADR-0026 二分 + 工作空间层）：
+    # private 存 db/runs；public 存 reports；workspace 存工程克隆（可由 git 重建，不进备份）
     DATA = Path(os.environ.get("CHRONICLER_DATA", PKG_ROOT.parent / "data" / "private" / "chronicler"))
     PUBLIC = Path(os.environ.get("CHRONICLER_PUBLIC", PKG_ROOT.parent / "data" / "public"))
+    WORKSPACE = Path(os.environ.get("CHRONICLER_WORKSPACE", PKG_ROOT.parent / "data" / "workspace"))
 
     # 会话
     SESSION_SECRET = os.environ.get("CHRONICLER_SECRET", "chronicler-secret-change-me")
@@ -59,7 +61,7 @@ class Cfg:
 
     @classmethod
     def repos_dir(cls) -> Path:
-        return cls.DATA / "repos"
+        return cls.WORKSPACE / "repos"
 
     @classmethod
     def runs_dir(cls) -> Path:

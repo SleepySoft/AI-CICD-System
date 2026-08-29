@@ -48,6 +48,11 @@ def _run_hook(hook: Path, cmd: str, path: Path) -> dict:
     return result
 
 
+def _tar_skip_links(ti: tarfile.TarInfo):
+    """跳过符号链接（WSL 容器里创建的链接在 Windows 宿主上打不开）"""
+    return None if (ti.issym() or ti.islnk()) else ti
+
+
 def _default_backup(tool: dict, dest: Path) -> dict:
     """兜底：tar 组件的 data 目录（旧布局 data/<name> 与 ADR-0026 新布局 private/public 都试）"""
     dest.mkdir(parents=True, exist_ok=True)
@@ -55,9 +60,21 @@ def _default_backup(tool: dict, dest: Path) -> dict:
     for candidate in (DATA_ROOT / "private" / tool["name"], DATA_ROOT / tool["name"],
                       DATA_ROOT / "public" / tool["name"]):
         if candidate.is_dir():
+            skipped = []
             with tarfile.open(dest / f"{candidate.name}.tar.gz", "w:gz") as tar:
-                tar.add(candidate, arcname=candidate.name)
-            covered.append(str(candidate))
+                for root, _, files in os.walk(candidate):
+                    for fn in files:
+                        fp = Path(root) / fn
+                        try:
+                            ti = tar.gettarinfo(str(fp), arcname=str(fp.relative_to(candidate.parent)))
+                            if ti.issym() or ti.islnk():
+                                skipped.append(fn)
+                                continue
+                            with open(fp, "rb") as fh:
+                                tar.addfile(ti, fh)
+                        except OSError:
+                            skipped.append(fn)
+            covered.append(str(candidate) + (f"（{len(skipped)} 个跨平台残留已跳过）" if skipped else ""))
     return {"covers": covered, "declared": False, "skipped": not covered}
 
 
@@ -116,6 +133,17 @@ def backup(out_dir: Path | None = None) -> dict:
             results[name]["declared"] = True
         else:
             results[name] = _default_backup(tool, dest)
+
+    # supervisor 自身数据（不在组件注册表）：private/chronicler + public
+    sup = bundle / "chronicler"
+    sup.mkdir(exist_ok=True)
+    covered = []
+    for cand in (Cfg.DATA, Cfg.PUBLIC):
+        if cand.is_dir():
+            with tarfile.open(sup / f"{cand.name}.tar.gz", "w:gz") as tar:
+                tar.add(cand, arcname=cand.name)
+            covered.append(str(cand))
+    results["chronicler"] = {"covers": covered, "declared": True, "note": "supervisor 自身数据"}
 
     top = {"timestamp": ts, "supervisor": "chronicler", "components": results}
     (bundle / "manifest.json").write_text(json.dumps(top, ensure_ascii=False, indent=2),

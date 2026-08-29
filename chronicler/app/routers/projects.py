@@ -57,8 +57,10 @@ async def update(pid: int, body: ProjectPatch, user: dict = Depends(require_admi
 async def delete(pid: int, user: dict = Depends(require_admin)):
     import shutil
     p = projects.get_project(pid)
+    # 先清关联 Run（task_runs 有外键），再删工程；报告保留在 public/reports 供追溯
+    projects.execute("DELETE FROM task_runs WHERE project_id=?", (pid,))
     projects.execute("DELETE FROM projects WHERE id=?", (pid,))
-    shutil.rmtree(projects.repo_dir(pid), ignore_errors=True)  # 清理本地克隆
+    shutil.rmtree(projects.repo_dir(pid), ignore_errors=True)  # 清理工作空间克隆
     audit(user["username"], "project.delete", p["name"])
     return {"ok": True}
 

@@ -34,9 +34,11 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
 - 所有脚本/配置文件统一 **LF 行尾**（.gitattributes 已强制；Windows 编辑后注意转换，
   或运行 `scripts/dev-sync.sh`）。
 - **密钥绝不入库**：只提交 `.env.example`；`.env` 已在 .gitignore。
-- **数据显式落宿主**（NFR-008/009，ADR-0012/0026）：`data/public/`（组件交换区，挂所有容器）
-  与 `data/private/<组件>/`（仅挂载声明者）二分；API 型组件用 private，文件型产物用 public；
+- **数据显式落宿主**（NFR-008/009，ADR-0012/0026）：三层——`data/public/`（组件交换区，挂所有容器）、
+  `data/private/<组件>/`（仅挂载声明者）、`data/workspace/`（工作区，工程克隆等可由 git 重建，不进备份）；
   机密永不落 data。禁止命名卷存业务数据；`data/` 已入 .gitignore。
+- 工程仓库地址只允许远端（Gitea 自托管或 GitHub 等第三方）；本地路径形态不存在——本地的是
+  工作空间克隆（`data/workspace/repos/<id>/`）。
 - 组件全部免费（含商用）：Python 环境用 **Miniforge**（禁用 Anaconda/defaults 通道）。
 - 新增环境服务/组件：`chronicler/components/<name>/` 一个目录装一切（ADR-0027）——
   `plugin.yaml`（注册：group/desc/url/container/autostart/critical/driver/data）+
