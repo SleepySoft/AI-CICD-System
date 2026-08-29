@@ -245,6 +245,7 @@ services:
       URL: http://kb.${BASE_DOMAIN:-localhost}
       PORT: "3000"
       FORCE_HTTPS: "false"
+      NODE_ENV: development   # HTTP 内网部署：production 模式强制 secure cookie 会 500
       FILE_STORAGE: local
       FILE_STORAGE_LOCAL_ROOT_DIR: /var/lib/outline/data
       FILE_STORAGE_UPLOAD_MAX_SIZE: "26214400"
