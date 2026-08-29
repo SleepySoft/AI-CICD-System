@@ -18,7 +18,8 @@
 #       --profile requirements up -d                      # 多个 profile 组合
 #
 # 数据持久化（NFR-008 / ADR-0012）：业务数据全部显式 bind mount 到
-#   ${DATA_ROOT:-./data}/<服务名>，禁用命名卷；升级只重建容器，不动数据目录。
+#   ${DATA_ROOT:-./data}/private/<组件>（仅该组件挂载），${DATA_ROOT:-./data}/public → /public（所有容器共享交换区）
+#   （ADR-0026）；禁用命名卷；升级只重建容器，不动数据目录。
 # ============================================================
 
 name: aisystem
@@ -58,7 +59,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-aisys}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
-      - ${DATA_ROOT:-./data}/postgres:/var/lib/postgresql/data
+      - ${DATA_ROOT:-./data}/private/postgres:/var/lib/postgresql/data
+      - ${DATA_ROOT:-./data}/public:/public
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
@@ -72,7 +74,8 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
-      - ${DATA_ROOT:-./data}/redis:/data
+      - ${DATA_ROOT:-./data}/private/redis:/data
+      - ${DATA_ROOT:-./data}/public:/public
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -135,7 +138,8 @@ services:
       GITEA__security__INSTALL_LOCK: "true"
       GITEA__packages__ENABLED: "true"
     volumes:
-      - ${DATA_ROOT:-./data}/gitea:/data
+      - ${DATA_ROOT:-./data}/private/gitea:/data
+      - ${DATA_ROOT:-./data}/public:/public
     ports:
       - "${GITEA_SSH_PORT:-2222}:22"   # git over ssh
     depends_on:
@@ -162,7 +166,8 @@ services:
       JENKINS_ADMIN_ID: ${JENKINS_ADMIN_ID:-admin}
       JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:?}
     volumes:
-      - ${DATA_ROOT:-./data}/jenkins:/var/jenkins_home
+      - ${DATA_ROOT:-./data}/private/jenkins:/var/jenkins_home
+      - ${DATA_ROOT:-./data}/public:/public
       # 挂载宿主 docker.sock：流水线中用工具链镜像起一次性构建容器
       - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
@@ -190,7 +195,8 @@ services:
       <<: *common-env
       ATR_API_TOKEN: ${ATR_API_TOKEN:?ATR_API_TOKEN is required}
     volumes:
-      - ${DATA_ROOT:-./data}/agents:/opt/agents        # agent CLI 与登录态持久卷（ADR-0017，NFR-008）
+      - ${DATA_ROOT:-./data}/private/terminal-runtime:/opt/agents        # agent CLI 与登录态持久卷（ADR-0017，NFR-008）
+      - ${DATA_ROOT:-./data}/public:/public
       - ./scripts/agents:/opt/agent-install:ro         # 锁版本安装脚本
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS -H \"Authorization: Bearer $${ATR_API_TOKEN}\" http://localhost:18650/health || exit 1"]
@@ -208,7 +214,8 @@ services:
     profiles: ["knowledge"]
     environment: *common-env
     volumes:
-      - ${DATA_ROOT:-./data}/qdrant:/qdrant/storage
+      - ${DATA_ROOT:-./data}/private/qdrant:/qdrant/storage
+      - ${DATA_ROOT:-./data}/public:/public
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:6333/healthz || exit 1"]
       interval: 15s
@@ -243,7 +250,8 @@ services:
       OIDC_DISPLAY_NAME: Keycloak
       OIDC_SCOPES: openid profile email
     volumes:
-      - ${DATA_ROOT:-./data}/outline:/var/lib/outline/data
+      - ${DATA_ROOT:-./data}/private/outline:/var/lib/outline/data
+      - ${DATA_ROOT:-./data}/public:/public
     depends_on:
       postgres:
         condition: service_healthy
@@ -278,7 +286,8 @@ services:
       OPENPROJECT_HTTPS: "false"
       OPENPROJECT_DEFAULT__LANGUAGE: zh
     volumes:
-      - ${DATA_ROOT:-./data}/openproject:/var/openproject/assets
+      - ${DATA_ROOT:-./data}/private/openproject:/var/openproject/assets
+      - ${DATA_ROOT:-./data}/public:/public
     depends_on:
       postgres:
         condition: service_healthy
@@ -293,7 +302,8 @@ services:
     profiles: ["monitor"]
     environment: *common-env
     volumes:
-      - ${DATA_ROOT:-./data}/uptime-kuma:/app/data
+      - ${DATA_ROOT:-./data}/private/uptime-kuma:/app/data
+      - ${DATA_ROOT:-./data}/public:/public
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks: [aisystem]
 
@@ -306,7 +316,8 @@ services:
     profiles: ["localai"]
     environment: *common-env
     volumes:
-      - ${DATA_ROOT:-./data}/ollama:/root/.ollama
+      - ${DATA_ROOT:-./data}/private/ollama:/root/.ollama
+      - ${DATA_ROOT:-./data}/public:/public
     networks: [aisystem]
 
   # ==========================================================

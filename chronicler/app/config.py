@@ -28,8 +28,9 @@ class Cfg:
     HOST = os.environ.get("CHRONICLER_HOST", "0.0.0.0")
     PORT = int(os.environ.get("CHRONICLER_PORT", "8600"))
 
-    # 数据根（NFR-008 显式落宿主；默认 <repo>/data/chronicler）
-    DATA = Path(os.environ.get("CHRONICLER_DATA", PKG_ROOT.parent / "data" / "chronicler"))
+    # 数据根（NFR-008 + ADR-0026 二分）：私有侧存 db/repos/runs，公开侧存 reports
+    DATA = Path(os.environ.get("CHRONICLER_DATA", PKG_ROOT.parent / "data" / "private" / "chronicler"))
+    PUBLIC = Path(os.environ.get("CHRONICLER_PUBLIC", PKG_ROOT.parent / "data" / "public"))
 
     # 会话
     SESSION_SECRET = os.environ.get("CHRONICLER_SECRET", "chronicler-secret-change-me")
@@ -66,7 +67,7 @@ class Cfg:
 
     @classmethod
     def reports_dir(cls) -> Path:
-        return cls.DATA / "reports"
+        return cls.PUBLIC / "reports"
 
     @classmethod
     def prompts_override_dir(cls) -> Path:

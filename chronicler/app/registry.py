@@ -10,7 +10,7 @@ import re
 import yaml
 from fastapi import HTTPException
 
-from .config import Cfg
+from .config import PKG_ROOT, Cfg
 
 _ENV_REF = re.compile(r"^\$\{(\w+)\}$")
 
@@ -34,12 +34,33 @@ def get_harness(name: str) -> dict:
     return h
 
 
+def skill_path(name: str) -> str | None:
+    """组件的 SKILL.md 路径（用户覆盖目录优先）；不存在返回 None（ADR-0025：存在即注入）"""
+    for base in (Cfg.DATA / "components" / name, PKG_ROOT / "components" / name):
+        p = base / "SKILL.md"
+        if p.is_file():
+            return str(p)
+    return None
+
+
 def load_components() -> dict:
     """组件配置改从组件插件目录取（ADR-0027）：enabled/url/note 来自 plugin.yaml"""
     from .tools import load_tools
     return {t["name"]: {"enabled": bool(t.get("enabled")), "url": t.get("url", ""),
                         "note": t.get("note", t.get("desc", ""))}
             for t in load_tools()}
+
+
+def injectable_components() -> list[dict]:
+    """可注入 prompt 的组件（ADR-0024/0025）：已启用 且 有 SKILL.md，返回 L0 摘要信息"""
+    from .tools import load_tools
+    out = []
+    for t in load_tools():
+        skill = skill_path(t["name"])
+        if t.get("enabled") and skill:
+            out.append({"name": t["name"], "group": t.get("group", ""),
+                        "desc": t.get("note") or t.get("desc", ""), "skill": skill})
+    return out
 
 
 def enabled_components() -> dict:

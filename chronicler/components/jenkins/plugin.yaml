@@ -1,5 +1,5 @@
 # 组件插件（ADR-0027）：一个目录装下组件的一切（SKILL.md / hooks/ 可选）
-# 用户覆盖：data/chronicler/components/<name>/ 同构
+# data 声明（ADR-0026）：private=数据仅本组件挂载；public_write=交换区子目录
 name: jenkins
 group: 研发
 desc: CI/CD 流水线（独立账号）
@@ -11,3 +11,6 @@ critical: false
 driver: docker
 enabled: true
 note: CI 构建结果查询（只读）
+data:
+  private: true
+  public_write: ci

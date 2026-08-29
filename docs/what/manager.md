@@ -95,7 +95,7 @@ asset_refs[]       上升入资产库的条目（FR-MGR-013/014）
 - **Agent 用户自装 harness**（ADR-0021，部分推翻 ADR-0017）：CLI 由用户在 supervisor 所在宿主自行安装与登录，supervisor 只登记命令模板（`command` + 参数），不接管安装与版本锁定；会话经 ATR 抽象尽力持久（harness 不支持持久会话则一次性 + resume 续接，语义 TBD）；terminal-runtime 保留为可选隔离沙箱（CI/不可信任务）。endpoint 抽象（`base_url` + key）与登录态复用约定沿用 ADR-0017 未推翻部分。
 - **Agent 注册表过渡形态**（ADR-0018，契约已随 ADR-0021 更新）：当前以 `manager/agents.yaml`（只读挂载热更新）为 agent 清单单一事实源，字段与本表 `agent_profile` 同名，M2 建库后原样迁移；`scripts/agents/<name>.sh` 锁版本安装脚本降级为 terminal-runtime 沙箱专用；操作流程见 ../runbooks/agent-onboarding.md。
 - **git 是唯一硬依赖**（ADR-0022）：代码源必须是 git 仓库，托管位置不限；其余组件（OP/JIRA/Qdrant/SSO 等）均可选、可替换、可外部。
-- **资源能力经 skill 注入**（FR-MGR-015）：资源以能力描述（访问途径 + 凭据引用 + 用途说明）注册，prompt 只携带已配置资源的访问途径，agent 自主翻看；未配置的资源不出现在 prompt 中，系统按此降级。
+- **资源能力经 SKILL 渐进披露注入**（FR-MGR-015、ADR-0024/0025）：组件目录的 `SKILL.md` 存在即注入（L0 摘要+路径常驻 prompt，正文 agent 按需自读）；无 SKILL 的组件（输出消费类）不注入。
 - **资产两级沉淀**（FR-MGR-013/014）：项目经验与代码抽取先入 `project_shadow`（每项目一个 git 仓库），经审批上升到全局资产库；内容本体在 git，Chronicler 只存索引（`asset` 表）。
 
 ### 2.2 API 概要

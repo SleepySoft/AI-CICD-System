@@ -1,5 +1,5 @@
 # 组件插件（ADR-0027）：一个目录装下组件的一切（SKILL.md / hooks/ 可选）
-# 用户覆盖：data/chronicler/components/<name>/ 同构
+# data 声明（ADR-0026）：private=数据仅本组件挂载；public_write=交换区子目录
 name: outline
 group: 知识与文档
 desc: 知识库 Web（knowledge profile，Keycloak 登录）
@@ -11,3 +11,5 @@ critical: false
 driver: docker
 enabled: false
 note: 知识库 Wiki
+data:
+  private: true

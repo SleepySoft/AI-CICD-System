@@ -17,10 +17,20 @@ from .config import Cfg
 from .db import dumps, execute, q, q1
 
 
+def _q(path: str) -> str:
+    """跨平台路径引号：Windows cmd 用双引号，POSIX 用 shlex（ADR-0020 多平台）"""
+    return f'"{path}"' if os.name == "nt" else shlex.quote(path)
+
+
 def _render_prompt(template: str, project: dict, extra: dict) -> str:
-    components = "\n".join(
-        f"- {name}: {c.get('url', '')}（{c.get('note', '')}）"
-        for name, c in registry.enabled_components().items()) or "- （未启用任何组件）"
+    # ADR-0024/0025：注入 L0 摘要（名称+一句话+SKILL 路径），agent 按需自读 SKILL.md
+    comps = registry.injectable_components()
+    if comps:
+        lines = [f"- {c['name']}: {c['desc']}（能力详情见 SKILL 文件：{c['skill']}，需要时再读）"
+                 for c in comps]
+        components = "\n".join(lines)
+    else:
+        components = "- （未注入任何组件能力；按纯本地仓库分析，缺失维度如实说明）"
     vars_ = {
         "project_name": project["name"],
         "repo_dir": str(projects.repo_dir(project["id"])),
@@ -54,7 +64,8 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "")
         " VALUES (?,?,?,?,?,?,?,?)",
         (project_id, task_type, "queued", harness_name, prompt_version,
          dumps({"repo_head": projects.head_commit(project_id), "git_url": project["git_url"],
-                "overrides": overrides, "components": list(registry.enabled_components())}),
+                "overrides": overrides,
+                "components": [c["name"] for c in registry.injectable_components()]}),
          actor, time.time()))
     threading.Thread(target=_run, args=(run_id, harness, prompt), daemon=True).start()
     return get_run(run_id)
@@ -71,9 +82,9 @@ def _run(run_id: int, harness: dict, prompt: str):
     prompt_file.write_text(prompt, encoding="utf-8")
 
     command = harness["command_template"].format(
-        prompt_file=shlex.quote(str(prompt_file)),
-        report_file=shlex.quote(str(report_file)),
-        repo_dir=shlex.quote(str(repo)))
+        prompt_file=_q(str(prompt_file)),
+        report_file=_q(str(report_file)),
+        repo_dir=_q(str(repo)))
     env = {**os.environ, **registry.resolve_env(harness.get("env"))}
 
     execute("UPDATE task_runs SET status='running', log_path=? WHERE id=?",

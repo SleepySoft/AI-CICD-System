@@ -24,8 +24,8 @@ harnesses:
       MOONSHOT_API_KEY: "${LLM_API_KEY}"
     timeout_sec: 1800
   - name: shell
-    desc: 冒烟测试用假 harness：不做 AI 调用，把 prompt 原样写成报告
-    command_template: "cat {prompt_file} > {report_file}"
+    desc: 冒烟测试用假 harness：不做 AI 调用，把 prompt 原样写成报告（跨平台 python 一行）
+    command_template: "python -c \"import shutil,sys;shutil.copyfile(sys.argv[1],sys.argv[2])\" {prompt_file} {report_file}"
     session: once
     env: {}
     timeout_sec: 60

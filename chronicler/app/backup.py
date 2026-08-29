@@ -15,8 +15,9 @@ from pathlib import Path
 from .config import PKG_ROOT, Cfg
 from .tools import load_tools
 
-BACKUPS_DIR = Cfg.DATA.parent / "backups"
-DATA_ROOT = Cfg.DATA.parent
+REPO_ROOT = PKG_ROOT.parent
+BACKUPS_DIR = REPO_ROOT / "data" / "backups"
+DATA_ROOT = REPO_ROOT / "data"
 
 
 def _hook_path(tool: dict) -> Path | None:
