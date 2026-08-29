@@ -79,7 +79,7 @@ artifacts[]        每个产物：kind(report|doc|knowhow|code-snippet)、path�
                    action(created|updated|deleted)、size_bytes
                    【v1】（报告类产物已记；doc/knowhow 类随 M3/M4）
 artifact_commit    产物落入 git 的提交 SHA（报告库/shadow 库/目标仓库）
-                   【规划】报告库 git 化（M3）后必填
+                   【v1】shadow 仓提交 SHA 已回填（ADR-0028）
 review_refs[]      关联的待审区条目（FR-MGR-009）
 asset_refs[]       上升入资产库的条目（FR-MGR-013/014）
 ```

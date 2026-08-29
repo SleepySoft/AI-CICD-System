@@ -5,6 +5,7 @@ import re
 import subprocess
 from pathlib import Path
 
+import httpx
 from fastapi import HTTPException
 
 from .config import Cfg
@@ -119,22 +120,29 @@ def repo_dirty(pid: int) -> bool:
 
 
 def shadow_dir(pid: int) -> Path:
-    """项目影子库目录（FR-MGR-013）：data/private/chronicler/shadow/<pid>"""
-    return Cfg.DATA / "shadow" / str(pid)
+    """项目影子库目录（FR-MGR-013/ADR-0028）：data/public/shadow/<工程名>-shadow（交换区，容器可读）"""
+    p = get_project(pid)
+    return Cfg.PUBLIC / "shadow" / f"{p['name']}-shadow"
 
 
 def ensure_shadow_repo(pid: int) -> Path:
-    """建立或同步 shadow 库：工程指定了 shadow_repo（URL/路径）则 clone；否则本地 init
-    返回 shadow 库路径（git 仓库）"""
+    """建立或获取 shadow 库：指定 shadow_repo 则 clone；未指定则尝试 Gitea 自动建仓
+    <工程名>-shadow（幂等）；Gitea 不可达时纯本地仓。返回 git 仓路径。"""
     p = get_project(pid)
     dest = shadow_dir(pid)
-    if dest.is_dir():
+    if (dest / ".git").is_dir():
         return dest
+    url = (p.get("shadow_repo") or "").strip()
+    if not url:
+        url = _gitea_auto_shadow_repo(p) or ""  # 建仓成功会回写 project.shadow_repo
     dest.parent.mkdir(parents=True, exist_ok=True)
-    if p.get("shadow_repo"):
-        r = _git(["clone", p["shadow_repo"], str(dest)], timeout=300)
+    if url:
+        r = _git(["clone", url, str(dest)], timeout=300)
         if r.returncode != 0:
-            raise HTTPException(status_code=502, detail=f"shadow 库 clone 失败：{r.stderr.strip()[:300]}")
+            # clone 失败（如空仓 404）则本地初始化，推送时建仓
+            dest.mkdir(parents=True, exist_ok=True)
+            _git(["-C", str(dest), "init"])
+            _git(["-C", str(dest), "commit", "--allow-empty", "-m", "init shadow repo"])
     else:
         dest.mkdir(parents=True, exist_ok=True)
         _git(["-C", str(dest), "init"])
@@ -142,10 +150,52 @@ def ensure_shadow_repo(pid: int) -> Path:
     return dest
 
 
+def _gitea_auto_shadow_repo(project: dict) -> str | None:
+    """Gitea 自动建仓 <工程名>-shadow（幂等，ADR-0028）；凭据环境注入。返回 clone URL 或 None"""
+    user, pw = os.environ.get("GITEA_ADMIN_USER", ""), os.environ.get("GITEA_ADMIN_PASSWORD", "")
+    if not (user and pw):
+        return None
+    try:
+        gitea = next((t for t in load_tools_safe() if t["name"] == "gitea"), None)
+        if not gitea:
+            return None
+        base = gitea.get("url", "http://git.localhost").rstrip("/")
+        host = base.split("//")[1]
+        api = f"http://127.0.0.1/api/v1" if host.endswith(".localhost") else f"{base}/api/v1"
+        headers = {"Host": host} if host.endswith(".localhost") else {}
+        repo_name = f"{project['name']}-shadow"
+        with httpx.Client(timeout=10, trust_env=False) as client:
+            auth = (user, pw)
+            r = client.get(f"{api}/repos/{user}/{repo_name}", headers=headers, auth=auth)
+            if r.status_code == 404:
+                r = client.post(f"{api}/user/repos", headers=headers, auth=auth, json={
+                    "name": repo_name,
+                    "description": f"Chronicler shadow：{project['name']} 的分析报告与蒸馏文档（ADR-0028）",
+                    "private": False, "auto_init": False})
+                if r.status_code not in (200, 201, 409):
+                    return None
+            clone_url = f"{base}/{user}/{repo_name}.git"
+            execute("UPDATE projects SET shadow_repo=? WHERE id=?", (clone_url, project["id"]))
+            return clone_url
+    except Exception:  # noqa: BLE001 - 建仓失败降级为本地仓
+        return None
+
+
+def load_tools_safe():
+    from .tools import load_tools
+    try:
+        return load_tools()
+    except Exception:
+        return []
+
+
 def push_shadow(pid: int) -> str | None:
     """shadow 库推送到工程指定的 shadow_repo（FR-MGR-013）；凭据运行期从环境注入，不落库"""
     p = get_project(pid)
     url = (p.get("shadow_repo") or "").strip()
+    if not url:
+        # 本地仓已存在但远端未登记：尝试 Gitea 自动建仓（幂等）并回写（ADR-0028）
+        url = _gitea_auto_shadow_repo(p) or ""
     if not url:
         return None
     dest = shadow_dir(pid)

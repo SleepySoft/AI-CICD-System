@@ -65,8 +65,8 @@
 
 ### FR-MGR-013 项目影子库（project_shadow）
 - 状态: 生效 | 上层: BR-007 | 优先级: P1
-- 描述: 每个受管项目可建立或指定一个 shadow git 仓库，沉淀该项目蒸馏出的经验与抽取的代码片段；内容本体在 git，Chronicler 仅存索引（NFR-009）。
-- 验收: 批准的经验/代码抽取条目出现在 shadow 仓库，`git log` 可追溯来源 Run。
+- 描述: 每个受管项目一个 shadow git 仓（`data/public/shadow/<工程名>-shadow`，ADR-0028）：承载分析报告（reports/）与蒸馏卡片（know-how/）等全部持久产物，统一 git 提交并推送远端（默认 Gitea 自动建仓，可指定任意 git 远端）；内容本体在 git，Chronicler 仅存索引（NFR-009）。
+- 验收: Run 的 artifacts 含 shadow 提交 SHA 与推送状态；Gitea 仓可见对应提交；未配置远端时纯本地仓也成立。
 
 ### FR-MGR-014 全局资产库
 - 状态: 生效 | 上层: BR-007 | 优先级: P1

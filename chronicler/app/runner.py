@@ -202,7 +202,10 @@ def _run(run_id: int, harness: dict, prompt: str):
             if proc.returncode == 0:
                 if report_file.is_file():
                     artifacts.append(_publish(run, report_file))
-                _, shadow_arts = _commit_shadow(run)  # FR-MGR-013：shadow 库变更入库并记 artifact_commit
+                sha, shadow_arts = _commit_shadow(run)  # ADR-0028：统一提交，报告 artifact 回填 commit
+                if sha:
+                    for a in artifacts:
+                        a["commit"] = a.get("commit") or sha
                 artifacts.extend(shadow_arts)
             if proc.returncode == 0 and artifacts:
                 execute("UPDATE task_runs SET status='success', artifacts=?, finished_at=? WHERE id=?",
@@ -235,9 +238,10 @@ def _commit_shadow(run: dict) -> tuple[str | None, list[dict]]:
                    "user.email=chronicler@localhost", "commit", "-m",
                    f"run#{run['id']} {run['task_type']}"])
     sha = projects._git(["-C", str(shadow), "rev-parse", "HEAD"]).stdout.strip()
+    pushed = False
     try:
-        projects.push_shadow(run["project_id"])  # 指定了 shadow_repo 则同步到远端（如 Gitea）
-    except Exception as e:  # noqa: BLE001 - 推送失败不影响本地档案
+        pushed = bool(projects.push_shadow(run["project_id"]))  # ADR-0028：推送失败不判死
+    except Exception as e:  # noqa: BLE001
         _audit_push_failure(run, e)
     arts = []
     for line in status.splitlines():
@@ -245,15 +249,17 @@ def _commit_shadow(run: dict) -> tuple[str | None, list[dict]]:
         full = shadow / path
         arts.append({"kind": "knowhow" if "knowhow" in run["task_type"] else "shadow",
                      "path": str(full), "action": "created" if line.startswith("??") else "updated",
-                     "size_bytes": full.stat().st_size if full.is_file() else 0, "commit": sha})
+                     "size_bytes": full.stat().st_size if full.is_file() else 0,
+                     "commit": sha, "pushed": pushed})
     return sha, arts
 
 
 def _publish(run: dict, report_file) -> dict:
-    """产物落盘并返回 artifact 记录（§2.1.1 C 段）。产物为 git 内容时补 commit（报告库 git 化在 M3）。"""
-    dest_dir = Cfg.reports_dir() / str(run["project_id"])
+    """报告写入 shadow 仓 reports/<task_type>/（ADR-0028：持久产物统一入 shadow project）"""
+    shadow = projects.ensure_shadow_repo(run["project_id"])
+    dest_dir = shadow / "reports" / run["task_type"]
     dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / f"{time.strftime('%Y%m%d-%H%M%S')}-{run['task_type']}.md"
+    dest = dest_dir / f"{time.strftime('%Y%m%d-%H%M%S')}.md"
     dest.write_bytes(report_file.read_bytes())
     execute("UPDATE task_runs SET report_path=? WHERE id=?", (str(dest), run["id"]))
     return {"kind": "report", "path": str(dest), "action": "created",

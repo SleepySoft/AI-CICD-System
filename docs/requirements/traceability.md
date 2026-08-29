@@ -40,7 +40,7 @@
 | FR-MGR-010 | CI 结果消费 | what/manager.md §数据模型 | chronicler/app/runner.py _ci_context（最小实现：快照记录同期构建） | 人工：Run 快照含 ci_context |
 | FR-MGR-011 | Prompt 库版本化 | what/manager.md §数据模型 | chronicler/（M3 规划） | 待实现（M3） |
 | FR-MGR-012 | 项目全景仪表盘 | what/manager.md §前端页面 | chronicler/（M3 规划） | 待实现（M3） |
-| FR-MGR-013 | 项目影子库 | what/manager.md §数据模型 | chronicler/app/projects.py ensure_shadow_repo + runner._commit_shadow（最小实现：本地 shadow 库 + 变更自动提交） | 人工：knowhow-distill 后 git log shadow 库 |
+| FR-MGR-013 | 项目影子库 | what/manager.md §数据模型 | chronicler/app/projects.py（ensure_shadow_repo + Gitea 自动建仓）+ runner._commit_shadow（ADR-0028） | 人工：触发任务后查 artifacts 的 commit/pushed 与 Gitea 仓 |
 | FR-MGR-014 | 全局资产库 | what/manager.md §数据模型 | chronicler/（M4 规划） | 待实现（M4） |
 | FR-MGR-015 | 资源能力注入（skill 化） | what/manager.md §契约要点 | chronicler/app/registry.py（injectable_components）+ chronicler/components/\<name\>/SKILL.md（ADR-0024/0025） | 人工：触发 Run 后查 prompt 快照含 SKILL 路径 |
 | FR-MGR-016 | 任务来源适配与降级 | what/manager.md §任务类型框架 | chronicler/（M3 规划） | 待实现（M3） |

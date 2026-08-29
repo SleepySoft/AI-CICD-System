@@ -279,7 +279,7 @@ services:
     command: ["serve", "--dev-addr=0.0.0.0:8000"]
     volumes:
       - ./mkdocs:/docs
-      - ${DATA_ROOT:-./data}/public/reports:/docs/docs/reports   # 被管工程报告（Chronicler 产出，不写本仓）
+      - ${DATA_ROOT:-./data}/public/shadow:/docs/docs/shadow   # 被管工程 shadow 仓（Chronicler 产出，ADR-0028）
     networks: [aisystem]
 
   # ==========================================================
