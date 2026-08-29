@@ -34,8 +34,9 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
 - 所有脚本/配置文件统一 **LF 行尾**（.gitattributes 已强制；Windows 编辑后注意转换，
   或运行 `scripts/dev-sync.sh`）。
 - **密钥绝不入库**：只提交 `.env.example`；`.env` 已在 .gitignore。
-- **数据显式落宿主**（NFR-008/009，ADR-0012/0013）：服务数据 bind mount 到
-  `${DATA_ROOT:-./data}/<服务>`，禁止命名卷存业务数据；`data/` 已入 .gitignore。
+- **数据显式落宿主**（NFR-008/009，ADR-0012/0026）：`data/public/`（组件交换区，挂所有容器）
+  与 `data/private/<组件>/`（仅挂载声明者）二分；API 型组件用 private，文件型产物用 public；
+  机密永不落 data。禁止命名卷存业务数据；`data/` 已入 .gitignore。
 - 组件全部免费（含商用）：Python 环境用 **Miniforge**（禁用 Anaconda/defaults 通道）。
 - 新增环境服务：改 `docker-compose.yml`（按需挂 profile）+ `caddy/Caddyfile` 子域名 +
   `chronicler/config/tools.d/<name>.yaml` 组件插件（FR-MGR-022）+ README 更新。
