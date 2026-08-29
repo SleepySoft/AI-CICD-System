@@ -69,6 +69,7 @@ bash scripts/verify-chronicler.sh    # WSL；Windows 用浏览器访问 http://1
 | OIDC 登录 token 交换失败 | 代理拦截 127.0.0.1 | 确认进程走 trust_env=False；shell 里测试用 `curl --noproxy '*'` |
 | app.localhost 502 | supervisor 没起或 Caddy 未重载 | 先验 127.0.0.1:8600 直连；再 `docker compose up -d caddy` |
 | 改了代码不生效 | 后台旧进程还在 | 停掉 8600 端口的旧进程再启动（Windows：`Get-NetTCPConnection -LocalPort 8600` 找 PID） |
+| PyCharm 调试报端口占用 | 后台服务实例占着 8600 | 调试配置加环境变量 `CHRONICLER_PORT=8601` 错开（经 8601 直连调试，不影响正式入口）；或先停服务实例 |
 | 容器全部消失 | Docker Desktop 未启动 | 启动 Docker Desktop 后 `docker compose up -d`（restart 策略自动恢复） |
 
 ## 回滚（如适用）
