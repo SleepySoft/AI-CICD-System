@@ -82,6 +82,8 @@ powershell -File scripts\start-chronicler.ps1            # 读 .env 后启动（
   且 Docker 容器内 *.localhost 按 RFC6761 强制回环（extra_hosts 也难覆盖）→ SCM 源用内网名
   （http://gitea:3000）+ 多分支任务加 PeriodicFolderTrigger 兑底（本机实测，2026-08-29）。
 - Jenkins API 的 POST 需要 crumb+cookie jar；URL 含 `[]` 要加 `curl -g`；JCasC jobs 脚本写错会导致 Jenkins 崩溃循环（RestartCount 飚升）——看 `docker logs` 的 InitReactorRunner 错误。
+- Windows 本机 `*.localhost` 可能被代理 fake-ip/DNS 劫持 → 用 `scripts/fix-hosts.ps1`（需管理员）
+  把子域名钉到 127.0.0.1；写 hosts 用 `[System.IO.File]::AppendAllText`（Add-Content 预读编码会报“流不可读”）。
 - Windows 侧 Python subprocess 捕获输出必须显式 `encoding="utf-8", errors="replace"`
   （`text=True` 用 GBK 解码，遇 UTF-8 提交信息 stdout 变 None，2026-08-27 实测）。
 - Windows 部署时 Docker Desktop 需随登录自启（Settings → General → Start when you sign in），
