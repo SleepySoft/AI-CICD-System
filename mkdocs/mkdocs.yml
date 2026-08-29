@@ -19,3 +19,5 @@ plugins:
 nav:
   - 首页: index.md
   # Agent 生成的文档会按仓库/模块追加到此处
+  - 分析报告:
+    - daily-report 08-29 14:56: reports/ai-cicd-system/20260829-145621-daily-report.md
