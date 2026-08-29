@@ -127,6 +127,7 @@ services:
       USER_UID: "1000"
       USER_GID: "1000"
       GITEA__database__DB_TYPE: postgres
+      GITEA__webhook__ALLOWED_HOST_LIST: "*"   # 允许内网 webhook（jenkins 等），内网环境可接受
       GITEA__database__HOST: postgres:5432
       GITEA__database__NAME: gitea
       GITEA__database__USER: ${POSTGRES_USER:-aisys}
@@ -165,11 +166,16 @@ services:
       JAVA_OPTS: "-Djenkins.install.runSetupWizard=false"
       JENKINS_ADMIN_ID: ${JENKINS_ADMIN_ID:-admin}
       JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:?}
+      GITEA_ADMIN_USER: ${GITEA_ADMIN_USER:-gitea_admin}
+      GITEA_ADMIN_PASSWORD: ${GITEA_ADMIN_PASSWORD:?}
     volumes:
       - ${DATA_ROOT:-./data}/private/jenkins:/var/jenkins_home
       - ${DATA_ROOT:-./data}/public:/public
       # 挂载宿主 docker.sock：流水线中用工具链镜像起一次性构建容器
       - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      # webhook payload 与 SCM source 统一用公开域名 git.localhost；容器内经宿主 Caddy 回源
+      - "git.localhost:host-gateway"
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/login >/dev/null || exit 1"]
       interval: 20s

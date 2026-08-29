@@ -19,21 +19,55 @@ unclassified:
     url: "http://ci.localhost/"
   timestamper:
     allPipelines: true
+  giteaServers:
+    servers:
+      - displayName: "Gitea（内网直连）"
+        serverUrl: "http://gitea:3000"
+        credentialsId: "gitea-admin"
+        manageHooks: false
+      - displayName: "Gitea（公开域名）"
+        serverUrl: "http://git.localhost"
+        credentialsId: "gitea-admin"
+        manageHooks: false
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - usernamePassword:
+              scope: GLOBAL
+              id: gitea-admin
+              username: "${GITEA_ADMIN_USER}"
+              password: "${GITEA_ADMIN_PASSWORD}"
 
 jobs:
   - script: >
-      pipelineJob('chronicler-selftest') {
-        description('Chronicler 组件自检（FR-MGR-023）：契约校验 + 可选沙箱部署测试')
-        definition {
-          cpsScm {
-            scm {
-              git {
-                remote { url('http://gitea:3000/gitea_admin/ai-cicd-system.git') }
-                branch('*/main')
+      multibranchPipelineJob('chronicler-selftest') {
+        description('Chronicler 组件自检（FR-MGR-023）：契约校验 + 可选沙箱部署测试；Gitea push 自动触发')
+        branchSources {
+          branchSource {
+            source {
+              giteaSCMSource {
+                id('chronicler-selftest')
+                serverUrl('http://gitea:3000')   // 容器内网直连；webhook 匹配不上时用周期扫描兜底
+                credentialsId('gitea-admin')
+                repoOwner('gitea_admin')
+                repository('ai-cicd-system')
+                traits {
+                  giteaBranchDiscovery { strategyId(1) }
+                }
               }
             }
-            scriptPath('Jenkinsfile')
-            lightweight(true)
+          }
+        }
+        factory {
+          workflowBranchProjectFactory { scriptPath('Jenkinsfile') }
+        }
+        // 周期扫描兑底（每 2 分钟发现新提交即构建；webhook 触发为加速通道）
+        configure { project ->
+          project / 'triggers' / 'com.cloudbees.hudson.plugins.folder.computed.PeriodicFolderTrigger' << {
+            spec('H/2 * * * *')
+            interval('120000')
           }
         }
       }

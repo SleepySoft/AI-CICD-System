@@ -78,6 +78,10 @@ powershell -File scripts\start-chronicler.ps1            # 读 .env 后启动（
 - Gitea CLI 拒绝 root：`docker exec -u git`。
 - Jenkins 插件 ID 是 `allure-jenkins-plugin`（不是 `allure`）。
 - PowerShell 内联 wsl 命令避免 `$()`/`*` 转义问题 → 写成 scripts/*.sh 再执行。
+- Gitea webhook 投递后 Jenkins gitea 插件按 URL 匹配任务，内外网域名不一致会静默不触发；
+  且 Docker 容器内 *.localhost 按 RFC6761 强制回环（extra_hosts 也难覆盖）→ SCM 源用内网名
+  （http://gitea:3000）+ 多分支任务加 PeriodicFolderTrigger 兑底（本机实测，2026-08-29）。
+- Jenkins API 的 POST 需要 crumb+cookie jar；URL 含 `[]` 要加 `curl -g`；JCasC jobs 脚本写错会导致 Jenkins 崩溃循环（RestartCount 飚升）——看 `docker logs` 的 InitReactorRunner 错误。
 - Windows 侧 Python subprocess 捕获输出必须显式 `encoding="utf-8", errors="replace"`
   （`text=True` 用 GBK 解码，遇 UTF-8 提交信息 stdout 变 None，2026-08-27 实测）。
 - Windows 部署时 Docker Desktop 需随登录自启（Settings → General → Start when you sign in），
