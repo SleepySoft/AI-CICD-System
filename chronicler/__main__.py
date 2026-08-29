@@ -3,6 +3,7 @@
   python -m chronicler create-admin       交互创建 admin 账号
   python -m chronicler backup [目录]       组件化一键备份（ADR-0027）
   python -m chronicler restore <备份目录>  恢复
+  python -m chronicler test [--component X] [--deploy] [--timeout N]   组件自检（FR-MGR-023）
 """
 import sys
 
@@ -21,6 +22,24 @@ def main():
         from .app.config import Cfg
         Cfg.ensure_dirs()
         uvicorn.run("chronicler.app.main:app", host=Cfg.HOST, port=Cfg.PORT)
+    elif cmd == "test":
+        from .app.testing import test_all, test_component
+        deploy = "--deploy" in sys.argv
+        name = sys.argv[sys.argv.index("--component") + 1] if "--component" in sys.argv else None
+        timeout = int(sys.argv[sys.argv.index("--timeout") + 1]) if "--timeout" in sys.argv else 300
+        results = [test_component(name, deploy, timeout)] if name else test_all(deploy, timeout)
+        failed = 0
+        for r in results:
+            mark = "[PASS]" if r["ok"] else "[FAIL]"
+            print(f"{mark} {r['name']}")
+            for p in r.get("problems", []):
+                print(f"    契约: {p}")
+            if r.get("deploy") and not r["deploy"].get("ok"):
+                print(f"    部署: {r['deploy'].get('stage')} — {r['deploy'].get('log', '')[:120]}")
+            if not r["ok"]:
+                failed += 1
+        print(f"\n{len(results) - failed}/{len(results)} 通过")
+        sys.exit(1 if failed else 0)
     elif cmd == "backup":
         from pathlib import Path
         from .app.backup import backup

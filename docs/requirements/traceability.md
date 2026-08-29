@@ -50,6 +50,7 @@
 | FR-MGR-020 | 工程实体与配置覆盖 | what/manager.md §数据模型 | chronicler/app/projects.py | 人工：建工程+覆盖项触发 Run |
 | FR-MGR-021 | 工程分析策略配置 | what/manager.md §任务类型框架 | chronicler/（M3 规划） | 待实现（M3） |
 | FR-MGR-022 | 组件生命周期管理 | what/manager.md §前端页面 | chronicler/app/tools.py + chronicler/components/（ADR-0027） | 人工：自启开关重启验证/日志/详情/一键部署 |
+| FR-MGR-023 | 组件自检 | chronicler/app/testing.py | chronicler/app/testing.py + 组件 hooks/test.py | `python -m chronicler test [--deploy]` |
 | FR-TASK-001 | 任务前端提交 | what/task-mgmt.md §角色分工 | docker-compose.yml(requirements profile) | 人工：建包后 API 检索 |
 | FR-TASK-002 | AI 任务领取 | what/task-mgmt.md §API 契约 | .agents/skills/openproject/（Manager M2 起自动化） | 人工：按 skill 领任务置 in progress |
 | FR-TASK-003 | AI 状态回写 | what/task-mgmt.md §状态机 | .agents/skills/openproject/ + OpenProject workflow 配置 | 人工：回写成功且置 closed 被拒 |

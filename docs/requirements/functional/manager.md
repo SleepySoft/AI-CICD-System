@@ -112,3 +112,8 @@
 - 状态: 生效 | 上层: UR-006, UR-009 | 优先级: P1
 - 描述: 组件目录自包含（components/<name>/ 一个目录装一切：plugin.yaml 注册 + 可选 SKILL.md 能力 + 可选 hooks/backup.py、deploy.py，ADR-0027）；supervisor 只做目录扫描与契约调用，不含组件特定信息。每个组件可标记自启——supervisor 启动时自动拉起（停止的 docker start，容器不存在则组件 deploy 钩子或 `docker compose up -d` 现场创建）与关键组件（critical，关自启/停止需强确认）；登录用户可查看组件日志与运行详情；admin 可一键部署未部署组件（实时进度）。
 - 验收: 新增组件 = 建一个目录即注册成功；`docker compose down` 后仅启动 supervisor，标记自启的组件全部自动恢复；critical 组件操作有确认提示；日志/详情/部署进度接口可用。
+
+### FR-MGR-023 组件自检（契约校验 + 隔离沙箱部署测试）
+- 状态: 生效 | 上层: UR-009, BR-002 | 优先级: P1
+- 描述: 每个组件可自动自检：plugin.yaml/SKILL.md/备份钩子契约校验；可选隔离部署测试——以独立 compose 项目名与临时数据目录拉起组件，零配置/默认配置验证可达 healthy 后销毁，不影响正式实例。组件可提供 hooks/test.py 自测钩子优先于通用测试。
+- 验收: `python -m chronicler test` 全部组件契约通过；`--deploy` 沙箱测试后正式实例运行状态不变且无沙箱残留。
