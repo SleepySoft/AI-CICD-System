@@ -40,34 +40,5 @@ credentials:
               username: "${GITEA_ADMIN_USER}"
               password: "${GITEA_ADMIN_PASSWORD}"
 
-jobs:
-  - script: >
-      multibranchPipelineJob('chronicler-selftest') {
-        description('Chronicler 组件自检（FR-MGR-023）：契约校验 + 可选沙箱部署测试；Gitea push 自动触发')
-        branchSources {
-          branchSource {
-            source {
-              giteaSCMSource {
-                id('chronicler-selftest')
-                serverUrl('http://gitea:3000')   // 容器内网直连；webhook 匹配不上时用周期扫描兜底
-                credentialsId('gitea-admin')
-                repoOwner('gitea_admin')
-                repository('ai-cicd-system')
-                traits {
-                  giteaBranchDiscovery { strategyId(1) }
-                }
-              }
-            }
-          }
-        }
-        factory {
-          workflowBranchProjectFactory { scriptPath('Jenkinsfile') }
-        }
-        // 周期扫描兑底（每 2 分钟发现新提交即构建；webhook 触发为加速通道）
-        configure { project ->
-          project / 'triggers' / 'com.cloudbees.hudson.plugins.folder.computed.PeriodicFolderTrigger' << {
-            spec('H/2 * * * *')
-            interval('120000')
-          }
-        }
-      }
+# 注意：jobs 不写在 JCasC（job-dsl 脚本出错会让 Jenkins 崩溃循环，2026-08-29 实测）；
+# 任务创建走 scripts/wire-jenkins-job.sh（启动后经 REST 投递 config.xml）

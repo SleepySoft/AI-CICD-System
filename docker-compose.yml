@@ -168,11 +168,17 @@ services:
       JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:?}
       GITEA_ADMIN_USER: ${GITEA_ADMIN_USER:-gitea_admin}
       GITEA_ADMIN_PASSWORD: ${GITEA_ADMIN_PASSWORD:?}
+      # master 侧 git 操作（分支发现）也用该密钥
+      GIT_SSH_COMMAND: ssh -i /var/jenkins_home/.ssh-ro/id_rsa -o StrictHostKeyChecking=no
+    # 挂載密钥为 ro 且权限过松，ssh 会拒绝；入口先复制并收权
+    command: bash -c "mkdir -p /var/jenkins_home/.ssh-ro && cp /run/ssh/id_rsa /var/jenkins_home/.ssh-ro/id_rsa && chmod 600 /var/jenkins_home/.ssh-ro/id_rsa && chown -R jenkins:jenkins /var/jenkins_home/.ssh-ro && /usr/bin/tini -- /usr/local/bin/jenkins.sh"
     volumes:
       - ${DATA_ROOT:-./data}/private/jenkins:/var/jenkins_home
       - ${DATA_ROOT:-./data}/public:/public
       # 挂载宿主 docker.sock：流水线中用工具链镜像起一次性构建容器
       - /var/run/docker.sock:/var/run/docker.sock
+      # GitHub SSH 私仓只读密钥（路径经 .env SSH_KEY_PATH；个人 key 直挂仅适合本机自用，正式换 deploy key）
+      - ${SSH_KEY_PATH:-/root/.ssh/id_rsa}:/run/ssh/id_rsa:ro
     extra_hosts:
       # webhook payload 与 SCM source 统一用公开域名 git.localhost；容器内经宿主 Caddy 回源
       - "git.localhost:host-gateway"

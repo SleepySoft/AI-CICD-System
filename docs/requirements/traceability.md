@@ -12,7 +12,7 @@
 | FR-ENV-003 | 统一门户导航 | what/environment.md §服务清单 | chronicler 首页（tools.yaml 注册表驱动，Homepage 已退役） | 人工：登录 Chronicler 首页看入口与状态 |
 | FR-ENV-004 | 状态监控 | what/environment.md §服务清单 | docker-compose.yml(monitor profile) | 人工：Uptime Kuma 面板 |
 | FR-ENV-005 | SSO 统一认证 | what/environment.md §SSO 契约 | keycloak/realm/ | scripts/check-kc.sh |
-| FR-CI-001 | push 自动触发流水线 | how/images-toolchain.md | jenkins/（chronicler-selftest 多分支任务 + Gitea webhook + 2min 周期扫描兑底） | 人工：push 后观察 Jenkins 新构建 |
+| FR-CI-001 | push 自动触发流水线 | how/images-toolchain.md | jenkins/（chronicler-selftest 流水线，GitHub SSH 直拉 + pollSCM 兜底） | 人工：push 后观察 Jenkins 新构建 |
 | FR-CI-002 | 一次性容器内构建 | how/images-toolchain.md | jenkins/（inbound agents） | 人工：构建日志 |
 | FR-CI-003 | Allure 报告归档 | how/images-toolchain.md | jenkins/（allure-jenkins-plugin） | 人工：Jenkins 报告页 |
 | FR-CI-004 | Jenkins 配置即代码 | how/images-toolchain.md | jenkins/casc.yaml + plugins.txt | 重建 Jenkins 容器 |

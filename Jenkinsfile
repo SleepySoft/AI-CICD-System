@@ -11,6 +11,14 @@ pipeline {
   parameters {
     booleanParam(name: 'DEPLOY_TESTS', defaultValue: false, description: '同时跑隔离沙箱部署测试（慢，需拉镜像）')
   }
+  triggers {
+    // 分支轮询兑底（webhook 不可达时 5 分钟内也能发现新提交）
+    pollSCM('H/5 * * * *')
+  }
+  environment {
+    // GitHub SSH 私仓认证：宿主挂载密钥（compose 挂载 /run/ssh -> 收权后 .ssh-ro）
+    GIT_SSH_COMMAND = 'ssh -i /var/jenkins_home/.ssh-ro/id_rsa -o StrictHostKeyChecking=no'
+  }
   stages {
     stage('依赖') {
       steps {
