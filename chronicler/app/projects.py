@@ -87,6 +87,12 @@ def _last_commit(pid: int) -> str | None:
     return r.stdout.strip() if r.returncode == 0 else None
 
 
+def repo_dirty(pid: int) -> bool:
+    """工作区是否有未提交改动（Run 档案 §2.1.1 A 段 repo_status）"""
+    r = _git(["-C", str(repo_dir(pid)), "status", "--porcelain"])
+    return bool(r.stdout.strip()) if r.returncode == 0 else False
+
+
 def head_commit(pid: int) -> str:
     r = _git(["-C", str(repo_dir(pid)), "rev-parse", "HEAD"])
     return r.stdout.strip() if r.returncode == 0 else ""

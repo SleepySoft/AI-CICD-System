@@ -34,10 +34,13 @@ CREATE TABLE IF NOT EXISTS task_runs (
     trigger TEXT NOT NULL DEFAULT 'manual',
     harness TEXT NOT NULL,
     prompt_version TEXT NOT NULL,                -- 内容 hash（FR-MGR-011）
-    input_snapshot TEXT DEFAULT '{}',            -- JSON：repo commit 等
+    input_snapshot TEXT DEFAULT '{}',            -- JSON：A 段输入快照（执行前冻结，§2.1.1）
     log_path TEXT DEFAULT '',
     report_path TEXT DEFAULT '',
     error TEXT DEFAULT '',
+    error_class TEXT DEFAULT '',                 -- B 段：网络|配额|解析|超时|其他
+    runner_env TEXT DEFAULT '',                  -- B 段：执行环境（平台+supervisor 版本）
+    artifacts TEXT DEFAULT '[]',                 -- C 段：产物清单 JSON[{kind,path,action,size_bytes,commit}]
     created_by TEXT DEFAULT '',
     started_at REAL, finished_at REAL
 );
@@ -65,6 +68,20 @@ def init():
     conn = db()
     conn.executescript(SCHEMA)
     conn.commit()
+    _migrate()
+
+
+def _migrate():
+    """轻量迁移：给已存在的表补新列（SQLite ALTER ADD COLUMN，幂等）"""
+    existing = {r["name"] for r in q("PRAGMA table_info(task_runs)")}
+    for col, ddl in (
+        ("error_class", "TEXT DEFAULT ''"),
+        ("runner_env", "TEXT DEFAULT ''"),
+        ("artifacts", "TEXT DEFAULT '[]'"),
+    ):
+        if col not in existing:
+            db().execute(f"ALTER TABLE task_runs ADD COLUMN {col} {ddl}")
+    db().commit()
 
 
 def q(sql: str, args: tuple = ()) -> list[dict]:

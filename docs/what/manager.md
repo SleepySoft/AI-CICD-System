@@ -51,11 +51,11 @@ created_by         触发人（审计追溯）                          【v1】
 queued_at          入队时间                                    【v1】
 project            工程 id/name/git_url                        【v1】
 repo_base_commit   分析基于的提交 SHA（全量，非短 hash）        【v1】
-repo_status        工作区是否脏（有未提交改动需警示）
-harness            name + 解析后的完整启动命令 + CLI 版本      【v1】（CLI 版本待补）
+repo_status        工作区是否脏（有未提交改动需警示）        【v1】repo_dirty
+harness            name + 解析后的完整启动命令 + CLI 版本      【v1】
 prompt             模板版本 hash + 渲染后全文路径               【v1】
 overrides          工程级覆盖项（harness/prompt/策略）          【v1】
-components         注入的资源能力清单（SKILL 名 + 版本/hash）   【v1】（仅名单，hash 待补）
+components         注入的资源能力清单（SKILL 名 + 版本/hash）   【v1】
 extra_prompt       触发时附加指令                              【v1】
 ci_context         同期 Jenkins 构建号/结果（FR-MGR-010）
 openproject_id     关联的 OpenProject 工作包（FR-TASK-002/003）
@@ -66,10 +66,10 @@ openproject_id     关联的 OpenProject 工作包（FR-TASK-002/003）
 ```
 status             queued|running|success|failed|canceled     【v1】
 started_at / finished_at / duration_sec                        【v1】
-runner_env         执行环境：宿主平台、supervisor 版本
+runner_env         执行环境：宿主平台、supervisor 版本          【v1】
 log_path           完整 stdout/stderr 日志路径                 【v1】
 token_usage        prompt/completion token 用量与耗时（harness 能提供时）
-error / error_class 失败原因与归类（网络/配额/解析/超时）        【v1】（归类待补）
+error / error_class 失败原因与归类（网络/配额/解析/超时）        【v1】
 ```
 
 **C. 产物清单（执行后补记——“生成/更新了什么，落在哪个提交”）**
@@ -77,7 +77,9 @@ error / error_class 失败原因与归类（网络/配额/解析/超时）      
 ```
 artifacts[]        每个产物：kind(report|doc|knowhow|code-snippet)、path、
                    action(created|updated|deleted)、size_bytes
+                   【v1】（报告类产物已记；doc/knowhow 类随 M3/M4）
 artifact_commit    产物落入 git 的提交 SHA（报告库/shadow 库/目标仓库）
+                   【规划】报告库 git 化（M3）后必填
 review_refs[]      关联的待审区条目（FR-MGR-009）
 asset_refs[]       上升入资产库的条目（FR-MGR-013/014）
 ```

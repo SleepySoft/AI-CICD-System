@@ -9,6 +9,7 @@ import shlex
 import subprocess
 import threading
 import time
+from pathlib import Path
 
 from fastapi import HTTPException
 
@@ -58,17 +59,66 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "")
     template, prompt_version = registry.load_prompt(task_type)
     prompt = _render_prompt(template, project, {"extra": extra_prompt})
 
+    # A 段输入快照（§2.1.1，执行前冻结）
+    snapshot = {
+        "repo_head": projects.head_commit(project_id),
+        "repo_dirty": projects.repo_dirty(project_id),
+        "git_url": project["git_url"],
+        "overrides": overrides,
+        "harness_command": harness["command_template"],
+        "harness_version": _harness_version(harness),
+        "components": [{"name": c["name"], "skill": c["skill"],
+                        "skill_hash": _file_hash(c["skill"])} for c in registry.injectable_components()],
+    }
     run_id = execute(
         "INSERT INTO task_runs(project_id, task_type, status, harness, prompt_version,"
-        " input_snapshot, created_by, started_at)"
-        " VALUES (?,?,?,?,?,?,?,?)",
+        " input_snapshot, created_by, started_at, runner_env)"
+        " VALUES (?,?,?,?,?,?,?,?,?)",
         (project_id, task_type, "queued", harness_name, prompt_version,
-         dumps({"repo_head": projects.head_commit(project_id), "git_url": project["git_url"],
-                "overrides": overrides,
-                "components": [c["name"] for c in registry.injectable_components()]}),
-         actor, time.time()))
+         dumps(snapshot), actor, time.time(), _runner_env()))
     threading.Thread(target=_run, args=(run_id, harness, prompt), daemon=True).start()
     return get_run(run_id)
+
+
+def _runner_env() -> str:
+    import platform
+    from .. import __version__
+    return f"{platform.system()} {platform.release()} / chronicler {__version__}"
+
+
+def _file_hash(path: str) -> str:
+    import hashlib
+    try:
+        return hashlib.sha1(Path(path).read_bytes()).hexdigest()[:8]
+    except OSError:
+        return ""
+
+
+def _harness_version(harness: dict) -> str:
+    """尽力获取 harness CLI 版本（5s 超时，拿不到不阻塞）"""
+    import shutil as _sh
+    cmd = harness["command_template"].split("{")[0].strip().split()
+    if not cmd or not _sh.which(cmd[0]):
+        return ""
+    try:
+        r = subprocess.run([cmd[0], "--version"], capture_output=True, timeout=5,
+                           encoding="utf-8", errors="replace")
+        return (r.stdout or r.stderr).strip().splitlines()[0][:80] if (r.stdout or r.stderr) else ""
+    except Exception:
+        return ""
+
+
+def _classify_error(err: str) -> str:
+    e = err.lower()
+    if "超时" in err or "timeout" in e:
+        return "超时"
+    if any(k in e for k in ("429", "quota", "rate limit")):
+        return "配额"
+    if any(k in e for k in ("connection", "econn", "502", "503", "网络")):
+        return "网络"
+    if any(k in e for k in ("json", "parse", "解析")):
+        return "解析"
+    return "其他"
 
 
 def _run(run_id: int, harness: dict, prompt: str):
@@ -98,29 +148,33 @@ def _run(run_id: int, harness: dict, prompt: str):
                                   stdout=log, stderr=subprocess.STDOUT,
                                   timeout=harness.get("timeout_sec", 1800))
         if proc.returncode == 0 and report_file.is_file():
-            _publish(run, report_file)
-            execute("UPDATE task_runs SET status='success', finished_at=? WHERE id=?",
-                    (time.time(), run_id))
+            artifact = _publish(run, report_file)
+            execute("UPDATE task_runs SET status='success', artifacts=?, finished_at=? WHERE id=?",
+                    (dumps([artifact]), time.time(), run_id))
         else:
             err = "" if proc.returncode == 0 else f"exit code {proc.returncode}"
             if not report_file.is_file():
                 err = (err + "；" if err else "") + "未产出报告文件"
-            execute("UPDATE task_runs SET status='failed', error=?, finished_at=? WHERE id=?",
-                    (err, time.time(), run_id))
+            execute("UPDATE task_runs SET status='failed', error=?, error_class=?, finished_at=? WHERE id=?",
+                    (err, _classify_error(err), time.time(), run_id))
     except subprocess.TimeoutExpired:
-        execute("UPDATE task_runs SET status='failed', error='超时', finished_at=? WHERE id=?",
+        execute("UPDATE task_runs SET status='failed', error='超时', error_class='超时', finished_at=? WHERE id=?",
                 (time.time(), run_id))
     except Exception as e:  # noqa: BLE001 - 执行器兜底，错误必须落库
-        execute("UPDATE task_runs SET status='failed', error=?, finished_at=? WHERE id=?",
-                (f"{type(e).__name__}: {e}"[:500], time.time(), run_id))
+        err = f"{type(e).__name__}: {e}"[:500]
+        execute("UPDATE task_runs SET status='failed', error=?, error_class=?, finished_at=? WHERE id=?",
+                (err, _classify_error(err), time.time(), run_id))
 
 
-def _publish(run: dict, report_file):
+def _publish(run: dict, report_file) -> dict:
+    """产物落盘并返回 artifact 记录（§2.1.1 C 段）。产物为 git 内容时补 commit（报告库 git 化在 M3）。"""
     dest_dir = Cfg.reports_dir() / str(run["project_id"])
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / f"{time.strftime('%Y%m%d-%H%M%S')}-{run['task_type']}.md"
     dest.write_bytes(report_file.read_bytes())
     execute("UPDATE task_runs SET report_path=? WHERE id=?", (str(dest), run["id"]))
+    return {"kind": "report", "path": str(dest), "action": "created",
+            "size_bytes": dest.stat().st_size, "commit": None}
 
 
 def get_run(run_id: int) -> dict:
@@ -129,6 +183,7 @@ def get_run(run_id: int) -> dict:
     if not r:
         raise HTTPException(status_code=404, detail="Run 不存在")
     r["input_snapshot"] = json.loads(r["input_snapshot"] or "{}")
+    r["artifacts"] = json.loads(r.get("artifacts") or "[]")
     return r
 
 
