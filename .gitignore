@@ -22,6 +22,3 @@ homepage/config/kubernetes.yaml
 # Chronicler host-side venv (ADR-0020)
 chronicler/.venv/
 chronicler/.venv-win/
-
-# AI 产物发布区（不随代码仓提交，NFR-009）
-mkdocs/docs/reports/

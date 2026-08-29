@@ -256,36 +256,11 @@ def _publish(run: dict, report_file) -> dict:
     dest = dest_dir / f"{time.strftime('%Y%m%d-%H%M%S')}-{run['task_type']}.md"
     dest.write_bytes(report_file.read_bytes())
     execute("UPDATE task_runs SET report_path=? WHERE id=?", (str(dest), run["id"]))
-    _publish_to_docs(run, dest)  # 同步发布到结构化文档站（mkdocs）
     return {"kind": "report", "path": str(dest), "action": "created",
             "size_bytes": dest.stat().st_size, "commit": None}
 
 
-def _publish_to_docs(run: dict, report_path: Path):
-    """报告发布到结构化文档站：mkdocs/docs/reports/<工程名>/ + nav 注册（幂等）"""
-    try:
-        docs_dir = PKG_ROOT.parent / "mkdocs" / "docs" / "reports" / run["project_name"]
-        docs_dir.mkdir(parents=True, exist_ok=True)
-        target = docs_dir / report_path.name
-        target.write_bytes(report_path.read_bytes())
-
-        yml = PKG_ROOT.parent / "mkdocs" / "mkdocs.yml"
-        nav_path = f"reports/{run['project_name']}/{report_path.name}"
-        text = yml.read_text(encoding="utf-8")
-        if nav_path in text:
-            return
-        title = f"{run['task_type']} {time.strftime('%m-%d %H:%M')}"
-        if "分析报告:" in text or "分析报告：" in text:
-            lines = text.splitlines()
-            for i, line in enumerate(lines):
-                if line.strip().startswith("分析报告"):
-                    lines.insert(i + 1, f"    - {title}: {nav_path}")
-                    break
-        else:
-            lines = text.rstrip().splitlines() + ["  - 分析报告:", f"    - {title}: {nav_path}"]
-        yml.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    except OSError:
-        pass  # 文档站发布失败不影响 Run 本体
+# 注：mkdocs 只经挂载读 data/public/reports（见 compose），supervisor 不写本仓。
 
 
 def get_run(run_id: int) -> dict:
