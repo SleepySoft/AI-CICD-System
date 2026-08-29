@@ -1,5 +1,6 @@
 """工程（FR-MGR-020）：核心是一个 git 链接；clone/fetch 到宿主目录，供 harness 真实路径访问"""
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -88,8 +89,13 @@ def sync_project(pid: int) -> dict:
 
 
 def _git(args: list[str], timeout: int = 120) -> subprocess.CompletedProcess:
-    """统一 git 调用：显式 UTF-8 解码（Windows 默认 GBK 遇到 UTF-8 提交信息会炸）"""
-    return subprocess.run(["git", *args], capture_output=True,
+    """统一 git 调用：显式 UTF-8 解码（Windows 默认 GBK 遇 UTF-8 提交信息会炸）；
+    剥离 http 代理（本系统 git 操作全是本机 Gitea / GitHub SSH，Clash 类代理会拦截假死）"""
+    env = {k: v for k, v in os.environ.items()
+           if k.lower() not in ("http_proxy", "https_proxy", "all_proxy")}
+    # git 全局配置可能带 socks/http 代理（Clash），本系统 git 操作（本机 Gitea / GitHub SSH）都应直连
+    return subprocess.run(["git", "-c", "http.proxy=", "-c", "https.proxy=", *args],
+                          capture_output=True, env=env,
                           encoding="utf-8", errors="replace", timeout=timeout)
 
 
@@ -126,6 +132,26 @@ def ensure_shadow_repo(pid: int) -> Path:
         _git(["-C", str(dest), "init"])
         _git(["-C", str(dest), "commit", "--allow-empty", "-m", "init shadow repo"])
     return dest
+
+
+def push_shadow(pid: int) -> str | None:
+    """shadow 库推送到工程指定的 shadow_repo（FR-MGR-013）；凭据运行期从环境注入，不落库"""
+    p = get_project(pid)
+    url = (p.get("shadow_repo") or "").strip()
+    if not url:
+        return None
+    dest = shadow_dir(pid)
+    push_url = url
+    if url.startswith("http"):
+        user, pw = os.environ.get("GITEA_ADMIN_USER", ""), os.environ.get("GITEA_ADMIN_PASSWORD", "")
+        if user and pw:
+            from urllib.parse import urlparse, urlunparse
+            u = urlparse(url)
+            push_url = urlunparse(u._replace(netloc=f"{user}:{pw}@{u.netloc}"))
+    r = _git(["-C", str(dest), "push", push_url, "HEAD:main"], timeout=120)
+    if r.returncode != 0:
+        raise HTTPException(status_code=502, detail=f"shadow 推送失败：{r.stderr.strip()[:300]}")
+    return url
 
 
 def head_commit(pid: int) -> str:

@@ -17,7 +17,16 @@ from fastapi import HTTPException
 
 from . import projects, registry
 from .config import Cfg
-from .db import dumps, execute, q, q1
+from .db import audit, dumps, execute, q, q1
+
+_harness_locks: dict[str, threading.Lock] = {}
+
+
+def _harness_lock(name: str) -> threading.Lock:
+    """同 harness 串行锁：kimi 等 CLI 有全局日志文件锁，并发实例会互抢（实测 WinError 32）"""
+    if name not in _harness_locks:
+        _harness_locks[name] = threading.Lock()
+    return _harness_locks[name]
 
 
 def _q(path: str) -> str:
@@ -101,6 +110,10 @@ def _harness_version(harness: dict) -> str:
         return ""
 
 
+def _audit_push_failure(run: dict, e: Exception):
+    audit("supervisor", "shadow.push_failed", f"run#{run['id']}", str(e)[:200])
+
+
 def _classify_error(err: str) -> str:
     e = err.lower()
     if "超时" in err or "timeout" in e:
@@ -175,37 +188,38 @@ def _run(run_id: int, harness: dict, prompt: str):
 
     execute("UPDATE task_runs SET status='running', log_path=? WHERE id=?",
             (str(log_file), run_id))
-    try:
-        stdin_data = prompt if harness.get("stdin_prompt") else None
-        with open(log_file, "w", encoding="utf-8") as log:
-            log.write(f"$ {command}\n\n")
-            log.flush()
-            proc = subprocess.run(command, shell=True, cwd=str(repo), env=env,
-                                  input=stdin_data, text=bool(stdin_data),
-                                  stdout=log, stderr=subprocess.STDOUT,
-                                  timeout=harness.get("timeout_sec", 1800))
-        artifacts = []
-        if proc.returncode == 0:
-            if report_file.is_file():
-                artifacts.append(_publish(run, report_file))
-            _, shadow_arts = _commit_shadow(run)  # FR-MGR-013：shadow 库变更入库并记 artifact_commit
-            artifacts.extend(shadow_arts)
-        if proc.returncode == 0 and artifacts:
-            execute("UPDATE task_runs SET status='success', artifacts=?, finished_at=? WHERE id=?",
-                    (dumps(artifacts), time.time(), run_id))
-        else:
-            err = "" if proc.returncode == 0 else f"exit code {proc.returncode}"
-            if not artifacts:
-                err = (err + "；" if err else "") + "未产出报告文件"
+    with _harness_lock(harness["name"]):
+        try:
+            stdin_data = prompt if harness.get("stdin_prompt") else None
+            with open(log_file, "w", encoding="utf-8") as log:
+                log.write(f"$ {command}\n\n")
+                log.flush()
+                proc = subprocess.run(command, shell=True, cwd=str(repo), env=env,
+                                      input=stdin_data, text=bool(stdin_data),
+                                      stdout=log, stderr=subprocess.STDOUT,
+                                      timeout=harness.get("timeout_sec", 1800))
+            artifacts = []
+            if proc.returncode == 0:
+                if report_file.is_file():
+                    artifacts.append(_publish(run, report_file))
+                _, shadow_arts = _commit_shadow(run)  # FR-MGR-013：shadow 库变更入库并记 artifact_commit
+                artifacts.extend(shadow_arts)
+            if proc.returncode == 0 and artifacts:
+                execute("UPDATE task_runs SET status='success', artifacts=?, finished_at=? WHERE id=?",
+                        (dumps(artifacts), time.time(), run_id))
+            else:
+                err = "" if proc.returncode == 0 else f"exit code {proc.returncode}"
+                if not artifacts:
+                    err = (err + "；" if err else "") + "未产出报告文件"
+                execute("UPDATE task_runs SET status='failed', error=?, error_class=?, finished_at=? WHERE id=?",
+                        (err, _classify_error(err), time.time(), run_id))
+        except subprocess.TimeoutExpired:
+            execute("UPDATE task_runs SET status='failed', error='超时', error_class='超时', finished_at=? WHERE id=?",
+                    (time.time(), run_id))
+        except Exception as e:  # noqa: BLE001 - 执行器兜底，错误必须落库
+            err = f"{type(e).__name__}: {e}"[:500]
             execute("UPDATE task_runs SET status='failed', error=?, error_class=?, finished_at=? WHERE id=?",
                     (err, _classify_error(err), time.time(), run_id))
-    except subprocess.TimeoutExpired:
-        execute("UPDATE task_runs SET status='failed', error='超时', error_class='超时', finished_at=? WHERE id=?",
-                (time.time(), run_id))
-    except Exception as e:  # noqa: BLE001 - 执行器兜底，错误必须落库
-        err = f"{type(e).__name__}: {e}"[:500]
-        execute("UPDATE task_runs SET status='failed', error=?, error_class=?, finished_at=? WHERE id=?",
-                (err, _classify_error(err), time.time(), run_id))
 
 
 def _commit_shadow(run: dict) -> tuple[str | None, list[dict]]:
@@ -221,6 +235,10 @@ def _commit_shadow(run: dict) -> tuple[str | None, list[dict]]:
                    "user.email=chronicler@localhost", "commit", "-m",
                    f"run#{run['id']} {run['task_type']}"])
     sha = projects._git(["-C", str(shadow), "rev-parse", "HEAD"]).stdout.strip()
+    try:
+        projects.push_shadow(run["project_id"])  # 指定了 shadow_repo 则同步到远端（如 Gitea）
+    except Exception as e:  # noqa: BLE001 - 推送失败不影响本地档案
+        _audit_push_failure(run, e)
     arts = []
     for line in status.splitlines():
         path = line[3:].strip()
