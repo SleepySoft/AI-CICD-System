@@ -222,11 +222,7 @@ services:
     volumes:
       - ${DATA_ROOT:-./data}/private/qdrant:/qdrant/storage
       - ${DATA_ROOT:-./data}/public:/public
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/healthz || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
+    # qdrant 镜像无 wget/curl，不做容器内健康检查（宿主侧经 Caddy 探测 vectors.localhost）
     networks: [aisystem]
 
   outline:
@@ -237,6 +233,7 @@ services:
       <<: *common-env
       SECRET_KEY: ${OUTLINE_SECRET_KEY:?}
       UTILS_SECRET: ${OUTLINE_UTILS_SECRET:?}
+      PGSSLMODE: disable   # 内网 postgres 无 SSL
       DATABASE_URL: postgres://${POSTGRES_USER:-aisys}:${POSTGRES_PASSWORD}@postgres:5432/outline
       REDIS_URL: redis://redis:6379
       URL: http://kb.${BASE_DOMAIN:-localhost}

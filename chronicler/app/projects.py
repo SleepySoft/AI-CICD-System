@@ -2,6 +2,7 @@
 import json
 import re
 import subprocess
+from pathlib import Path
 
 from fastapi import HTTPException
 
@@ -16,15 +17,15 @@ def repo_dir(project_id: int):
 
 
 def create_project(name: str, git_url: str, ci_url: str = "", description: str = "",
-                   overrides: dict | None = None, default_branch: str = "") -> dict:
+                   overrides: dict | None = None, default_branch: str = "", shadow_repo: str = "") -> dict:
     if not _NAME_RE.match(name):
         raise HTTPException(status_code=400, detail="工程名仅允许小写字母/数字/-/_")
     if q1("SELECT id FROM projects WHERE name=?", (name,)):
         raise HTTPException(status_code=409, detail="工程名已存在")
     pid = execute(
-        "INSERT INTO projects(name, git_url, default_branch, ci_url, description, overrides, created_at)"
-        " VALUES (?,?,?,?,?,?,strftime('%s','now'))",
-        (name, git_url, default_branch, ci_url, description, json.dumps(overrides or {}, ensure_ascii=False)))
+        "INSERT INTO projects(name, git_url, default_branch, ci_url, shadow_repo, description, overrides, created_at)"
+        " VALUES (?,?,?,?,?,?,?,strftime('%s','now'))",
+        (name, git_url, default_branch, ci_url, shadow_repo, description, json.dumps(overrides or {}, ensure_ascii=False)))
     return get_project(pid)
 
 
@@ -48,14 +49,17 @@ def list_projects() -> list[dict]:
 def update_project(pid: int, fields: dict) -> dict:
     p = get_project(pid)
     merged = {**p["overrides"], **(fields.pop("overrides", {}) or {})}
-    allowed = {k: v for k, v in fields.items() if k in ("git_url", "ci_url", "description", "default_branch")}
+    allowed = {k: v for k, v in fields.items() if k in ("git_url", "ci_url", "description", "default_branch", "shadow_repo")}
     if allowed or merged != p["overrides"]:
-        sets = ", ".join(f"{k}=?" for k in allowed)
-        args = list(allowed.values())
-        sets += ", overrides=?"
+        sets = []
+        args = []
+        for k, v in allowed.items():
+            sets.append(f"{k}=?")
+            args.append(v)
+        sets.append("overrides=?")
         args.append(json.dumps(merged, ensure_ascii=False))
         args.append(pid)
-        execute(f"UPDATE projects SET {sets} WHERE id=?", tuple(args))
+        execute(f"UPDATE projects SET {', '.join(sets)} WHERE id=?", tuple(args))
     return get_project(pid)
 
 
@@ -98,6 +102,30 @@ def repo_dirty(pid: int) -> bool:
     """工作区是否有未提交改动（Run 档案 §2.1.1 A 段 repo_status）"""
     r = _git(["-C", str(repo_dir(pid)), "status", "--porcelain"])
     return bool(r.stdout.strip()) if r.returncode == 0 else False
+
+
+def shadow_dir(pid: int) -> Path:
+    """项目影子库目录（FR-MGR-013）：data/private/chronicler/shadow/<pid>"""
+    return Cfg.DATA / "shadow" / str(pid)
+
+
+def ensure_shadow_repo(pid: int) -> Path:
+    """建立或同步 shadow 库：工程指定了 shadow_repo（URL/路径）则 clone；否则本地 init
+    返回 shadow 库路径（git 仓库）"""
+    p = get_project(pid)
+    dest = shadow_dir(pid)
+    if dest.is_dir():
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if p.get("shadow_repo"):
+        r = _git(["clone", p["shadow_repo"], str(dest)], timeout=300)
+        if r.returncode != 0:
+            raise HTTPException(status_code=502, detail=f"shadow 库 clone 失败：{r.stderr.strip()[:300]}")
+    else:
+        dest.mkdir(parents=True, exist_ok=True)
+        _git(["-C", str(dest), "init"])
+        _git(["-C", str(dest), "commit", "--allow-empty", "-m", "init shadow repo"])
+    return dest
 
 
 def head_commit(pid: int) -> str:

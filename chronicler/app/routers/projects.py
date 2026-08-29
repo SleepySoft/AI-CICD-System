@@ -14,6 +14,7 @@ class ProjectBody(BaseModel):
     git_url: str
     default_branch: str = ""
     ci_url: str = ""
+    shadow_repo: str = ""
     description: str = ""
     overrides: dict = {}
 
@@ -22,6 +23,7 @@ class ProjectPatch(BaseModel):
     git_url: str | None = None
     default_branch: str | None = None
     ci_url: str | None = None
+    shadow_repo: str | None = None
     description: str | None = None
     overrides: dict | None = None
 
@@ -33,7 +35,8 @@ async def list_(user: dict = Depends(current_user)):
 
 @router.post("")
 async def create(body: ProjectBody, user: dict = Depends(require_admin)):
-    p = projects.create_project(body.name, body.git_url, body.ci_url, body.description, body.overrides)
+    p = projects.create_project(body.name, body.git_url, body.ci_url, body.description,
+                                body.overrides, body.default_branch, body.shadow_repo)
     audit(user["username"], "project.create", body.name)
     return p
 

@@ -2,6 +2,7 @@
 
 v1 边界：仅 once 会话（持久/resume 为 ADR-0021 标注的 TBD，后续版本）；
 手动触发；日志落文件，前端轮询（SSE 留待后续）。
+Run 档案契约见 docs/what/manager.md §2.1.1（A 输入快照 / B 执行过程 / C 产物清单）。
 """
 import json
 import os
@@ -11,6 +12,7 @@ import threading
 import time
 from pathlib import Path
 
+import httpx
 from fastapi import HTTPException
 
 from . import projects, registry
@@ -35,6 +37,7 @@ def _render_prompt(template: str, project: dict, extra: dict) -> str:
     vars_ = {
         "project_name": project["name"],
         "repo_dir": str(projects.repo_dir(project["id"])),
+        "shadow_dir": str(projects.ensure_shadow_repo(project["id"])),
         "date": time.strftime("%Y-%m-%d"),
         "components": components,
         **extra,
@@ -45,39 +48,29 @@ def _render_prompt(template: str, project: dict, extra: dict) -> str:
     return out
 
 
-def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "") -> dict:
-    project = projects.get_project(project_id)
-    if not projects.repo_dir(project_id).is_dir():
-        projects.sync_project(project_id)  # 未 clone 则先同步
-
-    overrides = project.get("overrides") or {}
-    harness_name = overrides.get("harness") or os.environ.get("CHRONICLER_DEFAULT_HARNESS", "shell")
-    harness = registry.get_harness(harness_name)
-    if harness.get("session", "once") != "once":
-        raise RuntimeError(f"harness {harness_name} 声明为持久会话，v1 暂不支持（ADR-0021 TBD）")
-
-    template, prompt_version = registry.load_prompt(task_type)
-    prompt = _render_prompt(template, project, {"extra": extra_prompt})
-
-    # A 段输入快照（§2.1.1，执行前冻结）
-    snapshot = {
-        "repo_head": projects.head_commit(project_id),
-        "repo_dirty": projects.repo_dirty(project_id),
-        "git_url": project["git_url"],
-        "overrides": overrides,
-        "harness_command": harness["command_template"],
-        "harness_version": _harness_version(harness),
-        "components": [{"name": c["name"], "skill": c["skill"],
-                        "skill_hash": _file_hash(c["skill"])} for c in registry.injectable_components()],
-    }
-    run_id = execute(
-        "INSERT INTO task_runs(project_id, task_type, status, harness, prompt_version,"
-        " input_snapshot, created_by, started_at, runner_env)"
-        " VALUES (?,?,?,?,?,?,?,?,?)",
-        (project_id, task_type, "queued", harness_name, prompt_version,
-         dumps(snapshot), actor, time.time(), _runner_env()))
-    threading.Thread(target=_run, args=(run_id, harness, prompt), daemon=True).start()
-    return get_run(run_id)
+def _ci_context(project: dict) -> dict:
+    """同期 CI 构建上下文（FR-MGR-010 最小实现）：从 Jenkins job 拉 lastBuild
+    注：supervisor 在宿主，ci.localhost 等域名走 127.0.0.1 + Host 头（容器不解析 *.localhost）"""
+    ci_url = (project.get("ci_url") or "").strip().rstrip("/")
+    if not ci_url:
+        return {}
+    try:
+        from urllib.parse import urlparse
+        u = urlparse(ci_url)
+        host = u.hostname or ""
+        base = "http://127.0.0.1" if host.endswith(".localhost") else f"{u.scheme}://{u.netloc}"
+        headers = {"Host": host} if host.endswith(".localhost") else {}
+        auth = (os.environ.get("JENKINS_ADMIN_ID", ""), os.environ.get("JENKINS_ADMIN_PASSWORD", ""))
+        with httpx.Client(timeout=5, trust_env=False) as client:
+            r = client.get(f"{base}{u.path}/lastBuild/api/json?tree=number,result,timestamp,url",
+                           headers=headers, auth=auth if auth[1] else None)
+        if r.status_code == 200:
+            b = r.json()
+            return {"job": ci_url, "build": b.get("number"), "result": b.get("result"),
+                    "timestamp": b.get("timestamp")}
+    except Exception:  # noqa: BLE001 - CI 上下文缺失不阻塞任务
+        pass
+    return {"job": ci_url, "error": "unreachable"}
 
 
 def _runner_env() -> str:
@@ -121,6 +114,42 @@ def _classify_error(err: str) -> str:
     return "其他"
 
 
+def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "") -> dict:
+    project = projects.get_project(project_id)
+    if not projects.repo_dir(project_id).is_dir():
+        projects.sync_project(project_id)  # 未 clone 则先同步
+
+    overrides = project.get("overrides") or {}
+    harness_name = overrides.get("harness") or os.environ.get("CHRONICLER_DEFAULT_HARNESS", "shell")
+    harness = registry.get_harness(harness_name)
+    if harness.get("session", "once") != "once":
+        raise RuntimeError(f"harness {harness_name} 声明为持久会话，v1 暂不支持（ADR-0021 TBD）")
+
+    template, prompt_version = registry.load_prompt(task_type)
+    prompt = _render_prompt(template, project, {"extra": extra_prompt})
+
+    # A 段输入快照（§2.1.1，执行前冻结）
+    snapshot = {
+        "repo_head": projects.head_commit(project_id),
+        "repo_dirty": projects.repo_dirty(project_id),
+        "git_url": project["git_url"],
+        "overrides": overrides,
+        "harness_command": harness["command_template"],
+        "harness_version": _harness_version(harness),
+        "components": [{"name": c["name"], "skill": c["skill"],
+                        "skill_hash": _file_hash(c["skill"])} for c in registry.injectable_components()],
+        "ci_context": _ci_context(project),
+    }
+    run_id = execute(
+        "INSERT INTO task_runs(project_id, task_type, status, harness, prompt_version,"
+        " input_snapshot, created_by, started_at, runner_env)"
+        " VALUES (?,?,?,?,?,?,?,?,?)",
+        (project_id, task_type, "queued", harness_name, prompt_version,
+         dumps(snapshot), actor, time.time(), _runner_env()))
+    threading.Thread(target=_run, args=(run_id, harness, prompt), daemon=True).start()
+    return get_run(run_id)
+
+
 def _run(run_id: int, harness: dict, prompt: str):
     run = get_run(run_id)
     repo = projects.repo_dir(run["project_id"])
@@ -134,12 +163,12 @@ def _run(run_id: int, harness: dict, prompt: str):
     command = harness["command_template"].format(
         prompt_file=_q(str(prompt_file)),
         report_file=_q(str(report_file)),
-        repo_dir=_q(str(repo)))
+        repo_dir=_q(str(repo)),
+        shadow_dir=_q(str(projects.shadow_dir(run["project_id"]))))
     env = {**os.environ, **registry.resolve_env(harness.get("env"))}
 
     execute("UPDATE task_runs SET status='running', log_path=? WHERE id=?",
             (str(log_file), run_id))
-    t0 = time.time()
     try:
         with open(log_file, "w", encoding="utf-8") as log:
             log.write(f"$ {command}\n\n")
@@ -147,13 +176,18 @@ def _run(run_id: int, harness: dict, prompt: str):
             proc = subprocess.run(command, shell=True, cwd=str(repo), env=env,
                                   stdout=log, stderr=subprocess.STDOUT,
                                   timeout=harness.get("timeout_sec", 1800))
-        if proc.returncode == 0 and report_file.is_file():
-            artifact = _publish(run, report_file)
+        if proc.returncode == 0:
+            artifacts = []
+            if report_file.is_file():
+                artifacts.append(_publish(run, report_file))
+            _, shadow_arts = _commit_shadow(run)  # FR-MGR-013：shadow 库变更入库并记 artifact_commit
+            artifacts.extend(shadow_arts)
+        if proc.returncode == 0 and artifacts:
             execute("UPDATE task_runs SET status='success', artifacts=?, finished_at=? WHERE id=?",
-                    (dumps([artifact]), time.time(), run_id))
+                    (dumps(artifacts), time.time(), run_id))
         else:
             err = "" if proc.returncode == 0 else f"exit code {proc.returncode}"
-            if not report_file.is_file():
+            if not artifacts:
                 err = (err + "；" if err else "") + "未产出报告文件"
             execute("UPDATE task_runs SET status='failed', error=?, error_class=?, finished_at=? WHERE id=?",
                     (err, _classify_error(err), time.time(), run_id))
@@ -164,6 +198,29 @@ def _run(run_id: int, harness: dict, prompt: str):
         err = f"{type(e).__name__}: {e}"[:500]
         execute("UPDATE task_runs SET status='failed', error=?, error_class=?, finished_at=? WHERE id=?",
                 (err, _classify_error(err), time.time(), run_id))
+
+
+def _commit_shadow(run: dict) -> tuple[str | None, list[dict]]:
+    """shadow 库收尾（FR-MGR-013）：有变更则提交，返回 (commit_sha, 新增产物清单)"""
+    shadow = projects.shadow_dir(run["project_id"])
+    if not shadow.is_dir():
+        return None, []
+    status = projects._git(["-C", str(shadow), "status", "--porcelain"]).stdout.strip()
+    if not status:
+        return None, []
+    projects._git(["-C", str(shadow), "add", "-A"])
+    projects._git(["-C", str(shadow), "-c", "user.name=chronicler", "-c",
+                   "user.email=chronicler@localhost", "commit", "-m",
+                   f"run#{run['id']} {run['task_type']}"])
+    sha = projects._git(["-C", str(shadow), "rev-parse", "HEAD"]).stdout.strip()
+    arts = []
+    for line in status.splitlines():
+        path = line[3:].strip()
+        full = shadow / path
+        arts.append({"kind": "knowhow" if "knowhow" in run["task_type"] else "shadow",
+                     "path": str(full), "action": "created" if line.startswith("??") else "updated",
+                     "size_bytes": full.stat().st_size if full.is_file() else 0, "commit": sha})
+    return sha, arts
 
 
 def _publish(run: dict, report_file) -> dict:

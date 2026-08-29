@@ -34,13 +34,13 @@
 | FR-MGR-004 | 任务多方式触发 | what/manager.md §数据模型 | chronicler/（M2-M3 规划） | 待实现（M3） |
 | FR-MGR-005 | 一切皆 Run | what/manager.md §数据模型 | chronicler/app/runner.py（输入快照已冻结；重放/重跑待续） | 人工：查看 Run 输入快照 |
 | FR-MGR-006 | SSE 实时日志 | what/manager.md §API 概要 | chronicler/（M2 规划） | 待实现（M2） |
-| FR-MGR-007 | 内置六类任务 | what/manager.md §任务类型框架 | chronicler/（M3 规划） | 待实现（M3） |
+| FR-MGR-007 | 内置六类任务 | what/manager.md §任务类型框架 | chronicler/prompts/（六类模板齐备）；执行依赖真实 harness 配置 | 人工：触发各任务类型产生 Run |
 | FR-MGR-008 | 报告分级可见 | what/manager.md §权限规格 | chronicler/（M3 规划） | 待实现（M3） |
 | FR-MGR-009 | 待审闭环 | what/manager.md §数据模型 | chronicler/（M4 规划） | 待实现（M4） |
-| FR-MGR-010 | CI 结果消费 | what/manager.md §数据模型 | chronicler/（M5 规划） | 待实现（M5） |
+| FR-MGR-010 | CI 结果消费 | what/manager.md §数据模型 | chronicler/app/runner.py _ci_context（最小实现：快照记录同期构建） | 人工：Run 快照含 ci_context |
 | FR-MGR-011 | Prompt 库版本化 | what/manager.md §数据模型 | chronicler/（M3 规划） | 待实现（M3） |
 | FR-MGR-012 | 项目全景仪表盘 | what/manager.md §前端页面 | chronicler/（M3 规划） | 待实现（M3） |
-| FR-MGR-013 | 项目影子库 | what/manager.md §数据模型 | chronicler/（M4 规划） | 待实现（M4） |
+| FR-MGR-013 | 项目影子库 | what/manager.md §数据模型 | chronicler/app/projects.py ensure_shadow_repo + runner._commit_shadow（最小实现：本地 shadow 库 + 变更自动提交） | 人工：knowhow-distill 后 git log shadow 库 |
 | FR-MGR-014 | 全局资产库 | what/manager.md §数据模型 | chronicler/（M4 规划） | 待实现（M4） |
 | FR-MGR-015 | 资源能力注入（skill 化） | what/manager.md §契约要点 | chronicler/app/registry.py（injectable_components）+ chronicler/components/\<name\>/SKILL.md（ADR-0024/0025） | 人工：触发 Run 后查 prompt 快照含 SKILL 路径 |
 | FR-MGR-016 | 任务来源适配与降级 | what/manager.md §任务类型框架 | chronicler/（M3 规划） | 待实现（M3） |

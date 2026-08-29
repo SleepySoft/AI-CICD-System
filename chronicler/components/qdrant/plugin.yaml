@@ -9,7 +9,7 @@ visibility: admin
 autostart: false
 critical: false
 driver: docker
-enabled: false
+enabled: true
 note: 语义检索向量库
 data:
   private: true

@@ -29,3 +29,9 @@ harnesses:
     session: once
     env: {}
     timeout_sec: 60
+  - name: shell-shadow
+    desc: 冒烟测试用假 harness（shadow 版）：写一张测试卡片进 shadow 库 + 复制 prompt 为报告
+    command_template: "python -c \"from pathlib import Path;import shutil,sys;Path(sys.argv[1],'know-how').mkdir(parents=True,exist_ok=True);Path(sys.argv[1],'know-how','smoke-card.md').write_text('# smoke card',encoding='utf-8');shutil.copyfile(sys.argv[2],sys.argv[3])\" {shadow_dir} {prompt_file} {report_file}"
+    session: once
+    env: {}
+    timeout_sec: 60
