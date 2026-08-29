@@ -1,6 +1,8 @@
 """Chronicler CLI：
   python -m chronicler serve              启动 supervisor（默认 0.0.0.0:8600）
   python -m chronicler create-admin       交互创建 admin 账号
+  python -m chronicler backup [目录]       组件化一键备份（ADR-0027）
+  python -m chronicler restore <备份目录>  恢复
 """
 import sys
 
@@ -19,6 +21,24 @@ def main():
         from .app.config import Cfg
         Cfg.ensure_dirs()
         uvicorn.run("chronicler.app.main:app", host=Cfg.HOST, port=Cfg.PORT)
+    elif cmd == "backup":
+        from pathlib import Path
+        from .app.backup import backup
+        out = Path(sys.argv[2]) if len(sys.argv) > 2 else None
+        result = backup(out)
+        print(f"备份完成：{result['bundle']}")
+        for name, r in result["components"].items():
+            state = "跳过" if r.get("skipped") else ("失败: " + r.get("error", "") if r.get("error") else "OK")
+            declared = "" if r.get("declared", True) else "（兜底策略）"
+            print(f"  {name}: {state}{declared}")
+    elif cmd == "restore":
+        if len(sys.argv) < 3:
+            sys.exit("用法: python -m chronicler restore <备份目录>")
+        from pathlib import Path
+        from .app.backup import restore
+        result = restore(Path(sys.argv[2]))
+        for name, r in result["components"].items():
+            print(f"  {name}: {r}")
     elif cmd == "create-admin":
         import getpass
         from .app import db

@@ -5,8 +5,11 @@ data/chronicler/config/tools.d/*.yaml 为用户目录（同名覆盖内置）。
 自启开关持久化在 data/chronicler/config/autostart.yaml（运行时覆盖层）。
 docker 控制走本地 socket（ADR-0020：supervisor 与 dockerd 同环境）。
 """
+import subprocess
+import sys
 import threading
 import time
+from pathlib import Path
 
 import docker
 import yaml
@@ -24,21 +27,25 @@ def _client() -> docker.DockerClient:
     return _docker
 
 
-def _load_dir(d) -> dict:
+def _load_plugins_dir(d) -> dict:
+    """扫描组件目录：<d>/<name>/plugin.yaml（ADR-0027 组件目录自包含）"""
     out = {}
     if d.is_dir():
-        for f in sorted(d.glob("*.yaml")):
-            with open(f, encoding="utf-8") as fh:
-                entry = yaml.safe_load(fh)
-            if entry and entry.get("name"):
-                out[entry["name"]] = entry
+        for child in sorted(d.iterdir()):
+            f = child / "plugin.yaml"
+            if child.is_dir() and f.is_file():
+                with open(f, encoding="utf-8") as fh:
+                    entry = yaml.safe_load(fh)
+                if entry and entry.get("name"):
+                    entry["_dir"] = str(child)
+                    out[entry["name"]] = entry
     return out
 
 
 def load_tools() -> list[dict]:
-    """合并 内置 tools.d + 用户 tools.d + autostart 覆盖层，字段归一化"""
-    merged = _load_dir(Cfg.CONFIG_DIR / "tools.d")
-    merged.update(_load_dir(Cfg.DATA / "config" / "tools.d"))
+    """合并 内置 components/ + 用户 components/ + autostart 覆盖层，字段归一化"""
+    merged = _load_plugins_dir(PKG_ROOT / "components")
+    merged.update(_load_plugins_dir(Cfg.DATA / "components"))
     overlay = _autostart_overlay()
     tools = []
     for t in merged.values():
@@ -100,6 +107,17 @@ def ensure_running(tool: dict) -> str:
         audit("supervisor", "tool.autostart", name)
         return "start"
     except docker.errors.NotFound:
+        # 组件自带部署钩子则优先（ADR-0027）；否则回落 docker compose
+        hook = Path(tool["_dir"]) / "hooks" / "deploy.py" if tool.get("_dir") else None
+        if hook and hook.is_file():
+            r = subprocess.run([sys.executable, str(hook), "up"],
+                               cwd=str(PKG_ROOT.parent), capture_output=True,
+                               encoding="utf-8", errors="replace", timeout=600)
+            if r.returncode == 0:
+                audit("supervisor", "tool.deploy_hook", name)
+                return "deploy-hook"
+            audit("supervisor", "tool.autostart_failed", name, r.stderr.strip()[:200])
+            return "error"
         service = tool.get("compose_service") or name
         try:
             r = subprocess.run(["docker", "compose", "up", "-d", service],

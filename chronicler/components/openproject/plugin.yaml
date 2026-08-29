@@ -1,0 +1,13 @@
+# 组件插件（ADR-0027）：一个目录装下组件的一切（SKILL.md / hooks/ 可选）
+# 用户覆盖：data/chronicler/components/<name>/ 同构
+name: openproject
+group: 管理
+desc: 需求管理（requirements profile，独立账号）
+url: http://req.localhost
+container: aisystem-openproject-1
+visibility: all
+autostart: false
+critical: false
+driver: docker
+enabled: false
+note: 任务管理（工作包）；未启用时任务来源降级为文本/直接指令

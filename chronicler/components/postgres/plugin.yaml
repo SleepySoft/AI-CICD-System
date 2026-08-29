@@ -1,0 +1,10 @@
+# 组件插件（ADR-0027）：一个目录装下组件的一切（SKILL.md / hooks/ 可选）
+# 用户覆盖：data/chronicler/components/<name>/ 同构
+name: postgres
+group: 平台
+desc: 共享数据库
+container: aisystem-postgres-1
+visibility: admin
+autostart: true
+critical: true
+driver: docker

@@ -49,7 +49,7 @@
 | FR-MGR-019 | Agent harness 登记（命令模板） | what/manager.md §数据模型 | chronicler/config/harness.yaml + chronicler/app/runner.py（ADR-0021） | 人工：登记 harness 后触发 Run |
 | FR-MGR-020 | 工程实体与配置覆盖 | what/manager.md §数据模型 | chronicler/app/projects.py | 人工：建工程+覆盖项触发 Run |
 | FR-MGR-021 | 工程分析策略配置 | what/manager.md §任务类型框架 | chronicler/（M3 规划） | 待实现（M3） |
-| FR-MGR-022 | 组件生命周期管理 | what/manager.md §前端页面 | chronicler/app/tools.py + chronicler/config/tools.d/ | 人工：自启开关重启验证/日志/详情弹窗 |
+| FR-MGR-022 | 组件生命周期管理 | what/manager.md §前端页面 | chronicler/app/tools.py + chronicler/components/（ADR-0027） | 人工：自启开关重启验证/日志/详情/一键部署 |
 | FR-TASK-001 | 任务前端提交 | what/task-mgmt.md §角色分工 | docker-compose.yml(requirements profile) | 人工：建包后 API 检索 |
 | FR-TASK-002 | AI 任务领取 | what/task-mgmt.md §API 契约 | .agents/skills/openproject/（Manager M2 起自动化） | 人工：按 skill 领任务置 in progress |
 | FR-TASK-003 | AI 状态回写 | what/task-mgmt.md §状态机 | .agents/skills/openproject/ + OpenProject workflow 配置 | 人工：回写成功且置 closed 被拒 |
@@ -67,5 +67,5 @@
 | NFR-005 | 构建可复现 | images/*/Dockerfile 版本锁定 | 重建比对 digest |
 | NFR-006 | 三形态同源 | scripts/build-images.sh + 封装脚本；supervisor 独立交付（ADR-0020，待实现） | 人工：封装脚本复用 compose |
 | NFR-007 | Agent 成本可控 | chronicler harness 注册表 + Ollama profile | 人工：切换本地模型跑任务 |
-| NFR-008 | 数据显式持久化 | docker-compose.yml bind mounts（${DATA_ROOT:-./data}）；scripts/backup.sh + restore.sh（ADR-0015） | `down`+升级+`up` 后数据完整 |
+| NFR-008 | 数据显式持久化 | docker-compose.yml bind mounts（${DATA_ROOT:-./data}，public/private 二分 ADR-0026）；组件化备份编排 chronicler/app/backup.py + 组件 hooks（ADR-0027），scripts/backup.sh 为薄壳 | `python -m chronicler backup` 产出含 manifest 的备份包 |
 | NFR-009 | 系统数据 Git 化 | docs/、knowledge/vault/、jenkins/casc.yaml（已落实）；scripts/export-openproject.sh（手工导出，ADR-0014）；chronicler Git 落盘（M3 起） | 抽查数据可定位 Git 事实源 |

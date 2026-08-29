@@ -35,7 +35,11 @@ def get_harness(name: str) -> dict:
 
 
 def load_components() -> dict:
-    return _load_yaml("components.yaml", "components")
+    """组件配置改从组件插件目录取（ADR-0027）：enabled/url/note 来自 plugin.yaml"""
+    from .tools import load_tools
+    return {t["name"]: {"enabled": bool(t.get("enabled")), "url": t.get("url", ""),
+                        "note": t.get("note", t.get("desc", ""))}
+            for t in load_tools()}
 
 
 def enabled_components() -> dict:

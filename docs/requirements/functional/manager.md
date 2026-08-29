@@ -110,5 +110,5 @@
 
 ### FR-MGR-022 组件生命周期管理（自启/日志/详情/插件化注册）
 - 状态: 生效 | 上层: UR-006, UR-009 | 优先级: P1
-- 描述: 组件以插件化注册（config/tools.d/ 一文件一组件，用户目录同名覆盖）；每个组件可标记自启——supervisor 启动时自动拉起（停止的 docker start，容器不存在则 `docker compose up -d <service>` 现场创建，底座无需单独手动启动）与关键组件（critical，关自启/停止需强确认）；登录用户可查看组件日志与运行详情（镜像/端口/运行时长/健康/重启次数）。
-- 验收: 新增组件 = 丢一个 yaml 到 tools.d/ 即出现在首页；`docker compose down` 后仅启动 supervisor，标记自启的组件全部自动恢复；critical 组件操作有确认提示；日志与详情接口可用。
+- 描述: 组件目录自包含（components/<name>/ 一个目录装一切：plugin.yaml 注册 + 可选 SKILL.md 能力 + 可选 hooks/backup.py、deploy.py，ADR-0027）；supervisor 只做目录扫描与契约调用，不含组件特定信息。每个组件可标记自启——supervisor 启动时自动拉起（停止的 docker start，容器不存在则组件 deploy 钩子或 `docker compose up -d` 现场创建）与关键组件（critical，关自启/停止需强确认）；登录用户可查看组件日志与运行详情；admin 可一键部署未部署组件（实时进度）。
+- 验收: 新增组件 = 建一个目录即注册成功；`docker compose down` 后仅启动 supervisor，标记自启的组件全部自动恢复；critical 组件操作有确认提示；日志/详情/部署进度接口可用。
