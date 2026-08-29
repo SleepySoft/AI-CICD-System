@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS projects (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT UNIQUE NOT NULL,
     git_url TEXT NOT NULL,                       -- 工程核心：一个 git 链接（FR-MGR-020）
+    default_branch TEXT DEFAULT '',              -- 空=远端默认分支
     ci_url TEXT DEFAULT '',
     description TEXT DEFAULT '',
     overrides TEXT DEFAULT '{}',                 -- JSON：harness/prompt_pack 等工程级覆盖
@@ -73,14 +74,15 @@ def init():
 
 def _migrate():
     """轻量迁移：给已存在的表补新列（SQLite ALTER ADD COLUMN，幂等）"""
-    existing = {r["name"] for r in q("PRAGMA table_info(task_runs)")}
     for col, ddl in (
         ("error_class", "TEXT DEFAULT ''"),
         ("runner_env", "TEXT DEFAULT ''"),
         ("artifacts", "TEXT DEFAULT '[]'"),
     ):
-        if col not in existing:
+        if col not in {r["name"] for r in q("PRAGMA table_info(task_runs)")}:
             db().execute(f"ALTER TABLE task_runs ADD COLUMN {col} {ddl}")
+    if "default_branch" not in {r["name"] for r in q("PRAGMA table_info(projects)")}:
+        db().execute("ALTER TABLE projects ADD COLUMN default_branch TEXT DEFAULT ''")
     db().commit()
 
 

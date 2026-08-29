@@ -19,3 +19,21 @@ unclassified:
     url: "http://ci.localhost/"
   timestamper:
     allPipelines: true
+
+jobs:
+  - script: >
+      pipelineJob('chronicler-selftest') {
+        description('Chronicler 组件自检（FR-MGR-023）：契约校验 + 可选沙箱部署测试')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote { url('http://gitea:3000/gitea_admin/ai-cicd-system.git') }
+                branch('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+            lightweight(true)
+          }
+        }
+      }

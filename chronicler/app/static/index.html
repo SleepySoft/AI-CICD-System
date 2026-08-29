@@ -242,11 +242,16 @@
     <!-- 新建工程 -->
     <el-dialog v-model="showNewProject" title="新建工程" width="560px">
       <el-form label-position="top" size="small">
-        <el-form-item label="名称"><el-input v-model="newProject.name" /></el-form-item>
-        <el-form-item label="Git 地址"><el-input v-model="newProject.git_url" /></el-form-item>
-        <el-form-item label="CI 地址"><el-input v-model="newProject.ci_url" /></el-form-item>
+        <el-form-item label="名称（小写字母/数字/-/_）"><el-input v-model="newProject.name" placeholder="my-project" /></el-form-item>
+        <el-form-item label="Git 地址（工程核心：任意 git 远端或本地路径）"><el-input v-model="newProject.git_url" placeholder="http://git.localhost/team/repo.git 或 C:\\path\\to\\repo" /></el-form-item>
+        <el-form-item label="默认分支（留空=远端默认）"><el-input v-model="newProject.default_branch" placeholder="main" /></el-form-item>
+        <el-form-item label="CI 项目链接（可选，复杂项目关联 Jenkins job 等）"><el-input v-model="newProject.ci_url" placeholder="http://ci.localhost/job/xxx" /></el-form-item>
+        <el-form-item label="Agent harness 覆盖（留空=全局默认）">
+          <el-select v-model="newProject.harness" clearable placeholder="全局默认" style="width:100%">
+            <el-option v-for="h in harnesses" :key="h.name" :label="h.name + ' — ' + h.desc" :value="h.name" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="描述"><el-input v-model="newProject.description" type="textarea" :rows="2" /></el-form-item>
-        <el-form-item label="覆盖项（JSON）"><el-input v-model="newProject.overrides" type="textarea" :rows="4" placeholder="{}" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showNewProject = false">取消</el-button>
@@ -255,8 +260,17 @@
     </el-dialog>
 
     <!-- 编辑覆盖项 -->
-    <el-dialog v-model="showOverrides" :title="'覆盖项 - ' + (editProject?.name || '')" width="560px">
-      <el-input v-model="overridesText" type="textarea" :rows="8" placeholder="{}" />
+    <el-dialog v-model="showOverrides" :title="'工程设置 - ' + (editProject?.name || '')" width="560px">
+      <el-form label-position="top" size="small">
+        <el-form-item label="Agent harness 覆盖">
+          <el-select v-model="overridesHarness" clearable placeholder="全局默认" style="width:100%">
+            <el-option v-for="h in harnesses" :key="h.name" :label="h.name + ' — ' + h.desc" :value="h.name" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="高级覆盖项（JSON，如分析策略 prompt_pack 等）">
+          <el-input v-model="overridesText" type="textarea" :rows="6" placeholder="{}" />
+        </el-form-item>
+      </el-form>
       <template #footer>
         <el-button @click="showOverrides = false">取消</el-button>
         <el-button type="primary" @click="saveOverrides" :loading="acting">保存</el-button>

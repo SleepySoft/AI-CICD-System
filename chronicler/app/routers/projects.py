@@ -12,6 +12,7 @@ router = APIRouter(prefix="/api/projects", tags=["projects"])
 class ProjectBody(BaseModel):
     name: str
     git_url: str
+    default_branch: str = ""
     ci_url: str = ""
     description: str = ""
     overrides: dict = {}
@@ -19,6 +20,7 @@ class ProjectBody(BaseModel):
 
 class ProjectPatch(BaseModel):
     git_url: str | None = None
+    default_branch: str | None = None
     ci_url: str | None = None
     description: str | None = None
     overrides: dict | None = None

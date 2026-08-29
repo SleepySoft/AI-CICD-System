@@ -39,10 +39,11 @@ createApp({
     const resetPwForm = ref({ password: "", temporary: true });
 
     const showNewProject = ref(false);
-    const newProject = ref({ name: "", git_url: "", ci_url: "", description: "", overrides: "{}" });
+    const newProject = ref({ name: "", git_url: "", default_branch: "", ci_url: "", description: "", harness: "" });
     const showOverrides = ref(false);
     const editProject = ref(null);
     const overridesText = ref("");
+    const overridesHarness = ref("");
     const showTrigger = ref(false);
     const triggerForm = ref({ project_id: null, task_type: "", extra_prompt: "" });
     const showLog = ref(false);
@@ -120,7 +121,11 @@ createApp({
       if (!newProject.value.name || !newProject.value.git_url) { ElementPlus.ElMessage.warning("名称与 Git 地址必填"); return; }
       acting.value = true;
       try {
-        const body = { ...newProject.value, overrides: parseJson(newProject.value.overrides, "覆盖项") };
+        const overrides = parseJson(newProject.value.overrides || "{}", "覆盖项");
+        if (newProject.value.harness) overrides.harness = newProject.value.harness;
+        const body = { name: newProject.value.name, git_url: newProject.value.git_url,
+                       default_branch: newProject.value.default_branch, ci_url: newProject.value.ci_url,
+                       description: newProject.value.description, overrides };
         await api("/api/projects", { method: "POST", body: JSON.stringify(body) });
         toast.ok("工程已创建"); showNewProject.value = false;
         newProject.value = { name: "", git_url: "", ci_url: "", description: "", overrides: "{}" };
@@ -134,16 +139,20 @@ createApp({
     }
     function openOverrides(p) {
       editProject.value = p;
+      overridesHarness.value = p.overrides?.harness || "";
       overridesText.value = JSON.stringify(p.overrides ?? {}, null, 2);
       showOverrides.value = true;
     }
     async function saveOverrides() {
       acting.value = true;
       try {
+        const overrides = parseJson(overridesText.value, "覆盖项");
+        if (overridesHarness.value) overrides.harness = overridesHarness.value;
+        else delete overrides.harness;
         await api(`/api/projects/${editProject.value.id}`, {
-          method: "PATCH", body: JSON.stringify({ overrides: parseJson(overridesText.value, "覆盖项") }),
+          method: "PATCH", body: JSON.stringify({ overrides }),
         });
-        toast.ok("覆盖项已保存"); showOverrides.value = false; loadProjects();
+        toast.ok("工程设置已保存"); showOverrides.value = false; loadProjects();
       } catch (e) { toast.err(e); }
       finally { acting.value = false; }
     }

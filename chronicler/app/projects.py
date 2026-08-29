@@ -16,15 +16,15 @@ def repo_dir(project_id: int):
 
 
 def create_project(name: str, git_url: str, ci_url: str = "", description: str = "",
-                   overrides: dict | None = None) -> dict:
+                   overrides: dict | None = None, default_branch: str = "") -> dict:
     if not _NAME_RE.match(name):
         raise HTTPException(status_code=400, detail="工程名仅允许小写字母/数字/-/_")
     if q1("SELECT id FROM projects WHERE name=?", (name,)):
         raise HTTPException(status_code=409, detail="工程名已存在")
     pid = execute(
-        "INSERT INTO projects(name, git_url, ci_url, description, overrides, created_at)"
-        " VALUES (?,?,?,?,?,strftime('%s','now'))",
-        (name, git_url, ci_url, description, json.dumps(overrides or {}, ensure_ascii=False)))
+        "INSERT INTO projects(name, git_url, default_branch, ci_url, description, overrides, created_at)"
+        " VALUES (?,?,?,?,?,?,strftime('%s','now'))",
+        (name, git_url, default_branch, ci_url, description, json.dumps(overrides or {}, ensure_ascii=False)))
     return get_project(pid)
 
 
@@ -48,7 +48,7 @@ def list_projects() -> list[dict]:
 def update_project(pid: int, fields: dict) -> dict:
     p = get_project(pid)
     merged = {**p["overrides"], **(fields.pop("overrides", {}) or {})}
-    allowed = {k: v for k, v in fields.items() if k in ("git_url", "ci_url", "description")}
+    allowed = {k: v for k, v in fields.items() if k in ("git_url", "ci_url", "description", "default_branch")}
     if allowed or merged != p["overrides"]:
         sets = ", ".join(f"{k}=?" for k in allowed)
         args = list(allowed.values())
@@ -66,9 +66,16 @@ def sync_project(pid: int) -> dict:
     try:
         if dest.is_dir():
             r = _git(["-C", str(dest), "fetch", "--all", "--prune"], timeout=300)
+            branch = p.get("default_branch") or ""
+            if branch:
+                _git(["-C", str(dest), "checkout", branch])
+                _git(["-C", str(dest), "reset", "--hard", f"origin/{branch}"])
         else:
             dest.parent.mkdir(parents=True, exist_ok=True)
-            r = _git(["clone", p["git_url"], str(dest)], timeout=600)
+            clone_args = ["clone", p["git_url"], str(dest)]
+            if p.get("default_branch"):
+                clone_args = ["clone", "-b", p["default_branch"], p["git_url"], str(dest)]
+            r = _git(clone_args, timeout=600)
         if r.returncode != 0:
             raise HTTPException(status_code=502, detail=f"git 同步失败：{r.stderr.strip()[:500]}")
     except subprocess.TimeoutExpired:
