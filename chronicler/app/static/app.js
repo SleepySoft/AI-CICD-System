@@ -445,6 +445,7 @@ createApp({
       if (isAdmin.value) loadUsers();
     }
     function onTabChange(name) {
+      if (location.hash.slice(1) !== name) history.replaceState(null, "", "#" + name);
       if (name === "home") loadTools();
       else if (name === "projects") loadProjects();
       else if (name === "runs") { loadTasks(); loadRuns(); }
@@ -453,6 +454,9 @@ createApp({
     }
 
     onMounted(async () => {
+      const h = location.hash.slice(1);
+      if (h) tab.value = h;
+      window.addEventListener("hashchange", () => { if (location.hash.slice(1) !== tab.value) tab.value = location.hash.slice(1) || "home"; });
       try { authBackend.value = (await api("/api/auth/method")).backend; } catch (_) {}
       try { user.value = await api("/api/auth/me"); } catch (_) { user.value = null; }
       if (user.value) loadAll();
@@ -462,7 +466,7 @@ createApp({
     return {
       user, loading, acting, loginError, loginForm, authBackend, ssoLogin, showLocalLogin, tab, isAdmin,
       projects, loadingProjects, runs, loadingRuns, runFilter,
-      harnesses, components, componentList, prompts,
+      harnesses, components, componentList, prompts, tasksByProject,
       tools, loadingTools, groupedTools, users, newUser,
       showToolLog, toolLogName, toolLogText, showToolDetail, toolDetail,
       showDeploy, deployName, deployState, deployLines, openDeploy, closeDeploy,

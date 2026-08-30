@@ -29,12 +29,19 @@ def create_task(project_id: int, name: str, task_type: str, schedule_cron: str =
 
 
 def create_preset_tasks(project_id: int):
-    """新建工程默认挂预置任务（全部仅手动触发，cron 留空由用户开启）"""
+    """工程默认挂预置任务（幂等，启动时对存量工程也会补齐；全部仅手动触发）"""
     for tt in PRESET_TASKS:
         try:
             create_task(project_id, f"{tt}（预置）", tt)
         except Exception:
             pass
+
+
+def backfill_preset_tasks():
+    """启动钩子：给所有缺预置任务的存量工程补齐（幂等）"""
+    from .db import q
+    for p in q("SELECT id FROM projects"):
+        create_preset_tasks(p["id"])
 
 
 def get_task(tid: int) -> dict:

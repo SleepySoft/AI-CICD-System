@@ -21,8 +21,9 @@ async def no_cache_static(request, call_next):
 
 db.init()
 
-# 任务调度器（cron 触发，FR-MGR-004 前置形态）
-from .tasks import start_scheduler
+# 存量工程补齐预置任务（幂等）+ 任务调度器（cron 触发，FR-MGR-004 前置形态）
+from .tasks import backfill_preset_tasks, start_scheduler
+backfill_preset_tasks()
 start_scheduler()
 
 

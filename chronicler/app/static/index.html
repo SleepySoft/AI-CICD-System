@@ -112,12 +112,12 @@
             <el-table-column label="创建时间" width="160">
               <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
             </el-table-column>
-            <el-table-column v-if="isAdmin" label="操作" width="220">
+            <el-table-column v-if="isAdmin" label="操作" width="150">
               <template #default="{ row }">
-                <el-button size="small" text type="primary" @click="syncProject(row)">同步</el-button>
-                <el-button size="small" text type="warning" @click="resetClone(row)">重置克隆</el-button>
-                <el-button size="small" text @click="openEdit(row)">设置</el-button>
-                <el-button size="small" text type="danger" @click="removeProject(row)">删除</el-button>
+                <el-tooltip content="同步（拉取最新代码）" placement="top"><el-button size="small" text type="primary" icon="Refresh" @click="syncProject(row)"></el-button></el-tooltip>
+                <el-tooltip content="重置克隆（删本地重新拉）" placement="top"><el-button size="small" text type="warning" icon="RefreshLeft" @click="resetClone(row)"></el-button></el-tooltip>
+                <el-tooltip content="设置" placement="top"><el-button size="small" text icon="Setting" @click="openEdit(row)"></el-button></el-tooltip>
+                <el-tooltip content="删除工程" placement="top"><el-button size="small" text type="danger" icon="Delete" @click="removeProject(row)"></el-button></el-tooltip>
               </template>
             </el-table-column>
           </el-table>
