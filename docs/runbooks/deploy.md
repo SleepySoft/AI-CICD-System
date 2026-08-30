@@ -31,10 +31,6 @@
    ```bash
    bash scripts/build-images.sh    # Windows: scripts\build-images.ps1
    ```
-4. 知识库初始化（可选） — vault 推送至 Gitea
-   ```bash
-   cd knowledge/vault && git init   # 结构规范见 vault README
-   ```
 
 ## 二、supervisor（Chronicler，产品本体）
 

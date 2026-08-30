@@ -21,8 +21,8 @@
 | FR-IMG-003 | Node 工具链镜像 | how/images-toolchain.md | images/toolchain-node/ | scripts/build-images.sh |
 | FR-IMG-004 | Python 测试镜像(Miniforge) | how/images-toolchain.md | images/test-python/ | scripts/build-images.sh |
 | FR-IMG-005 | 浏览器自动化镜像 | how/images-toolchain.md | images/browsers/ | scripts/build-images.sh |
-| FR-KB-001 | Markdown vault 事实源 | what/knowledge.md §分区规范 | knowledge/vault/ | 人工：vault git 仓库 |
-| FR-KB-002 | 来源分区与标注 | what/knowledge.md §frontmatter 契约 | knowledge/vault/ | 人工：frontmatter 抽查 |
+| FR-KB-001 | Markdown vault 事实源 | what/knowledge.md §分区规范 | 已废弃（知识改由 shadow 仓/全局资产库承载，ADR-0028/FR-MGR-013/014） | - |
+| FR-KB-002 | 来源分区与标注 | what/knowledge.md §frontmatter 契约 | 已废弃（同上，分区约定将迁入 shadow 仓结构） | - |
 | FR-KB-003 | 语义检索（Qdrant） | what/knowledge.md §索引契约 | docker-compose.yml(knowledge profile) | 人工：MCP 语义查询 |
 | FR-KB-004 | Outline 分级可见 | what/knowledge.md §索引契约 | docker-compose.yml + Keycloak | 人工：dev/boss 登录比对 |
 | FR-REQ-001 | 需求条目化机器可读 | what/req-mgmt.md | docs/requirements/（本目录）+ Sphinx-Needs(规划) | 本文件自检 |
@@ -69,4 +69,4 @@
 | NFR-006 | 三形态同源 | scripts/build-images.sh + 封装脚本；supervisor 独立交付（ADR-0020，待实现） | 人工：封装脚本复用 compose |
 | NFR-007 | Agent 成本可控 | chronicler harness 注册表 + Ollama profile | 人工：切换本地模型跑任务 |
 | NFR-008 | 数据显式持久化 | docker-compose.yml bind mounts（${DATA_ROOT:-./data}，public/private 二分 ADR-0026）；组件化备份编排 chronicler/app/backup.py + 组件 hooks（ADR-0027），scripts/backup.sh 为薄壳 | `python -m chronicler backup` 产出含 manifest 的备份包 |
-| NFR-009 | 系统数据 Git 化 | docs/、knowledge/vault/、chronicler/components/jenkins/casc.yaml（已落实）；scripts/export-openproject.sh（手工导出，ADR-0014）；chronicler Git 落盘（M3 起） | 抽查数据可定位 Git 事实源 |
+| NFR-009 | 系统数据 Git 化 | docs/、shadow 仓（data/public/shadow/，ADR-0028）、chronicler/components/jenkins/casc.yaml（已落实）；scripts/export-openproject.sh（手工导出，ADR-0014） | 抽查数据可定位 Git 事实源 |

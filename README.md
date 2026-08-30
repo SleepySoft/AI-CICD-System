@@ -57,9 +57,7 @@ bash scripts/wire-chronicler.sh   # 可选：Chronicler 切 Keycloak 统一登�
 │   ├── config/              # harness.yaml（agent 命令模板）
 │   ├── prompts/             # 内置任务 prompt 模板（版本=内容 hash）
 │   └── scripts/             # install-service.sh（systemd 常驻）
-├── docker-compose.yml       # 可选底座编排（profiles: knowledge/requirements/monitor/localai/browsers/sandbox）
 ├── images/                  # CI 工具链镜像（toolchain-*，非栈组件）
-├── knowledge/vault/         # 知识库内容（git 事实源）
 ├── docs/                    # 项目文档：requirements/why/what/how/adr/runbooks
 ├── .agents/skills/          # 项目技能（Agent 行为规范）
 ├── third_party/             # 外部依赖（git submodule）
