@@ -127,7 +127,8 @@ def _classify_error(err: str) -> str:
     return "其他"
 
 
-def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "") -> dict:
+def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
+            prompt_override: str = "") -> dict:
     project = projects.get_project(project_id)
     if not projects.repo_dir(project_id).is_dir():
         projects.sync_project(project_id)  # 未 clone 则先同步
@@ -138,7 +139,12 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "")
     if harness.get("session", "once") != "once":
         raise RuntimeError(f"harness {harness_name} 声明为持久会话，v1 暂不支持（ADR-0021 TBD）")
 
-    template, prompt_version = registry.load_prompt(task_type)
+    if prompt_override:
+        # 工程级 prompt 覆盖（任务自带模板）；版本=内容 hash（FR-MGR-011）
+        import hashlib
+        template, prompt_version = prompt_override, hashlib.sha1(prompt_override.encode()).hexdigest()[:8]
+    else:
+        template, prompt_version = registry.load_prompt(task_type)
 
     # A 段输入快照（§2.1.1，执行前冻结）
     snapshot = {

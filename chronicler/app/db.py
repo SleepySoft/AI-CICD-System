@@ -28,6 +28,18 @@ CREATE TABLE IF NOT EXISTS projects (
     overrides TEXT DEFAULT '{}',                 -- JSON：harness/prompt_pack 等工程级覆盖
     created_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS task_defs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id),
+    name TEXT NOT NULL,
+    task_type TEXT NOT NULL,                     -- 对应 prompts/<task_type>.md
+    prompt_override TEXT DEFAULT '',             -- 非空=工程级覆盖全局模板（FR-MGR-011 版本=hash）
+    schedule_cron TEXT DEFAULT '',               -- 空=仅手动；hook/联动预留 webhook 字段
+    webhook INTEGER DEFAULT 0,                   -- 预留：push 等事件联动
+    enabled INTEGER DEFAULT 1,                   -- 关闭=停止自动触发但不删配置
+    created_at REAL NOT NULL,
+    UNIQUE(project_id, task_type)
+);
 CREATE TABLE IF NOT EXISTS task_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     project_id INTEGER NOT NULL REFERENCES projects(id),

@@ -87,3 +87,22 @@ def load_prompt(task_type: str) -> tuple[str, str]:
         raise HTTPException(status_code=404, detail=f"未知任务类型：{task_type}（缺少 prompt 模板 {name}）")
     content = path.read_text(encoding="utf-8")
     return content, hashlib.sha1(content.encode()).hexdigest()[:8]
+
+
+def save_prompt_override(task_type: str, content: str) -> dict:
+    """保存 prompt 覆盖到 DATA/prompts/（FR-MGR-011：内置模板只读，编辑即覆盖副本）"""
+    if not (Cfg.PROMPTS_DIR / f"{task_type}.md").is_file() and \
+       not (Cfg.prompts_override_dir() / f"{task_type}.md").is_file():
+        raise HTTPException(status_code=404, detail=f"未知任务类型：{task_type}")
+    Cfg.prompts_override_dir().mkdir(parents=True, exist_ok=True)
+    out = Cfg.prompts_override_dir() / f"{task_type}.md"
+    out.write_text(content, encoding="utf-8", newline="\n")
+    return {"ok": True, "version": hashlib.sha1(content.encode()).hexdigest()[:8], "path": str(out)}
+
+
+def delete_prompt_override(task_type: str) -> dict:
+    """删除覆盖，回落内置模板"""
+    p = Cfg.prompts_override_dir() / f"{task_type}.md"
+    if p.is_file():
+        p.unlink()
+    return {"ok": True}

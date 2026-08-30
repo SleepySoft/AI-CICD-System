@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import db
-from .routers import auth, config, oidc, projects, runs, tools, users
+from .routers import auth, config, oidc, projects, runs, tasks, tools, users
 
 app = FastAPI(title="Chronicler", docs_url=None, redoc_url=None)
 
@@ -21,6 +21,10 @@ async def no_cache_static(request, call_next):
 
 db.init()
 
+# 任务调度器（cron 触发，FR-MGR-004 前置形态）
+from .tasks import start_scheduler
+start_scheduler()
+
 
 @app.on_event("startup")
 def _autostart_boot():
@@ -30,7 +34,8 @@ def _autostart_boot():
     threading.Thread(target=autostart_boot, daemon=True).start()
 
 
-for r in (auth.router, oidc.router, users.router, projects.router, runs.router, config.router, tools.router):
+for r in (auth.router, oidc.router, users.router, projects.router, runs.router,
+          tasks.router, config.router, tools.router):
     app.include_router(r)
 
 STATIC = Path(__file__).parent / "static"

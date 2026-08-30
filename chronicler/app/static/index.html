@@ -20,6 +20,7 @@
     .login-page { display: flex; align-items: center; justify-content: center; height: 100vh; }
     .card-box { background: #fff; border: 1px solid #e4e7ed; border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
     .log-view { background: #1e1e1e; color: #d4d4d4; font-family: Consolas, "Courier New", monospace; font-size: 12px; line-height: 1.35; padding: 12px; border-radius: 6px; white-space: pre-wrap; word-break: break-all; overflow: auto; height: 60vh; margin: 0; }
+    .mono textarea { font-family: Consolas, "Courier New", monospace; font-size: 12px; }
     .muted { color: #909399; font-size: 12px; }
   </style>
 </head>
@@ -125,6 +126,42 @@
 
         <!-- ============ 任务 ============ -->
         <el-tab-pane label="任务" name="runs">
+          <div class="group-title" style="margin-top:0">任务定义</div>
+          <div style="margin-bottom: 8px">
+            <el-button size="small" @click="loadTasks" :loading="loadingTasks">刷新</el-button>
+            <el-button v-if="isAdmin" size="small" type="primary" @click="openNewTask">新建任务</el-button>
+          </div>
+          <el-table :data="tasks" size="small" style="width:100%">
+            <el-table-column label="工程" width="150">
+              <template #default="{ row }">{{ projectName(row.project_id) }}</template>
+            </el-table-column>
+            <el-table-column prop="name" label="任务名" width="180" show-overflow-tooltip></el-table-column>
+            <el-table-column prop="task_type" label="类型" width="150" show-overflow-tooltip></el-table-column>
+            <el-table-column label="调度 cron" width="140">
+              <template #default="{ row }">
+                <span style="font-family:Consolas,monospace">{{ row.schedule_cron || '（手动）' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="启用" width="80">
+              <template #default="{ row }">
+                <el-switch v-if="isAdmin" :model-value="!!row.enabled" size="small" @change="v => toggleTaskEnabled(row, v)"></el-switch>
+                <el-tag v-else :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '停用' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="创建时间" width="160">
+              <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
+            </el-table-column>
+            <el-table-column v-if="isAdmin" label="操作" width="180">
+              <template #default="{ row }">
+                <el-button size="small" text type="primary" @click="triggerTask(row)">触发</el-button>
+                <el-button size="small" text @click="openTaskEdit(row)">编辑</el-button>
+                <el-button size="small" text type="danger" @click="removeTask(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <p v-if="!tasks.length" class="muted">暂无任务定义</p>
+
+          <div class="group-title">执行记录（Run）</div>
           <div style="margin-bottom: 8px; display:flex; gap:10px; align-items:center">
             <el-select v-model="runFilter" placeholder="全部工程" clearable size="small" style="width:200px" @change="loadRuns">
               <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id"></el-option>
@@ -193,6 +230,11 @@
               </template>
             </el-table-column>
             <el-table-column prop="size" label="大小(字节)" width="120"></el-table-column>
+            <el-table-column label="操作" width="110">
+              <template #default="{ row }">
+                <el-button size="small" text type="primary" @click="openPrompt(row)">{{ isAdmin ? '查看/编辑' : '查看' }}</el-button>
+              </template>
+            </el-table-column>
           </el-table>
           <p class="muted" style="margin-top:16px">配置为 YAML 文件，改文件即热生效。</p>
         </el-tab-pane>
@@ -287,6 +329,66 @@
       </template>
     </el-dialog>
 
+    <!-- 新建任务 -->
+    <el-dialog v-model="showNewTask" title="新建任务" width="520px">
+      <el-form label-position="top" size="small">
+        <el-form-item label="工程">
+          <el-select v-model="newTaskForm.project_id" style="width:100%">
+            <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id"></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="任务名称"><el-input v-model="newTaskForm.name" placeholder="每日代码洞察"></el-input></el-form-item>
+        <el-form-item label="任务类型">
+          <el-select v-model="newTaskForm.task_type" style="width:100%" placeholder="选择预置模板">
+            <el-option v-for="p in prompts" :key="p.task_type" :label="p.task_type + '（' + p.version + '）'" :value="p.task_type"></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="调度 cron（留空=仅手动触发）"><el-input v-model="newTaskForm.schedule_cron" placeholder="0 9 * * *"></el-input></el-form-item>
+        <el-form-item label="启用"><el-switch v-model="newTaskForm.enabled"></el-switch></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showNewTask = false">取消</el-button>
+        <el-button type="primary" @click="createTask" :loading="acting">创建</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 编辑任务 -->
+    <el-dialog v-model="showTaskEdit" :title="'编辑任务 - ' + (taskEditRow?.name || '')" width="600px">
+      <el-form label-position="top" size="small">
+        <el-form-item label="任务名称"><el-input v-model="taskEditForm.name"></el-input></el-form-item>
+        <el-form-item label="调度 cron（留空=仅手动触发）"><el-input v-model="taskEditForm.schedule_cron" placeholder="0 9 * * *"></el-input></el-form-item>
+        <el-form-item label="启用"><el-switch v-model="taskEditForm.enabled"></el-switch></el-form-item>
+        <el-form-item label="Webhook（预留，暂未开放）">
+          <el-input v-model="taskEditForm.webhook" disabled placeholder="预留字段"></el-input>
+        </el-form-item>
+        <el-form-item :label="'Prompt 覆盖（留空=使用全局模板）'">
+          <el-input v-model="taskEditForm.prompt_override" type="textarea" :rows="10" class="mono"
+                    placeholder="留空则使用全局模板"></el-input>
+          <div class="muted" style="margin-top:4px">{{ taskPromptSource }}</div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showTaskEdit = false">取消</el-button>
+        <el-button type="primary" @click="saveTaskEdit" :loading="acting">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 提示词查看/编辑 -->
+    <el-drawer v-model="showPrompt" :title="'提示词 - ' + promptView.task_type" size="60%">
+      <div style="margin-bottom:10px">
+        <el-tag size="small" effect="plain">版本 {{ promptView.version }}</el-tag>
+        <el-tag :type="promptView.overridden ? 'warning' : 'info'" size="small" style="margin-left:8px">
+          {{ promptView.overridden ? '已覆盖内置' : '内置模板' }}
+        </el-tag>
+      </div>
+      <el-input v-model="promptView.content" type="textarea" :rows="22" :readonly="!isAdmin" class="mono"></el-input>
+      <div v-if="isAdmin" style="margin-top:12px">
+        <el-button type="primary" @click="savePrompt" :loading="acting">保存为覆盖副本</el-button>
+        <el-button v-if="promptView.overridden" type="warning" plain @click="resetPrompt">恢复内置</el-button>
+      </div>
+      <p v-if="!isAdmin" class="muted" style="margin-top:12px">只读：仅管理员可编辑提示词。</p>
+    </el-drawer>
+
     <!-- 触发任务 -->
     <el-dialog v-model="showTrigger" title="触发任务" width="520px">
       <el-form label-position="top" size="small">
@@ -372,6 +474,6 @@
 
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://unpkg.com/element-plus/dist/index.full.min.js"></script>
-<script src="/app.js?v=3"></script>
+<script src="/app.js?v=4"></script>
 </body>
 </html>

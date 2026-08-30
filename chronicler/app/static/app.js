@@ -46,6 +46,16 @@ createApp({
                            description: "", harness: "", showAdv: false, overridesText: "{}" });
     const showTrigger = ref(false);
     const triggerForm = ref({ project_id: null, task_type: "", extra_prompt: "" });
+
+    const tasks = ref([]);
+    const loadingTasks = ref(false);
+    const showNewTask = ref(false);
+    const newTaskForm = ref({ project_id: null, name: "", task_type: "", schedule_cron: "", enabled: true });
+    const showTaskEdit = ref(false);
+    const taskEditRow = ref(null);
+    const taskEditForm = ref({ name: "", schedule_cron: "", enabled: true, webhook: "", prompt_override: "" });
+    const showPrompt = ref(false);
+    const promptView = ref({ task_type: "", version: "", content: "", overridden: false });
     const showLog = ref(false);
     const logRunId = ref(null);
     const logText = ref("");
@@ -57,6 +67,13 @@ createApp({
     const isAdmin = computed(() => user.value?.role === "admin");
     const componentList = computed(() =>
       Object.entries(components.value).map(([name, v]) => ({ name, ...v })));
+    const taskPromptSource = computed(() => {
+      if (!taskEditRow.value) return "";
+      if (taskEditForm.value.prompt_override.trim()) return "当前生效：本任务自定义覆盖";
+      const p = prompts.value.find(x => x.task_type === taskEditRow.value.task_type);
+      if (!p) return "当前生效：全局模板";
+      return `当前生效：全局模板 ${p.version}（${p.overridden ? "覆盖副本" : "内置"}）`;
+    });
     const groupedTools = computed(() => {
       const g = {};
       for (const t of tools.value) (g[t.group || "其他"] ||= []).push(t);
@@ -178,6 +195,92 @@ createApp({
           `确认删除工程 ${p.name}？将同时删除本地克隆（runs/报告保留）。`, "删除工程", { type: "warning" });
         await api(`/api/projects/${p.id}`, { method: "DELETE" });
         toast.ok("已删除"); loadProjects();
+      } catch (e) { if (e !== "cancel" && e?.message) toast.err(e); }
+    }
+
+    async function loadTasks() {
+      loadingTasks.value = true;
+      try { tasks.value = await api("/api/tasks"); } catch (e) { toast.err(e); }
+      finally { loadingTasks.value = false; }
+    }
+    function openNewTask() {
+      newTaskForm.value = { project_id: projects.value[0]?.id || null, name: "",
+                            task_type: prompts.value[0]?.task_type || "", schedule_cron: "", enabled: true };
+      showNewTask.value = true;
+    }
+    async function createTask() {
+      const f = newTaskForm.value;
+      if (!f.project_id || !f.name || !f.task_type) { ElementPlus.ElMessage.warning("工程、名称与任务类型必填"); return; }
+      acting.value = true;
+      try {
+        await api("/api/tasks", { method: "POST", body: JSON.stringify({
+          project_id: f.project_id, name: f.name, task_type: f.task_type,
+          schedule_cron: f.schedule_cron, enabled: f.enabled ? 1 : 0 }) });
+        toast.ok("任务已创建"); showNewTask.value = false; loadTasks();
+      } catch (e) { toast.err(e); }
+      finally { acting.value = false; }
+    }
+    async function toggleTaskEnabled(t, val) {
+      try {
+        await api(`/api/tasks/${t.id}`, { method: "PATCH", body: JSON.stringify({ enabled: val ? 1 : 0 }) });
+        t.enabled = val ? 1 : 0;
+        toast.ok(`已${val ? "启用" : "停用"}：${t.name}`);
+      } catch (e) { toast.err(e); }  // 失败：switch 单向绑定，不落库即回弹
+    }
+    function openTaskEdit(t) {
+      taskEditRow.value = t;
+      taskEditForm.value = { name: t.name || "", schedule_cron: t.schedule_cron || "",
+                             enabled: !!t.enabled, webhook: t.webhook || "", prompt_override: t.prompt_override || "" };
+      showTaskEdit.value = true;
+    }
+    async function saveTaskEdit() {
+      acting.value = true;
+      try {
+        await api(`/api/tasks/${taskEditRow.value.id}`, { method: "PATCH", body: JSON.stringify({
+          name: taskEditForm.value.name, schedule_cron: taskEditForm.value.schedule_cron,
+          enabled: taskEditForm.value.enabled ? 1 : 0, prompt_override: taskEditForm.value.prompt_override }) });
+        toast.ok("任务已保存"); showTaskEdit.value = false; loadTasks();
+      } catch (e) { toast.err(e); }
+      finally { acting.value = false; }
+    }
+    async function removeTask(t) {
+      try {
+        await ElementPlus.ElMessageBox.confirm(`确认删除任务「${t.name}」？执行记录（Run）保留。`, "删除任务", { type: "warning" });
+        await api(`/api/tasks/${t.id}`, { method: "DELETE" });
+        toast.ok("已删除"); loadTasks();
+      } catch (e) { if (e !== "cancel" && e?.message) toast.err(e); }
+    }
+    async function triggerTask(t) {
+      try {
+        await api(`/api/tasks/${t.id}/trigger`, { method: "POST" });
+        toast.ok(`已触发：${t.name}`); setTimeout(loadRuns, 800);
+      } catch (e) { toast.err(e); }
+    }
+    async function openPrompt(p) {
+      promptView.value = { task_type: p.task_type, version: p.version, content: "加载中…", overridden: p.overridden };
+      showPrompt.value = true;
+      try { promptView.value = await api(`/api/config/prompts/${encodeURIComponent(p.task_type)}/content`); }
+      catch (e) { toast.err(e); showPrompt.value = false; }
+    }
+    async function savePrompt() {
+      acting.value = true;
+      try {
+        const r = await api(`/api/config/prompts/${encodeURIComponent(promptView.value.task_type)}`,
+                            { method: "PUT", body: JSON.stringify({ content: promptView.value.content }) });
+        toast.ok(`已保存为覆盖副本${r.version ? `（${r.version}）` : ""}`);
+        promptView.value.overridden = true;
+        loadConfig();
+      } catch (e) { toast.err(e); }
+      finally { acting.value = false; }
+    }
+    async function resetPrompt() {
+      try {
+        await ElementPlus.ElMessageBox.confirm(
+          `确认删除「${promptView.value.task_type}」的覆盖副本并回落到内置模板？`, "恢复内置", { type: "warning" });
+        await api(`/api/config/prompts/${encodeURIComponent(promptView.value.task_type)}/override`, { method: "DELETE" });
+        toast.ok("已恢复内置模板");
+        await openPrompt(promptView.value);
+        loadConfig();
       } catch (e) { if (e !== "cancel" && e?.message) toast.err(e); }
     }
 
@@ -338,13 +441,13 @@ createApp({
     }
 
     function loadAll() {
-      loadProjects(); loadRuns(); loadConfig(); loadTools();
+      loadProjects(); loadRuns(); loadTasks(); loadConfig(); loadTools();
       if (isAdmin.value) loadUsers();
     }
     function onTabChange(name) {
       if (name === "home") loadTools();
       else if (name === "projects") loadProjects();
-      else if (name === "runs") loadRuns();
+      else if (name === "runs") { loadTasks(); loadRuns(); }
       else if (name === "config") loadConfig();
       else if (name === "users") loadUsers();
     }
@@ -366,10 +469,14 @@ createApp({
       toggleAutostart, openToolLogs, refreshToolLogs, openToolDetail, fmtUptime, fmtPorts,
       showNewProject, newProject, showEdit, editProject, editForm,
       showTrigger, triggerForm, showLog, logRunId, logText, showReport, reportRunId, reportText,
+      tasks, loadingTasks, showNewTask, newTaskForm, showTaskEdit, taskEditRow, taskEditForm,
+      showPrompt, promptView, taskPromptSource,
       fmtTime, open, projectName, runStatusText, runTagType, toolStatusText,
       login, logout, onTabChange,
       loadProjects, createProject, syncProject, resetClone, openEdit, saveEdit, removeProject,
       loadRuns, openTrigger, triggerRun, openLog, openReport, stopLogPoll,
+      loadTasks, openNewTask, createTask, toggleTaskEnabled, openTaskEdit, saveTaskEdit, removeTask, triggerTask,
+      openPrompt, savePrompt, resetPrompt,
       loadTools, ctlTool, createUser, removeUser, openResetPw, doResetPw, showResetPw, resetPwUser, resetPwForm,
     };
   },

@@ -35,8 +35,10 @@ async def list_(user: dict = Depends(current_user)):
 
 @router.post("")
 async def create(body: ProjectBody, user: dict = Depends(require_admin)):
+    from .. import tasks as task_mod
     p = projects.create_project(body.name, body.git_url, body.ci_url, body.description,
                                 body.overrides, body.default_branch, body.shadow_repo)
+    task_mod.create_preset_tasks(p["id"])  # 新建工程默认挂预置任务（仅手动触发）
     audit(user["username"], "project.create", body.name)
     return p
 
@@ -63,8 +65,10 @@ async def reset_clone(pid: int, user: dict = Depends(require_admin)):
 @router.delete("/{pid}")
 async def delete(pid: int, user: dict = Depends(require_admin)):
     import shutil
+    from .. import tasks
     p = projects.get_project(pid)
-    # 先清关联 Run（task_runs 有外键），再删工程；报告保留在 public/reports 供追溯
+    # 先清关联任务定义与 Run（外键），再删工程；报告保留在 shadow 仓供追溯
+    tasks.delete_project_tasks(pid)
     projects.execute("DELETE FROM task_runs WHERE project_id=?", (pid,))
     projects.execute("DELETE FROM projects WHERE id=?", (pid,))
     shutil.rmtree(projects.repo_dir(pid), ignore_errors=True)  # 清理工作空间克隆

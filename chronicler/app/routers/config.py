@@ -1,11 +1,13 @@
-"""全局配置查看路由（FR-MGR-018/019）：注册表只读展示 + prompt 模板列表
+"""全局配置查看路由（FR-MGR-018/019）：注册表只读展示 + prompt 模板读写
 
-配置本体是 YAML 文件（热更新），API 不提供写操作——改文件即生效（ADR-0018 模式）。
+配置本体是 YAML 文件（热更新），YAML 不提供写操作——改文件即生效（ADR-0018 模式）。
+prompt 模板例外：内置只读，编辑写覆盖副本（FR-MGR-011）。
 """
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 from .. import registry
-from ..auth import current_user
+from ..auth import current_user, require_admin
 from ..config import Cfg
 
 router = APIRouter(prefix="/api/config", tags=["config"])
@@ -34,3 +36,27 @@ async def prompts(user: dict = Depends(current_user)):
                     "overridden": (Cfg.prompts_override_dir() / path.name).is_file(),
                     "size": len(content)})
     return out
+
+
+@router.get("/prompts/{name}/content")
+async def prompt_content(name: str, user: dict = Depends(current_user)):
+    content, version = registry.load_prompt(name)
+    return {"task_type": name, "version": version, "content": content,
+            "overridden": (Cfg.prompts_override_dir() / f"{name}.md").is_file()}
+
+
+class PromptBody(BaseModel):
+    content: str
+
+
+@router.put("/prompts/{name}")
+async def prompt_save(name: str, body: PromptBody, user: dict = Depends(require_admin)):
+    r = registry.save_prompt_override(name, body.content)
+    from ..db import audit
+    audit(user["username"], "prompt.save", name, r["version"])
+    return r
+
+
+@router.delete("/prompts/{name}/override")
+async def prompt_reset(name: str, user: dict = Depends(require_admin)):
+    return registry.delete_prompt_override(name)
