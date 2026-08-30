@@ -18,6 +18,7 @@ plugins:
 
 nav:
   - 首页: index.md
-  # Agent 生成的文档会按仓库/模块追加到此处
-  - 分析报告:
-    - daily-report 08-29 14:56: reports/ai-cicd-system/20260829-145621-daily-report.md
+  # 工程分析报告在 shadow 仓（挂载 /shadow），按 URL 直达：
+  #   /shadow/<工程名>-shadow/reports/daily/YYYY-MM-DD/  （日报，按日期）
+  #   /shadow/<工程名>-shadow/reports/<task_type>/       （分析类，原地更新）
+  #   /shadow/<工程名>-shadow/know-how/<主题>/            （蒸馏卡片）
