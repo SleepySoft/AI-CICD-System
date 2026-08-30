@@ -32,7 +32,7 @@
       <h2 style="text-align:center; margin-top:0">Chronicler</h2>
       <p class="muted" style="text-align:center">AI 研发任务编排与执行监督</p>
       <template v-if="authBackend === 'oidc'">
-        <el-button type="primary" style="width:100%" @click="ssoLogin">经 Keycloak 统一登录</el-button>
+        <el-button type="primary" style="width:100%" @click="ssoLogin">通过 Keycloak 统一登录</el-button>
         <div style="text-align:center; margin-top:12px">
           <el-link type="info" size="small" @click="showLocalLogin = !showLocalLogin">
             {{ showLocalLogin ? '收起' : '本地应急账号登录' }}

@@ -22,3 +22,7 @@ homepage/config/kubernetes.yaml
 # Chronicler host-side venv (ADR-0020)
 chronicler/.venv/
 chronicler/.venv-win/
+
+# Chronicler 运行时日志（启动脚本重定向产物）
+chronicler-server.log
+chronicler-server.err.log

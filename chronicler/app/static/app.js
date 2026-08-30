@@ -466,7 +466,7 @@ createApp({
     return {
       user, loading, acting, loginError, loginForm, authBackend, ssoLogin, showLocalLogin, tab, isAdmin,
       projects, loadingProjects, runs, loadingRuns, runFilter,
-      harnesses, components, componentList, prompts, tasksByProject,
+      harnesses, components, componentList, prompts,
       tools, loadingTools, groupedTools, users, newUser,
       showToolLog, toolLogName, toolLogText, showToolDetail, toolDetail,
       showDeploy, deployName, deployState, deployLines, openDeploy, closeDeploy,
