@@ -199,7 +199,8 @@ def _run(run_id: int, harness: dict, prompt: str):
                                       stdout=log, stderr=subprocess.STDOUT,
                                       timeout=harness.get("timeout_sec", 1800))
             artifacts = []
-            if proc.returncode == 0:
+            # 产出契约优先于退出码（kimi 等 CLI 收尾阶段会误报非零）：有产物即成功
+            if proc.returncode == 0 or report_file.is_file():
                 if report_file.is_file():
                     artifacts.append(_publish(run, report_file))
                 sha, shadow_arts = _commit_shadow(run)  # ADR-0028：统一提交，报告 artifact 回填 commit
@@ -207,9 +208,10 @@ def _run(run_id: int, harness: dict, prompt: str):
                     for a in artifacts:
                         a["commit"] = a.get("commit") or sha
                 artifacts.extend(shadow_arts)
-            if proc.returncode == 0 and artifacts:
-                execute("UPDATE task_runs SET status='success', artifacts=?, finished_at=? WHERE id=?",
-                        (dumps(artifacts), time.time(), run_id))
+            if artifacts:
+                warn = "" if proc.returncode == 0 else f"（harness 退出码 {proc.returncode}，产物已在，判成功）"
+                execute("UPDATE task_runs SET status='success', artifacts=?, error=?, finished_at=? WHERE id=?",
+                        (dumps(artifacts), warn, time.time(), run_id))
             else:
                 err = "" if proc.returncode == 0 else f"exit code {proc.returncode}"
                 if not artifacts:
