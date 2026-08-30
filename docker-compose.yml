@@ -279,7 +279,9 @@ services:
     restart: unless-stopped
     profiles: ["knowledge"]
     working_dir: /docs
-    command: ["serve", "--dev-addr=0.0.0.0:8000"]
+    # awesome-pages：按目录结构自动生成导航（shadow 仓内容动态出现，无需手工注册 nav）
+    entrypoint: ["sh", "-c"]
+    command: ["pip install -q --disable-pip-version-check mkdocs-awesome-pages-plugin >/dev/null 2>&1; exec mkdocs serve --dev-addr=0.0.0.0:8000"]
     volumes:
       - ./mkdocs:/docs
       - ${DATA_ROOT:-./data}/public/shadow:/docs/docs/shadow   # 被管工程 shadow 仓（Chronicler 产出，ADR-0028）

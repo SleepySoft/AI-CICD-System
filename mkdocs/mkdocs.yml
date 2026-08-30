@@ -15,10 +15,6 @@ theme:
 plugins:
   - search:
       lang: zh
+  - awesome-pages        # 按目录结构自动导航（shadow 内容无需手工注册）
 
-nav:
-  - 首页: index.md
-  # 工程分析报告在 shadow 仓（挂载 /shadow），按 URL 直达：
-  #   /shadow/<工程名>-shadow/reports/daily/YYYY-MM-DD/  （日报，按日期）
-  #   /shadow/<工程名>-shadow/reports/<task_type>/       （分析类，原地更新）
-  #   /shadow/<工程名>-shadow/know-how/<主题>/            （蒸馏卡片）
+# 不设静态 nav：全部交给 awesome-pages 按目录生成
