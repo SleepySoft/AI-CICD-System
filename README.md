@@ -51,18 +51,17 @@ bash scripts/wire-chronicler.sh   # 可选：Chronicler 切 Keycloak 统一登�
 
 ```
 ├── chronicler/              # 产品本体：宿主侧 supervisor（FastAPI + SQLite + Vue3 SPA）
-│   ├── app/                 # 后端（auth/projects/runner/tools/registry…）+ 前端 static/
-│   ├── config/              # harness.yaml（agent 命令模板）、components.yaml、tools.d/（组件插件）
+│   ├── app/                 # 后端（auth/projects/runner/tools/registry/backup/testing…）+ 前端 static/
+│   ├── components/          # 组件目录：一组件一目录（plugin.yaml + SKILL.md + hooks/ + 部署配置）
+│   ├── config/              # harness.yaml（agent 命令模板）
 │   ├── prompts/             # 内置任务 prompt 模板（版本=内容 hash）
 │   └── scripts/             # install-service.sh（systemd 常驻）
 ├── docker-compose.yml       # 可选底座编排（profiles: knowledge/requirements/monitor/localai/browsers/sandbox）
-├── caddy/                   # 统一入口反代（app.localhost → 宿主 8600）
-├── keycloak/realm/          # 预置 realm（dev/boss 组 + OIDC 客户端 + scope）
-├── jenkins/                 # Dockerfile + 插件清单 + JCasC
-├── images/                  # 工具链镜像：cpp / android / node / test-python / browsers / terminal-runtime
-├── knowledge/vault/         # 知识库（human/ai-inbox/know-how 分区）
+├── images/                  # CI 工具链镜像（toolchain-*，非栈组件）
+├── knowledge/vault/         # 知识库内容（git 事实源）
 ├── docs/                    # 项目文档：requirements/why/what/how/adr/runbooks
 ├── .agents/skills/          # 项目技能（Agent 行为规范）
+├── third_party/             # 外部依赖（git submodule）
 └── scripts/                 # up.sh / wire-*.sh / verify*.sh / backup.sh
 ```
 

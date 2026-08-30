@@ -27,7 +27,7 @@ WSL/VM 封装**复用同一 compose**，不允许出现独立配置副本（NFR-
 ### 2.2 启动与接线机制
 
 1. `docker compose up -d` 起核心栈，依赖 healthcheck 排序；Keycloak 健康端点在 **9000** 端口。
-2. 预置 realm 自动导入（keycloak/realm/），含 dev/boss 组与 OIDC 客户端。
+2. 预置 realm 自动导入（chronicler/components/keycloak/realm/），含 dev/boss 组与 OIDC 客户端。
 3. 接线脚本完成运行时注册：`wire-sso.sh`（Gitea↔Keycloak + Gitea 管理员）、`wire-manager.sh`（Manager 客户端）。
 4. 验证脚本冒烟：`verify.sh`（环境）、`verify-manager.sh`（Manager）、`check-kc.sh`（Keycloak）。
 

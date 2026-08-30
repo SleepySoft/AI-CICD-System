@@ -27,11 +27,11 @@ CRUMB=$(curl --noproxy '*' -s -c "$JAR" -u "$U:$P" -H "$H" "$B/crumbIssuer/api/j
 if curl --noproxy '*' -s -o /dev/null -u "$U:$P" -H "$H" "$B/job/$JOB/api/json" -w '%{http_code}' | grep -q 200; then
   echo "==> 任务已存在，更新配置"
   curl --noproxy '*' -s -b "$JAR" -u "$U:$P" -H "$H" -H "$CRUMB" -X POST "$B/job/$JOB/config.xml" \
-    -H "Content-Type: application/xml" --data-binary "@jenkins/jobs/$JOB.xml" -o /dev/null -w 'update: %{http_code}\n'
+    -H "Content-Type: application/xml" --data-binary "@chronicler/components/jenkins/jobs/$JOB.xml" -o /dev/null -w 'update: %{http_code}\n'
 else
   echo "==> 创建任务"
   curl --noproxy '*' -s -b "$JAR" -u "$U:$P" -H "$H" -H "$CRUMB" -X POST "$B/createItem?name=$JOB" \
-    -H "Content-Type: application/xml" --data-binary "@jenkins/jobs/$JOB.xml" -o /dev/null -w 'create: %{http_code}\n'
+    -H "Content-Type: application/xml" --data-binary "@chronicler/components/jenkins/jobs/$JOB.xml" -o /dev/null -w 'create: %{http_code}\n'
 fi
 
 echo "==> 触发分支扫描"

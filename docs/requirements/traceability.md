@@ -8,14 +8,14 @@
 | 需求 ID | 标题 | 设计章节 | 实现位置 | 验证 |
 |---------|------|---------|---------|------|
 | FR-ENV-001 | Compose 统一编排 | what/environment.md §服务清单 | docker-compose.yml | `docker compose config -q` |
-| FR-ENV-002 | 统一域名入口 | what/environment.md §域名契约 | caddy/Caddyfile | scripts/verify.sh |
+| FR-ENV-002 | 统一域名入口 | what/environment.md §域名契约 | chronicler/components/caddy/Caddyfile | scripts/verify.sh |
 | FR-ENV-003 | 统一门户导航 | what/environment.md §服务清单 | chronicler 首页（tools.yaml 注册表驱动，Homepage 已退役） | 人工：登录 Chronicler 首页看入口与状态 |
 | FR-ENV-004 | 状态监控 | what/environment.md §服务清单 | docker-compose.yml(monitor profile) | 人工：Uptime Kuma 面板 |
-| FR-ENV-005 | SSO 统一认证 | what/environment.md §SSO 契约 | keycloak/realm/ | scripts/check-kc.sh |
-| FR-CI-001 | push 自动触发流水线 | how/images-toolchain.md | jenkins/（chronicler-selftest 流水线，GitHub SSH 直拉 + pollSCM 兜底） | 人工：push 后观察 Jenkins 新构建 |
-| FR-CI-002 | 一次性容器内构建 | how/images-toolchain.md | jenkins/（inbound agents） | 人工：构建日志 |
-| FR-CI-003 | Allure 报告归档 | how/images-toolchain.md | jenkins/（allure-jenkins-plugin） | 人工：Jenkins 报告页 |
-| FR-CI-004 | Jenkins 配置即代码 | how/images-toolchain.md | jenkins/casc.yaml + plugins.txt | 重建 Jenkins 容器 |
+| FR-ENV-005 | SSO 统一认证 | what/environment.md §SSO 契约 | chronicler/components/keycloak/realm/ | scripts/check-kc.sh |
+| FR-CI-001 | push 自动触发流水线 | how/images-toolchain.md | chronicler/components/jenkins/（chronicler-selftest 流水线，GitHub SSH 直拉 + pollSCM 兜底） | 人工：push 后观察 Jenkins 新构建 |
+| FR-CI-002 | 一次性容器内构建 | how/images-toolchain.md | chronicler/components/jenkins/（inbound agents） | 人工：构建日志 |
+| FR-CI-003 | Allure 报告归档 | how/images-toolchain.md | chronicler/components/jenkins/（allure-jenkins-plugin） | 人工：Jenkins 报告页 |
+| FR-CI-004 | Jenkins 配置即代码 | how/images-toolchain.md | chronicler/components/jenkins/casc.yaml + plugins.txt | 重建 Jenkins 容器 |
 | FR-IMG-001 | C/C++ 工具链镜像 | how/images-toolchain.md | images/toolchain-cpp/ | scripts/build-images.sh |
 | FR-IMG-002 | Android 工具链镜像 | how/images-toolchain.md | images/toolchain-android/ | scripts/build-images.sh |
 | FR-IMG-003 | Node 工具链镜像 | how/images-toolchain.md | images/toolchain-node/ | scripts/build-images.sh |
@@ -69,4 +69,4 @@
 | NFR-006 | 三形态同源 | scripts/build-images.sh + 封装脚本；supervisor 独立交付（ADR-0020，待实现） | 人工：封装脚本复用 compose |
 | NFR-007 | Agent 成本可控 | chronicler harness 注册表 + Ollama profile | 人工：切换本地模型跑任务 |
 | NFR-008 | 数据显式持久化 | docker-compose.yml bind mounts（${DATA_ROOT:-./data}，public/private 二分 ADR-0026）；组件化备份编排 chronicler/app/backup.py + 组件 hooks（ADR-0027），scripts/backup.sh 为薄壳 | `python -m chronicler backup` 产出含 manifest 的备份包 |
-| NFR-009 | 系统数据 Git 化 | docs/、knowledge/vault/、jenkins/casc.yaml（已落实）；scripts/export-openproject.sh（手工导出，ADR-0014）；chronicler Git 落盘（M3 起） | 抽查数据可定位 Git 事实源 |
+| NFR-009 | 系统数据 Git 化 | docs/、knowledge/vault/、chronicler/components/jenkins/casc.yaml（已落实）；scripts/export-openproject.sh（手工导出，ADR-0014）；chronicler Git 落盘（M3 起） | 抽查数据可定位 Git 事实源 |

@@ -12,7 +12,7 @@
 
 ### 2.1 realm 预置
 
-`keycloak/realm/` 下的 realm 配置随容器启动自动导入：预置 `dev`/`boss` 组、各子系统 OIDC 客户端、测试用户。健康检查走 **9000** 端口（管理端点，非 8080）。
+`chronicler/components/keycloak/realm/` 下的 realm 配置随容器启动自动导入：预置 `dev`/`boss` 组、各子系统 OIDC 客户端、测试用户。健康检查走 **9000** 端口（管理端点，非 8080）。
 
 ### 2.2 运行时接线
 

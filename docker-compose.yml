@@ -42,7 +42,7 @@ services:
     ports:
       - "${HTTP_PORT:-80}:80"
     volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./chronicler/components/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"   # 回源宿主侧 supervisor（ADR-0020）
     environment: *common-env
@@ -61,7 +61,7 @@ services:
     volumes:
       - ${DATA_ROOT:-./data}/private/postgres:/var/lib/postgresql/data
       - ${DATA_ROOT:-./data}/public:/public
-      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./chronicler/components/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 10s
@@ -103,7 +103,7 @@ services:
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
       KC_HEALTH_ENABLED: "true"
     volumes:
-      - ./keycloak/realm:/opt/keycloak/data/import:ro
+      - ./chronicler/components/keycloak/realm:/opt/keycloak/data/import:ro
       # 业务数据在共享 Postgres（keycloak 库），无需持久卷（NFR-008）
     depends_on:
       postgres:
@@ -157,7 +157,7 @@ services:
   # CI/CD：Jenkins（JCasC 配置即代码）
   # ----------------------------------------------------------
   jenkins:
-    build: ./jenkins
+    build: ./chronicler/components/jenkins
     image: aisystem/jenkins:lts
     restart: unless-stopped
     user: root   # 简化：便于访问挂载的 docker.sock
@@ -200,7 +200,7 @@ services:
     profiles: [sandbox]
     build:
       context: .
-      dockerfile: images/terminal-runtime/Dockerfile
+      dockerfile: chronicler/components/terminal-runtime/image/Dockerfile
     image: aisystem/terminal-runtime:latest
     restart: unless-stopped
     environment:
@@ -283,7 +283,7 @@ services:
     entrypoint: ["sh", "-c"]
     command: ["pip install -q --disable-pip-version-check mkdocs-awesome-pages-plugin >/dev/null 2>&1; exec mkdocs serve --dev-addr=0.0.0.0:8000"]
     volumes:
-      - ./mkdocs:/docs
+      - ./chronicler/components/mkdocs:/docs
       - ${DATA_ROOT:-./data}/public/shadow:/docs/docs/shadow   # 被管工程 shadow 仓（Chronicler 产出，ADR-0028）
     networks: [aisystem]
 
@@ -341,7 +341,7 @@ services:
   # 无头场景直接用 Jenkins 流水线中的 mcr.microsoft.com/playwright 镜像
   # ==========================================================
   browsers:
-    build: ./images/browsers
+    build: ./chronicler/components/browsers/image
     image: aisystem/browsers:latest
     restart: unless-stopped
     profiles: ["browsers"]
