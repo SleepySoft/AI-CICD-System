@@ -235,6 +235,9 @@ services:
     image: docker.getoutline.com/outlinewiki/outline:latest
     restart: unless-stopped
     profiles: ["knowledge"]
+    # 内网 HTTP 部署：production 会把 OAuth state cookie 标 secure → 登录 500（2026-08-29 实测）；
+    # 启动补丁脚本把 passport.js 的 secure 标记关掉（镜像升级后若失效需复评）
+    command: ["sh", "/opt/outline/patch-start.sh"]
     environment:
       <<: *common-env
       SECRET_KEY: ${OUTLINE_SECRET_KEY:?}
@@ -245,7 +248,6 @@ services:
       URL: http://kb.${BASE_DOMAIN:-localhost}
       PORT: "3000"
       FORCE_HTTPS: "false"
-      NODE_ENV: development   # HTTP 内网部署：production 模式强制 secure cookie 会 500
       FILE_STORAGE: local
       FILE_STORAGE_LOCAL_ROOT_DIR: /var/lib/outline/data
       FILE_STORAGE_UPLOAD_MAX_SIZE: "26214400"
@@ -262,6 +264,7 @@ services:
     volumes:
       - ${DATA_ROOT:-./data}/private/outline:/var/lib/outline/data
       - ${DATA_ROOT:-./data}/public:/public
+      - ./images/outline/patch-start.sh:/opt/outline/patch-start.sh:ro
     depends_on:
       postgres:
         condition: service_healthy

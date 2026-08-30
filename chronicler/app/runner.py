@@ -255,14 +255,21 @@ def _commit_shadow(run: dict) -> tuple[str | None, list[dict]]:
 
 
 def _publish(run: dict, report_file) -> dict:
-    """报告写入 shadow 仓 reports/<task_type>/（ADR-0028：持久产物统一入 shadow project）"""
+    """报告写入 shadow 仓（ADR-0028）。组织规则（用户定）：状态/周期类按时间序，
+    分析/洞察类按结构（稳定文件名原地更新，历史交给 git）。"""
     shadow = projects.ensure_shadow_repo(run["project_id"])
-    dest_dir = shadow / "reports" / run["task_type"]
+    if run["task_type"] in ("daily-report",):
+        dest_dir = shadow / "reports" / "daily"
+        name = f"{time.strftime('%Y-%m-%d')}.md"
+    else:
+        dest_dir = shadow / "reports"
+        name = f"{run['task_type']}.md"
     dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / f"{time.strftime('%Y%m%d-%H%M%S')}.md"
+    dest = dest_dir / name
+    action = "updated" if dest.exists() else "created"
     dest.write_bytes(report_file.read_bytes())
     execute("UPDATE task_runs SET report_path=? WHERE id=?", (str(dest), run["id"]))
-    return {"kind": "report", "path": str(dest), "action": "created",
+    return {"kind": "report", "path": str(dest), "action": action,
             "size_bytes": dest.stat().st_size, "commit": None}
 
 
