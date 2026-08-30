@@ -53,8 +53,11 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
 底座（WSL 或 Windows Docker Desktop 均可，ADR-0020“跟随 dockerd 同环境”；本机当前部署在 **Windows Docker Desktop**）：
 
 ```bash
-bash scripts/up.sh                # 底座一键：起核心栈 → SSO 接线 → 冒烟验证（幂等）
+bash scripts/up.sh                # 一键：共享网络 → supervisor（自启钩子拉起自启组件）→ SSO 接线 → 验证
 ```
+
+底座编排：无根 docker-compose.yml（已废除，ADR-0027）；组件部署定义在各组件目录
+`chronicler/components/<name>/compose.yml`，由 supervisor 按需拉起。日常不需手动 compose。
 
 supervisor（产品本体，跟随 dockerd 同环境）：
 

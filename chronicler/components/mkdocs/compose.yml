@@ -1,0 +1,20 @@
+# mkdocs 组件部署定义（ADR-0027：组件目录自包含）
+# 由 Chronicler 拉起：docker compose -p aisystem --env-file <repo>/.env -f <本文件> up -d；REPO_ROOT/DATA_ROOT 由 Chronicler 注入绝对路径
+services:
+  mkdocs:
+    image: squidfunk/mkdocs-material:latest
+    restart: unless-stopped
+    profiles:
+    - knowledge
+    working_dir: /docs
+    entrypoint:
+    - sh
+    - -c
+    command:
+    - pip install -q --disable-pip-version-check mkdocs-awesome-pages-plugin >/dev/null 2>&1; exec mkdocs serve --dev-addr=0.0.0.0:8000
+    volumes:
+    - ${REPO_ROOT}/chronicler/components/mkdocs:/docs
+    - ${DATA_ROOT:-./data}/public/shadow:/docs/docs/shadow
+networks:
+  aisystem:
+    name: aisystem

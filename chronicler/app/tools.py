@@ -5,6 +5,7 @@ data/chronicler/config/tools.d/*.yaml 为用户目录（同名覆盖内置）。
 自启开关持久化在 data/chronicler/config/autostart.yaml（运行时覆盖层）。
 docker 控制走本地 socket（ADR-0020：supervisor 与 dockerd 同环境）。
 """
+import os
 import subprocess
 import sys
 import threading
@@ -91,6 +92,34 @@ def set_autostart(name: str, enabled: bool) -> dict:
     return {"ok": True, "name": name, "autostart": bool(enabled), "critical": tool["critical"]}
 
 
+def _compose_up_cmd(tool: dict) -> tuple[list, dict]:
+    """构造组件 compose 拉起命令（args, env）；调用方负责网络先备（_ensure_network）"""
+    compose_file = Path(tool["_dir"]) / "compose.yml"
+    if not compose_file.is_file():
+        raise HTTPException(status_code=400, detail=f"组件无部署定义（缺 compose.yml）")
+    env = {**os.environ,
+           "REPO_ROOT": str(PKG_ROOT.parent),
+           "DATA_ROOT": str(PKG_ROOT.parent / "data")}
+    service = tool.get("compose_service") or tool["name"]
+    return (["docker", "compose", "-p", "aisystem", "--env-file", str(PKG_ROOT.parent / ".env"),
+             "-f", str(compose_file), "up", "-d", service], env)
+
+
+def _ensure_network():
+    try:
+        _client().networks.get("aisystem")
+    except docker.errors.NotFound:
+        _client().networks.create("aisystem", driver="bridge")
+
+
+def _compose_up(tool: dict) -> subprocess.CompletedProcess:
+    """按组件 compose 文件拉起（ADR-0027：部署定义在组件目录）"""
+    _ensure_network()
+    args, env = _compose_up_cmd(tool)
+    return subprocess.run(args, env=env, capture_output=True,
+                          encoding="utf-8", errors="replace", timeout=900)
+
+
 def ensure_running(tool: dict) -> str:
     """确保组件运行：running→跳过；stopped→docker start；absent→compose up -d 现场创建
     返回动作：skip/start/compose-up/error"""
@@ -120,9 +149,7 @@ def ensure_running(tool: dict) -> str:
             return "error"
         service = tool.get("compose_service") or name
         try:
-            r = subprocess.run(["docker", "compose", "up", "-d", service],
-                               cwd=str(PKG_ROOT.parent), capture_output=True,
-                               encoding="utf-8", errors="replace", timeout=600)
+            r = _compose_up(tool)
             if r.returncode == 0:
                 audit("supervisor", "tool.autostart_compose", name)
                 return "compose-up"
@@ -230,11 +257,11 @@ def _deploy_worker(tool: dict):
         task["lines"].append(line)
         del task["lines"][:-200]  # 只保留最近 200 行
 
-    service = tool.get("compose_service") or name
-    emit(f"$ docker compose up -d {service}")
+    emit(f"$ compose up（组件定义 {Path(tool['_dir']).name}/compose.yml）")
     try:
-        proc = sp.Popen(["docker", "compose", "up", "-d", service],
-                        cwd=str(PKG_ROOT.parent), stdout=sp.PIPE, stderr=sp.STDOUT,
+        _ensure_network()
+        args, env = _compose_up_cmd(tool)
+        proc = sp.Popen(args, env=env, stdout=sp.PIPE, stderr=sp.STDOUT,
                         encoding="utf-8", errors="replace")
         for line in proc.stdout:
             emit(line.rstrip())

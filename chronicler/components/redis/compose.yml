@@ -1,0 +1,24 @@
+# redis 组件部署定义（ADR-0027：组件目录自包含）
+# 由 Chronicler 拉起：docker compose -p aisystem --env-file <repo>/.env -f <本文件> up -d；REPO_ROOT/DATA_ROOT 由 Chronicler 注入绝对路径
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+    - redis-server
+    - --appendonly
+    - 'yes'
+    volumes:
+    - ${DATA_ROOT:-./data}/private/redis:/data
+    - ${DATA_ROOT:-./data}/public:/public
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      interval: 10s
+      timeout: 5s
+      retries: 10
+networks:
+  aisystem:
+    name: aisystem

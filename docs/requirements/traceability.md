@@ -7,7 +7,7 @@
 
 | 需求 ID | 标题 | 设计章节 | 实现位置 | 验证 |
 |---------|------|---------|---------|------|
-| FR-ENV-001 | Compose 统一编排 | what/environment.md §服务清单 | docker-compose.yml | `docker compose config -q` |
+| FR-ENV-001 | Compose 统一编排 | what/environment.md §服务清单 | chronicler/components/*/compose.yml（组件化部署定义，ADR-0027；无根 compose） | `python -m chronicler test` |
 | FR-ENV-002 | 统一域名入口 | what/environment.md §域名契约 | chronicler/components/caddy/Caddyfile | scripts/verify.sh |
 | FR-ENV-003 | 统一门户导航 | what/environment.md §服务清单 | chronicler 首页（tools.yaml 注册表驱动，Homepage 已退役） | 人工：登录 Chronicler 首页看入口与状态 |
 | FR-ENV-004 | 状态监控 | what/environment.md §服务清单 | docker-compose.yml(monitor profile) | 人工：Uptime Kuma 面板 |

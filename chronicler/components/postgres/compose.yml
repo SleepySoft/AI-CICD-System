@@ -1,0 +1,24 @@
+# postgres 组件部署定义（ADR-0027：组件目录自包含）
+# 由 Chronicler 拉起：docker compose -p aisystem --env-file <repo>/.env -f <本文件> up -d；REPO_ROOT/DATA_ROOT 由 Chronicler 注入绝对路径
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      POSTGRES_USER: ${POSTGRES_USER:-aisys}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+    - ${DATA_ROOT:-./data}/private/postgres:/var/lib/postgresql/data
+    - ${DATA_ROOT:-./data}/public:/public
+    - ${REPO_ROOT}/chronicler/components/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $${POSTGRES_USER}
+      interval: 10s
+      timeout: 5s
+      retries: 10
+networks:
+  aisystem:
+    name: aisystem

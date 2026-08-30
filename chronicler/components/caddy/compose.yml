@@ -1,0 +1,17 @@
+# caddy 组件部署定义（ADR-0027：组件目录自包含）
+# 由 Chronicler 拉起：docker compose -p aisystem --env-file <repo>/.env -f <本文件> up -d；REPO_ROOT/DATA_ROOT 由 Chronicler 注入绝对路径
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+    - ${HTTP_PORT:-80}:80
+    volumes:
+    - ${REPO_ROOT}/chronicler/components/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+networks:
+  aisystem:
+    name: aisystem

@@ -57,12 +57,17 @@ def deploy_test(tool: dict, timeout: int = 300) -> dict:
         return {"ok": True, "note": "非 docker 组件，跳过部署测试"}
     service = tool.get("compose_service") or tool["name"]
     data_root = Path(tempfile.mkdtemp(prefix=f"chronicle-test-{tool['name']}-"))
-    env = {**__import__("os").environ, "COMPOSE_PROJECT_NAME": TEST_PROJECT,
-           "DATA_ROOT": str(data_root), "HTTP_PORT": "18080"}
+    compose_file = Path(tool["_dir"]) / "compose.yml"
+    if not compose_file.is_file():
+        return {"ok": False, "stage": "up", "log": "组件缺 compose.yml"}
+    env = {**__import__("os").environ, "DATA_ROOT": str(data_root), "HTTP_PORT": "18080",
+           "REPO_ROOT": str(REPO)}
+    base = ["docker", "compose", "-p", TEST_PROJECT, "--env-file", str(REPO / ".env"),
+            "-f", str(compose_file)]
     log = []
 
     def run(*args, wait=None):
-        r = subprocess.run(["docker", "compose", *args], cwd=str(REPO), env=env,
+        r = subprocess.run([*base, *args], cwd=str(REPO), env=env,
                            capture_output=True, encoding="utf-8", errors="replace",
                            timeout=wait or 600)
         log.append((r.stdout + r.stderr).strip()[-300:])

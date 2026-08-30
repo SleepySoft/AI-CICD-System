@@ -1,0 +1,21 @@
+# openproject 组件部署定义（ADR-0027：组件目录自包含）
+# 由 Chronicler 拉起：docker compose -p aisystem --env-file <repo>/.env -f <本文件> up -d；REPO_ROOT/DATA_ROOT 由 Chronicler 注入绝对路径
+services:
+  openproject:
+    image: openproject/openproject:15
+    restart: unless-stopped
+    profiles:
+    - requirements
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-aisys}:${POSTGRES_PASSWORD}@postgres:5432/openproject
+      OPENPROJECT_SECRET_KEY_BASE: ${OPENPROJECT_SECRET_KEY_BASE:?}
+      OPENPROJECT_HOST__NAME: req.${BASE_DOMAIN:-localhost}
+      OPENPROJECT_HTTPS: 'false'
+      OPENPROJECT_DEFAULT__LANGUAGE: zh
+    volumes:
+    - ${DATA_ROOT:-./data}/private/openproject:/var/openproject/assets
+    - ${DATA_ROOT:-./data}/public:/public
+networks:
+  aisystem:
+    name: aisystem

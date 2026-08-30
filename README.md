@@ -31,8 +31,9 @@ bash scripts/up.sh            # 一键：核心栈 + SSO 接线 + 冒烟验证�
 bash scripts/wire-chronicler.sh   # 可选：Chronicler 切 Keycloak 统一登录（.env 设 CHRONICLER_AUTH_BACKEND=oidc）
 ```
 
-底座就绪后 Chronicler 经 `http://app.localhost` 访问（Caddy 回源宿主）。按需叠加 profile：
-`knowledge`（知识库）/ `requirements`（需求管理）/ `monitor` / `localai` / `browsers` / `sandbox`（ATR 隔离沙箱）。
+底座就绪后 Chronicler 经 `http://app.localhost` 访问（Caddy 回源宿主）。
+组件按需部署：首页点「部署」即可（部署定义在各组件目录 `chronicler/components/<name>/compose.yml`，
+如 knowledge 知识库、requirements 需求管理、monitor、localai、browsers、sandbox ATR 沙箱）。
 
 ## 访问入口
 

@@ -1,0 +1,40 @@
+# outline 组件部署定义（ADR-0027：组件目录自包含）
+# 由 Chronicler 拉起：docker compose -p aisystem --env-file <repo>/.env -f <本文件> up -d；REPO_ROOT/DATA_ROOT 由 Chronicler 注入绝对路径
+services:
+  outline:
+    image: docker.getoutline.com/outlinewiki/outline:latest
+    restart: unless-stopped
+    profiles:
+    - knowledge
+    command:
+    - sh
+    - /opt/outline/patch-start.sh
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      SECRET_KEY: ${OUTLINE_SECRET_KEY:?}
+      UTILS_SECRET: ${OUTLINE_UTILS_SECRET:?}
+      PGSSLMODE: disable
+      DATABASE_URL: postgres://${POSTGRES_USER:-aisys}:${POSTGRES_PASSWORD}@postgres:5432/outline
+      REDIS_URL: redis://redis:6379
+      URL: http://kb.${BASE_DOMAIN:-localhost}
+      PORT: '3000'
+      FORCE_HTTPS: 'false'
+      FILE_STORAGE: local
+      FILE_STORAGE_LOCAL_ROOT_DIR: /var/lib/outline/data
+      FILE_STORAGE_UPLOAD_MAX_SIZE: '26214400'
+      OIDC_CLIENT_ID: outline
+      OIDC_CLIENT_SECRET: ${OIDC_OUTLINE_SECRET:?}
+      OIDC_AUTH_URI: http://sso.${BASE_DOMAIN:-localhost}/realms/aisystem/protocol/openid-connect/auth
+      OIDC_TOKEN_URI: http://keycloak:8080/realms/aisystem/protocol/openid-connect/token
+      OIDC_USERINFO_URI: http://keycloak:8080/realms/aisystem/protocol/openid-connect/userinfo
+      OIDC_LOGOUT_URI: http://sso.${BASE_DOMAIN:-localhost}/realms/aisystem/protocol/openid-connect/logout
+      OIDC_USERNAME_CLAIM: preferred_username
+      OIDC_DISPLAY_NAME: Keycloak
+      OIDC_SCOPES: openid profile email
+    volumes:
+    - ${DATA_ROOT:-./data}/private/outline:/var/lib/outline/data
+    - ${DATA_ROOT:-./data}/public:/public
+    - ${REPO_ROOT}/chronicler/components/outline/patch-start.sh:/opt/outline/patch-start.sh:ro
+networks:
+  aisystem:
+    name: aisystem
