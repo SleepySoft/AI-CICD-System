@@ -1,6 +1,6 @@
 # Chronicler —— AI 研发任务的史官（supervisor）+ 可选一体化底座
 
-> **产品本体是 `chronicler/`（宿主侧 supervisor 进程）**；`docker-compose.yml` 是可一键配齐的可选底座（ADR-0022）。
+> **产品本体是 `chronicler/`（宿主侧 supervisor 进程）**；可选底座由各组件目录 `chronicler/components/<name>/compose.yml` 定义，supervisor 按需拉起（ADR-0022/0027）。
 > 需求与设计文档索引：[docs/README.md](docs/README.md)（WHY→WHAT→HOW 分层 + 需求 ID 追溯）
 
 Chronicler 做什么：登记工程（一个 git 链接）→ 用你自己装好的 agent harness（kimi/claude/aider…）
@@ -26,14 +26,13 @@ powershell -File scripts\start-chronicler.ps1
 ### 2. 可选底座（compose 栈）
 
 ```bash
-cp .env.example .env          # 修改所有 *_change_me
-bash scripts/up.sh            # 一键：核心栈 + SSO 接线 + 冒烟验证（幂等）
+bash scripts/up.sh            # 一键：共享网络 → supervisor（自启钩子拉起自启组件）→ SSO 接线 → 冒烟验证（幂等）
 bash scripts/wire-chronicler.sh   # 可选：Chronicler 切 Keycloak 统一登录（.env 设 CHRONICLER_AUTH_BACKEND=oidc）
 ```
 
 底座就绪后 Chronicler 经 `http://app.localhost` 访问（Caddy 回源宿主）。
 组件按需部署：首页点「部署」即可（部署定义在各组件目录 `chronicler/components/<name>/compose.yml`，
-如 knowledge 知识库、requirements 需求管理、monitor、localai、browsers、sandbox ATR 沙箱）。
+如 openproject 需求管理、uptime-kuma 监控、ollama 本地模型、browsers、terminal-runtime 沙箱）。
 
 ## 访问入口
 
