@@ -1,11 +1,12 @@
-# AISystem 统一入口（*.localhost 子域名，HTTP 内部环境）
-# 浏览器访问: http://portal.localhost 等；若不解析请写入 hosts
+# AISystem 统一入口（HTTP 内部环境）
+# 默认入口：http://app.localhost（http://localhost 为同义别名）；其余 *.localhost 子域名见下
+# 若不解析请写入 hosts（Windows: scripts/fix-hosts.ps1）
 
 {
 	auto_https off
 }
 
-http://app.localhost {
+http://localhost, http://app.localhost {
 	reverse_proxy host.docker.internal:8600
 }
 

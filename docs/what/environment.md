@@ -14,7 +14,7 @@
 
 | 组件 | 域名 | 启停 | 默认账号 |
 |------|------|------|---------|
-| Chronicler（supervisor） | http://app.localhost | 主入口 `python -m chronicler serve`（缺 .env 提示退出，ADR-0029） | 本地账密（create-admin）或 Keycloak OIDC |
+| Chronicler（supervisor） | http://app.localhost（`http://localhost` 同义别名） | 主入口 `python -m chronicler serve`（缺 .env 提示退出，ADR-0029） | 本地账密（create-admin）或 Keycloak OIDC |
 | Caddy 统一入口 | -（反代） | autostart | - |
 | Gitea | http://git.localhost | autostart | `scripts/wire-sso.sh` 创建管理员 |
 | Jenkins | http://ci.localhost | autostart | `.env` 的 `JENKINS_ADMIN_ID/PASSWORD` |
