@@ -62,6 +62,7 @@
 | ADR-0027 组件目录自包含与钩子契约 | adr/0027-component-directory-hooks.md | adr | 已接受 |
 | ADR-0028 持久产物统一入 shadow project | adr/0028-shadow-project-unified-artifacts.md | adr | 已接受 |
 | ADR-0029 supervisor 唯一入口与 .env 前置校验 | adr/0029-supervisor-single-entry-env-prereq.md | adr | 已接受 |
+| ADR-0030 人机 Web 终端（SSHwifty P0 → Human Terminal） | adr/0030-human-web-terminal-sshwifty.md | adr | 已接受 |
 | 部署与初始化 | runbooks/deploy.md | runbooks | 生效 |
 | 备份与恢复 | runbooks/backup-restore.md | runbooks | 生效 |
 | 接入新 Agent | runbooks/agent-onboarding.md | runbooks | 生效 |

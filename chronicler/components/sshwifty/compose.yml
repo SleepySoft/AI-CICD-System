@@ -1,0 +1,21 @@
+# sshwifty 组件部署定义（ADR-0027/0030）：P0 人机 Web 终端
+# 链路：浏览器 → caddy(ssh.localhost) → sshwifty(HTTP/WS) → 目标（仅可信本机/docker 网络内的 SSH 腿）
+# 约束：浏览器到系统只走 HTTP(S)/WebSocket，任何链路不得要求用户在浏览器侧发起 SSH（公司网络拦截 SSH 出口）
+services:
+  sshwifty:
+    image: niruix/sshwifty:latest
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      SSHWIFTY_HOSTNAME: ${SSHWIFTY_HOSTNAME:-ssh.localhost}
+      SSHWIFTY_SHAREDKEY: ${SSHWIFTY_SHAREDKEY:?SSHWIFTY_SHAREDKEY is required}
+      SSHWIFTY_LISTENPORT: '8182'
+      SSHWIFTY_DIALTIMEOUT: '10'
+      SSHWIFTY_READTIMEOUT: '120'
+      SSHWIFTY_WRITETIMEOUT: '120'
+      SSHWIFTY_HEARTBEATTIMEOUT: '10'
+      SSHWIFTY_ONLYALLOWPRESETREMOTES: ${SSHWIFTY_ONLYALLOWPRESETREMOTES:-false}
+      SSHWIFTY_PRESETS: ${SSHWIFTY_PRESETS:-}
+networks:
+  aisystem:
+    name: aisystem

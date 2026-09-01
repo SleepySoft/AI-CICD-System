@@ -45,6 +45,7 @@ bash scripts/wire-chronicler.sh   # 可选：Chronicler 切 Keycloak 统一登�
 | Jenkins | http://ci.localhost | 独立账号（`.env`） |
 | 知识库 Outline | http://kb.localhost | Keycloak（knowledge profile） |
 | 需求管理 | http://req.localhost | 独立账号（requirements profile） |
+| Web 终端（SSHwifty，P0） | http://ssh.localhost | `.env` 的 `SSHWIFTY_SHAREDKEY` |
 
 > `*.localhost` 在现代浏览器自动解析到 127.0.0.1；WSL 内访问需 `sudo bash scripts/fix-hosts.sh`。
 

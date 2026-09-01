@@ -28,6 +28,7 @@
 | Ollama | http://llm.localhost | 按需部署 | - |
 | noVNC 浏览器 | http://browser.localhost | 按需部署 | - |
 | terminal-runtime (ATR) | http://term.localhost/ui | 按需部署（可选沙箱，ADR-0021） | - |
+| SSHwifty Web 终端 | http://ssh.localhost | 按需部署（P0，ADR-0030） | `.env` 的 `SSHWIFTY_SHAREDKEY` |
 
 > `*.localhost` 在现代浏览器自动解析到 127.0.0.1；不生效时写 hosts。
 

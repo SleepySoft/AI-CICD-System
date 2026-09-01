@@ -117,3 +117,8 @@
 - 状态: 生效 | 上层: UR-009, BR-002 | 优先级: P1
 - 描述: 每个组件可自动自检：plugin.yaml/SKILL.md/备份钩子契约校验；可选隔离部署测试——以独立 compose 项目名与临时数据目录拉起组件，零配置/默认配置验证可达 healthy 后销毁，不影响正式实例。组件可提供 hooks/test.py 自测钩子优先于通用测试。
 - 验收: `python -m chronicler test` 全部组件契约通过；`--deploy` 沙箱测试后正式实例运行状态不变且无沙箱残留。
+
+### FR-MGR-024 人机 Web 终端（Human Terminal）
+- 状态: 生效 | 上层: UR-010, UR-009 | 优先级: P1
+- 描述: 用户在浏览器获得经 Chronicler 后端中转的交互式终端（xterm.js + WebSocket），进入受管工程工作区，支持上下文注入（prompt/skill，复用 injectable_components）与手动启动 agent（vibe coding）。浏览器↔后端仅 HTTP(S)/WebSocket，任何链路不得要求用户在浏览器侧发起 SSH（公司网络拦截 SSH 出口，ADR-0030）。P0 以 SSHwifty 组件提供能力，P1 内置。
+- 验收: 打开工程终端即进入该工程工作区目录；会话横幅含注入的 prompt/skill 清单；会话有鉴权与审计；浏览器侧无任何 SSH。
