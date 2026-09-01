@@ -41,7 +41,7 @@ bash scripts/wire-chronicler.sh   # 可选：Chronicler 切 Keycloak 统一登�
 |------|------|------|
 | **Chronicler**（首页=统一门户） | http://app.localhost（`http://localhost` 同义别名） | Keycloak 统一登录（或本地账密兜底） |
 | Gitea | http://git.localhost | Keycloak |
-| Keycloak 管理台 | http://sso.localhost/admin | `.env` 的 `KEYCLOAK_ADMIN/PASSWORD` |
+| Keycloak 管理台 | http://sso.localhost/admin（首页「管理」分组卡片可直达，admin 可见） | `.env` 的 `KEYCLOAK_ADMIN/PASSWORD` |
 | Jenkins | http://ci.localhost | 独立账号（`.env`） |
 | 知识库 Outline | http://kb.localhost | Keycloak（knowledge profile） |
 | 需求管理 | http://req.localhost | 独立账号（requirements profile） |
@@ -67,6 +67,7 @@ bash scripts/wire-chronicler.sh   # 可选：Chronicler 切 Keycloak 统一登�
 ## 备注
 
 - **账号**：有底座时 Keycloak 是唯一账号源（boss 组 = Chronicler admin）；无底座单机用本地账密。详见 `docs/runbooks/deploy.md`。
+- **Keycloak 用户**：添加用户与分组见 `docs/runbooks/keycloak-users.md`；登录页的「通过 Keycloak 统一登录」按钮需先启用 OIDC 后端（见 deploy.md §二.3）。
 - **接入 agent**：用户自装 CLI 后在 `chronicler/config/harness.yaml` 登记命令模板即可，见 `docs/runbooks/agent-onboarding.md`。
 - **环境坑**（WSL 代理/回收/dockerd 等本机实测）见 `AGENTS.md`「已知环境坑」。
 - **授权合规**：组件全部免费含商用；Python 环境用 Miniforge（规避 Anaconda 商用条款）。
