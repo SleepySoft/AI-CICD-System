@@ -52,6 +52,7 @@
 | FR-MGR-022 | 组件生命周期管理 | what/manager.md §前端页面 | chronicler/app/tools.py + chronicler/components/（ADR-0027） | 人工：自启开关重启验证/日志/详情/一键部署 |
 | FR-MGR-023 | 组件自检 | chronicler/app/testing.py | chronicler/app/testing.py + 组件 hooks/test.py | CI：Jenkins chronicler-selftest（push 触发）；本地 `python -m chronicler test [--deploy]` |
 | FR-MGR-024 | 人机 Web 终端（Human Terminal） | what/manager.md §前端页面 | chronicler/components/sshwifty/（P0，ADR-0030）+ chronicler/app/terminal（P1 规划） | 人工：浏览器打开终端进入工作区，会话含注入上下文 |
+| FR-MGR-025 | 手动会话上下文注入 | what/manager.md §前端页面（P1 Human Terminal） | chronicler/（P1 规划；ADR-0032） | 待实现（P1） |
 | FR-TASK-001 | 任务前端提交 | what/task-mgmt.md §角色分工 | chronicler/components/openproject/ | 人工：建包后 API 检索 |
 | FR-TASK-002 | AI 任务领取 | what/task-mgmt.md §API 契约 | .agents/skills/openproject/（Manager M2 起自动化） | 人工：按 skill 领任务置 in progress |
 | FR-TASK-003 | AI 状态回写 | what/task-mgmt.md §状态机 | .agents/skills/openproject/ + OpenProject workflow 配置 | 人工：回写成功且置 closed 被拒 |

@@ -64,12 +64,14 @@
 | ADR-0029 supervisor 唯一入口与 .env 前置校验 | adr/0029-supervisor-single-entry-env-prereq.md | adr | 已接受 |
 | ADR-0030 人机 Web 终端（SSHwifty P0 → Human Terminal） | adr/0030-human-web-terminal-sshwifty.md | adr | 已接受 |
 | ADR-0031 Web 终端目标选型（宿主 sshd） | adr/0031-web-terminal-target-host-sshd.md | adr | 已接受 |
+| ADR-0032 手动会话注入契约（约定文件+动态 SKILL+chai） | adr/0032-manual-session-skill-injection.md | adr | 已接受 |
 | 部署与初始化 | runbooks/deploy.md | runbooks | 生效 |
 | 备份与恢复 | runbooks/backup-restore.md | runbooks | 生效 |
 | 接入新 Agent | runbooks/agent-onboarding.md | runbooks | 生效 |
 | 手动启动与调试 Chronicler | runbooks/dev-debug.md | runbooks | 生效 |
 | Keycloak 用户与权限管理 | runbooks/keycloak-users.md | runbooks | 生效 |
 | Web 终端（SSHwifty）接入与使用 | runbooks/web-terminal.md | runbooks | 生效 |
+| Clash Verge 代理排查 | runbooks/proxy-clash.md | runbooks | 生效 |
 | 旧-需求分析与选型 | 01-需求分析与选型.md | 历史 | 过时（已拆分至本结构） |
 | 旧-Manager 设计 | 02-管理服务设计.md | 历史 | 过时（已拆分至本结构） |
 

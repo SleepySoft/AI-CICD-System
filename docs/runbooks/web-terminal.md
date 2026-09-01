@@ -2,7 +2,7 @@
 
 > 版本：v1.0 · 日期：2026-09-01 · 状态：生效
 > 适用：可选底座已起（sshwifty 组件运行中）；P0 目标为宿主 OpenSSH Server（ADR-0031）
-> 关联：chronicler/components/sshwifty/、scripts/setup-ssh-server.ps1；需求 FR-MGR-024、UR-010
+> 关联：chronicler/components/sshwifty/、scripts/setup-ssh-server.ps1；需求 FR-MGR-024/025、UR-010；注入契约见 ADR-0032
 
 ## 目的
 
@@ -33,6 +33,7 @@ Get-Command aider, kimi
 ```
 
 预期输出：`whoami` 返回本机用户；aider/kimi 均可找到（默认 shell 为 PowerShell，环境与 supervisor 一致）。
+会话内 CLI 访问外网慢/403 时，代理排查见 `runbooks/proxy-clash.md`（用户级 HTTP_PROXY/HTTPS_PROXY，NO_PROXY 必须含内网段）。
 
 ## 常见问题
 
@@ -42,6 +43,7 @@ Get-Command aider, kimi
 | 连接被拒（connection refused） | 宿主 sshd 未装/未启动 | 管理员跑 `setup-ssh-server.ps1`；`Get-Service sshd` 应为 Running |
 | 管理员公钥认证被拒 | Windows OpenSSH 管理员须用 `C:\ProgramData\ssh\administrators_authorized_keys` 且 ACL 仅 SYSTEM/Administrators | 脚本已处理；手工修复：`icacls C:\ProgramData\ssh\administrators_authorized_keys /inheritance:r /grant "SYSTEM:F" /grant "Administrators:F"` |
 | 担心公司网络拦截 SSH | 浏览器侧无 SSH；SSH 腿在 Docker 本机网络内 | 只经 http://ssh.localhost 访问，不要从本地终端 ssh 到外网主机 |
+| 会话内 CLI 访问外网慢/403 | 会话未继承代理环境，或 TUN 未真正生效 | 见 `runbooks/proxy-clash.md`（设用户级 HTTP_PROXY/HTTPS_PROXY + NO_PROXY 含内网段） |
 
 ## 回滚
 

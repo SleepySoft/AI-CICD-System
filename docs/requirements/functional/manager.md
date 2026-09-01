@@ -1,6 +1,6 @@
 # 功能需求：Manager 管理服务（MGR）
 
-> 版本：v1.2 · 日期：2026-08-27 · 状态：生效
+> 版本：v1.3 · 日期：2026-09-01 · 状态：生效
 > 定位：Manager（supervisor/Chronicler，ADR-0020/0022）的功能需求；规格（数据模型/API/权限）见 `../../what/manager.md`，机制见 `../../how/manager-architecture.md`
 
 ### FR-MGR-001 工具总览面板
@@ -122,3 +122,8 @@
 - 状态: 生效 | 上层: UR-010, UR-009 | 优先级: P1
 - 描述: 用户在浏览器获得经 Chronicler 后端中转的交互式终端（xterm.js + WebSocket），进入受管工程工作区，支持上下文注入（prompt/skill，复用 injectable_components）与手动启动 agent（vibe coding）。浏览器↔后端仅 HTTP(S)/WebSocket，任何链路不得要求用户在浏览器侧发起 SSH（公司网络拦截 SSH 出口，ADR-0030）。P0 以 SSHwifty 组件提供能力，P1 内置。
 - 验收: 打开工程终端即进入该工程工作区目录；会话横幅含注入的 prompt/skill 清单；会话有鉴权与审计；浏览器侧无任何 SSH。
+
+### FR-MGR-025 手动会话上下文注入（约定文件 + 动态 SKILL + chai）
+- 状态: 生效 | 上层: UR-010, UR-009 | 优先级: P1
+- 描述: 手动 agent 会话（Web 终端或 chai 本地入口）进入工程工作区时，注入与自动 Run 同源（injectable_components）的上下文：工作区根生成/刷新 AGENTS.md 与 CLAUDE.md（@AGENTS.md 桥接），并按 harness 在 .codex/skills、.kimi/skills、.claude/skills 下生成 chronicler 瘦 SKILL；chai 统一 cd/刷新/设 env/拉起 CLI；不写用户级 skills 目录（ADR-0032）。
+- 验收: 在受管工程内分别以 kimi/codex/claude 启动，三家均能按各自机制读到 chronicler 能力与组件 SKILL 路径；会话横幅列出注入清单；移除注入文件后三家会话不再出现该上下文。
