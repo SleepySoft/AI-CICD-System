@@ -12,7 +12,7 @@
 
 - keycloak 组件已运行且健康：首页工具面板「管理」分组 → Keycloak 卡片状态=运行中；或 `docker ps` 见 `aisystem-keycloak-1` 为 healthy（健康端点在 9000，启动约 1 分钟）。
 - 访问入口二选一：
-  - 已登录 Chronicler（admin）：首页「管理」分组 → Keycloak 卡片 →「打开」（该卡片 `visibility=admin`，普通用户不可见）；
+  - 已登录 Chronicler：首页「管理」分组 → Keycloak 卡片 →「打开」（导航入口全员可见；启停等管理操作仅 admin）；
   - 或直连 `http://sso.localhost/admin`。
 - 登录凭据：`.env` 的 `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD`（`.env.example` 默认 admin / admin_change_me，首次部署后应修改）。
 
@@ -33,7 +33,7 @@
 | 现象 | 原因 | 处置 |
 |------|------|------|
 | 登录页没有「通过 Keycloak 统一登录」按钮 | `.env` 未启用 OIDC 后端（`CHRONICLER_AUTH_BACKEND=local`，默认） | 管理用户无需启用，直连 `sso.localhost/admin` 即可；要 SSO 登录见 deploy.md §二.3（wire-chronicler.sh） |
-| 首页没有 Keycloak 卡片 | 当前登录账号非 admin（卡片 `visibility=admin`） | 用 admin 账号登录；或直连 `sso.localhost/admin` |
+| 首页看不到组件卡片 | 未登录，或工具列表加载失败 | 登录后刷新首页；浏览器控制台看 `/api/tools` 报错；仍不行直连 `sso.localhost/admin` |
 | sso.localhost 502 / 打不开 | keycloak 未就绪或已停止 | `docker ps` 看 `aisystem-keycloak-1` 状态；`docker logs aisystem-keycloak-1`；首页卡片点「启动」 |
 
 ## 回滚（如适用）

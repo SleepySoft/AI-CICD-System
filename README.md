@@ -41,7 +41,7 @@ bash scripts/wire-chronicler.sh   # 可选：Chronicler 切 Keycloak 统一登�
 |------|------|------|
 | **Chronicler**（首页=统一门户） | http://app.localhost（`http://localhost` 同义别名） | Keycloak 统一登录（或本地账密兜底） |
 | Gitea | http://git.localhost | Keycloak |
-| Keycloak 管理台 | http://sso.localhost/admin（首页「管理」分组卡片可直达，admin 可见） | `.env` 的 `KEYCLOAK_ADMIN/PASSWORD` |
+| Keycloak 管理台 | http://sso.localhost/admin（首页「管理」分组卡片可直达，导航入口全员可见） | `.env` 的 `KEYCLOAK_ADMIN/PASSWORD` |
 | Jenkins | http://ci.localhost | 独立账号（`.env`） |
 | 知识库 Outline | http://kb.localhost | Keycloak（knowledge profile） |
 | 需求管理 | http://req.localhost | 独立账号（requirements profile） |

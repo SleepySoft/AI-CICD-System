@@ -5,7 +5,7 @@ group: 管理
 desc: 认证中心 / 用户与权限
 url: http://sso.localhost/admin
 container: aisystem-keycloak-1
-visibility: admin
+visibility: all
 autostart: true
 critical: true
 driver: docker
