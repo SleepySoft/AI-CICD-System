@@ -56,11 +56,11 @@ const app = createApp({
     const tasks = ref([]);
     const loadingTasks = ref(false);
     const showNewTask = ref(false);
-    const newTaskForm = ref({ project_id: null, name: "", task_type: "", cwd: "",
+    const newTaskForm = ref({ project_id: null, name: "", task_type: "", harness: "", cwd: "",
                               schedule_cron: "", enabled: true });
     const showTaskEdit = ref(false);
     const taskEditRow = ref(null);
-    const taskEditForm = ref({ name: "", cwd: "", schedule_cron: "", enabled: true,
+    const taskEditForm = ref({ name: "", harness: "", cwd: "", schedule_cron: "", enabled: true,
                                webhook: "", prompt_override: "" });
     const showPrompt = ref(false);
     const promptView = ref({ task_type: "", version: "", content: "", overridden: false });
@@ -240,7 +240,7 @@ const app = createApp({
     }
     function openNewTask() {
       newTaskForm.value = { project_id: projects.value[0]?.id || null, name: "",
-                            task_type: prompts.value[0]?.task_type || "", cwd: "",
+                            task_type: prompts.value[0]?.task_type || "", harness: "", cwd: "",
                             schedule_cron: "", enabled: true };
       showNewTask.value = true;
     }
@@ -251,7 +251,8 @@ const app = createApp({
       try {
         await api("/api/tasks", { method: "POST", body: JSON.stringify({
           project_id: f.project_id, name: f.name, task_type: f.task_type,
-          cwd: f.cwd || "", schedule_cron: f.schedule_cron, enabled: f.enabled ? 1 : 0 }) });
+          harness: f.harness || "", cwd: f.cwd || "", schedule_cron: f.schedule_cron,
+          enabled: f.enabled ? 1 : 0 }) });
         toast.ok("任务已创建"); showNewTask.value = false; loadTasks();
       } catch (e) { toast.err(e); }
       finally { acting.value = false; }
@@ -265,7 +266,8 @@ const app = createApp({
     }
     function openTaskEdit(t) {
       taskEditRow.value = t;
-      taskEditForm.value = { name: t.name || "", cwd: t.cwd || "", schedule_cron: t.schedule_cron || "",
+      taskEditForm.value = { name: t.name || "", harness: t.harness || "", cwd: t.cwd || "",
+                             schedule_cron: t.schedule_cron || "",
                              enabled: !!t.enabled, webhook: t.webhook || "", prompt_override: t.prompt_override || "" };
       showTaskEdit.value = true;
     }
@@ -273,7 +275,8 @@ const app = createApp({
       acting.value = true;
       try {
         await api(`/api/tasks/${taskEditRow.value.id}`, { method: "PATCH", body: JSON.stringify({
-          name: taskEditForm.value.name, cwd: taskEditForm.value.cwd || "",
+          name: taskEditForm.value.name, harness: taskEditForm.value.harness || "",
+          cwd: taskEditForm.value.cwd || "",
           schedule_cron: taskEditForm.value.schedule_cron,
           enabled: taskEditForm.value.enabled ? 1 : 0, prompt_override: taskEditForm.value.prompt_override }) });
         toast.ok("任务已保存"); showTaskEdit.value = false; loadTasks();

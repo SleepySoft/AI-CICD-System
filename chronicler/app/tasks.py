@@ -15,16 +15,16 @@ PRESET_TASKS = ["daily-report", "code-insight", "deviation-analysis",
 
 
 def create_task(project_id: int, name: str, task_type: str, schedule_cron: str = "",
-                enabled: bool = True, cwd: str = "") -> dict:
+                enabled: bool = True, cwd: str = "", harness: str = "") -> dict:
     projects.get_project(project_id)
     if q1("SELECT id FROM task_defs WHERE project_id=? AND task_type=?",
           (project_id, task_type)):
         from fastapi import HTTPException
         raise HTTPException(status_code=409, detail="该工程已有同类型任务")
     tid = execute(
-        "INSERT INTO task_defs(project_id, name, task_type, cwd, schedule_cron, enabled, created_at)"
-        " VALUES (?,?,?,?,?,?,strftime('%s','now'))",
-        (project_id, name, task_type, cwd, schedule_cron, 1 if enabled else 0))
+        "INSERT INTO task_defs(project_id, name, task_type, harness, cwd, schedule_cron, enabled, created_at)"
+        " VALUES (?,?,?,?,?,?,?,strftime('%s','now'))",
+        (project_id, name, task_type, harness, cwd, schedule_cron, 1 if enabled else 0))
     return get_task(tid)
 
 
@@ -61,7 +61,7 @@ def list_tasks(project_id: int | None = None) -> list[dict]:
 def update_task(tid: int, fields: dict) -> dict:
     get_task(tid)
     allowed = {k: v for k, v in fields.items()
-               if k in ("name", "schedule_cron", "webhook", "enabled", "prompt_override", "cwd")}
+               if k in ("name", "schedule_cron", "webhook", "enabled", "prompt_override", "cwd", "harness")}
     if allowed:
         sets = ", ".join(f"{k}=?" for k in allowed)
         execute(f"UPDATE task_defs SET {sets} WHERE id=?", (*allowed.values(), tid))
@@ -83,9 +83,10 @@ def trigger_task(tid: int, actor: str, extra_prompt: str = "") -> dict:
     # prompt 覆盖：工程任务自定义 > 全局模板（版本化 hash 由 runner 记录）
     if t.get("prompt_override"):
         return runner.trigger(t["project_id"], t["task_type"], actor, extra_prompt,
-                              prompt_override=t["prompt_override"], cwd_override=t.get("cwd", ""))
+                              prompt_override=t["prompt_override"], cwd_override=t.get("cwd", ""),
+                              harness_override=t.get("harness", ""))
     return runner.trigger(t["project_id"], t["task_type"], actor, extra_prompt,
-                          cwd_override=t.get("cwd", ""))
+                          cwd_override=t.get("cwd", ""), harness_override=t.get("harness", ""))
 
 
 # ---------- cron 调度（简单轮询，每分钟） ----------
@@ -113,7 +114,7 @@ def scheduler_tick():
                 if last and last["last"] and now - last["last"] < 90:
                     continue  # 刚跑过
                 runner.trigger(t["project_id"], t["task_type"], "cron",
-                               cwd_override=t.get("cwd", ""))
+                               cwd_override=t.get("cwd", ""), harness_override=t.get("harness", ""))
         except Exception:
             continue  # cron 表达式非法等，单任务失败不影响调度
 

@@ -184,6 +184,12 @@
             <el-table :data="g.tasks" size="small" style="width:100%">
               <el-table-column prop="name" label="任务名" width="180" show-overflow-tooltip></el-table-column>
               <el-table-column prop="task_type" label="类型" width="150" show-overflow-tooltip></el-table-column>
+              <el-table-column label="Harness" width="110">
+                <template #default="{ row }">
+                  <el-tag v-if="row.harness" size="small" type="warning" effect="plain">{{ row.harness }}</el-tag>
+                  <span v-else class="muted">默认</span>
+                </template>
+              </el-table-column>
               <el-table-column label="调度 cron" width="140">
                 <template #default="{ row }">
                   <span style="font-family:Consolas,monospace">{{ row.schedule_cron || '（手动）' }}</span>
@@ -467,6 +473,11 @@
             <el-option v-for="p in prompts" :key="p.task_type" :label="p.task_type + '（' + p.version + '）'" :value="p.task_type"></el-option>
           </el-select>
         </el-form-item>
+        <el-form-item label="Agent harness 覆盖（留空=工程覆盖/全局默认，任务级优先）">
+          <el-select v-model="newTaskForm.harness" clearable placeholder="默认（工程/全局）" style="width:100%">
+            <el-option v-for="h in harnesses" :key="h.name" :label="h.name + ' — ' + h.desc" :value="h.name"></el-option>
+          </el-select>
+        </el-form-item>
         <el-form-item label="工作目录（留空=harness 默认；repo=工程仓库，shadow=shadow 库）">
           <el-select v-model="newTaskForm.cwd" clearable placeholder="harness 默认" style="width:100%">
             <el-option label="repo（工程仓库）" value="repo"></el-option>
@@ -486,6 +497,11 @@
     <el-dialog v-model="showTaskEdit" :title="'编辑任务 - ' + (taskEditRow?.name || '')" width="600px">
       <el-form label-position="top" size="small">
         <el-form-item label="任务名称"><el-input v-model="taskEditForm.name"></el-input></el-form-item>
+        <el-form-item label="Agent harness 覆盖（留空=工程覆盖/全局默认，任务级优先）">
+          <el-select v-model="taskEditForm.harness" clearable placeholder="默认（工程/全局）" style="width:100%">
+            <el-option v-for="h in harnesses" :key="h.name" :label="h.name + ' — ' + h.desc" :value="h.name"></el-option>
+          </el-select>
+        </el-form-item>
         <el-form-item label="工作目录（留空=harness 默认；repo=工程仓库，shadow=shadow 库）">
           <el-select v-model="taskEditForm.cwd" clearable placeholder="harness 默认" style="width:100%">
             <el-option label="repo（工程仓库）" value="repo"></el-option>

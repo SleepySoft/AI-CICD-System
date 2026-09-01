@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS task_defs (
     project_id INTEGER NOT NULL REFERENCES projects(id),
     name TEXT NOT NULL,
     task_type TEXT NOT NULL,                     -- 对应 prompts/<task_type>.md
+    harness TEXT DEFAULT '',                     -- harness 覆盖：''=回落工程/全局 | harness 名
     cwd TEXT DEFAULT '',                         -- 工作目录覆盖：''=harness 默认 | repo | shadow
     prompt_override TEXT DEFAULT '',             -- 非空=工程级覆盖全局模板（FR-MGR-011 版本=hash）
     schedule_cron TEXT DEFAULT '',               -- 空=仅手动；hook/联动预留 webhook 字段
@@ -106,6 +107,8 @@ def _migrate():
         db().execute("ALTER TABLE projects ADD COLUMN last_sync_error TEXT DEFAULT ''")
     if "cwd" not in {r["name"] for r in q("PRAGMA table_info(task_defs)")}:
         db().execute("ALTER TABLE task_defs ADD COLUMN cwd TEXT DEFAULT ''")
+    if "harness" not in {r["name"] for r in q("PRAGMA table_info(task_defs)")}:
+        db().execute("ALTER TABLE task_defs ADD COLUMN harness TEXT DEFAULT ''")
     if "prompt_text" not in {r["name"] for r in q("PRAGMA table_info(task_runs)")}:
         db().execute("ALTER TABLE task_runs ADD COLUMN prompt_text TEXT DEFAULT ''")
     db().commit()

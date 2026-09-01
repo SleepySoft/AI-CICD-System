@@ -218,13 +218,14 @@ def sweep_stale_runs(now: float | None = None) -> int:
 
 
 def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
-            prompt_override: str = "", cwd_override: str = "") -> dict:
+            prompt_override: str = "", cwd_override: str = "", harness_override: str = "") -> dict:
     project = projects.get_project(project_id)
     if not projects.repo_dir(project_id).is_dir():
         projects.sync_project(project_id)  # 未 clone 则先同步
 
     overrides = project.get("overrides") or {}
-    harness_name = overrides.get("harness") or registry.get_default_harness()
+    # harness 解析：任务定义覆盖 > 工程级覆盖 > 全局默认（FR-MGR-020）
+    harness_name = harness_override or overrides.get("harness") or registry.get_default_harness()
     harness = registry.get_harness(harness_name)
     if harness.get("session", "once") != "once":
         raise RuntimeError(f"harness {harness_name} 声明为持久会话，v1 暂不支持（ADR-0021 TBD）")
@@ -244,6 +245,8 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
         "repo_dirty": projects.repo_dirty(project_id),
         "git_url": project["git_url"],
         "overrides": overrides,
+        "harness_source": ("task" if harness_override
+                           else ("project" if overrides.get("harness") else "global")),
         "harness_command": harness["command_template"],
         "harness_version": _harness_version(harness),
         "harness_timeout": int(harness.get("timeout_sec", 1800)),

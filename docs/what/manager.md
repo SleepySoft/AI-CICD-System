@@ -24,8 +24,9 @@ agent_profile      Agent harness 配置：name, command(可执行命令 + 参数
 prompt_template    Prompt 库：name, scope(system|task), content(支持 {{变量}}), version,
                    builtin(bool), updated_by, updated_at
 task_def           任务定义：name, type(见 §2.3), repo_ids[], agent_id, prompt_id,
-                   cwd(repo|shadow|''，工作目录覆盖，''=回落 harness 默认), schedule_cron,
-                   enabled, params(JSON), output_visibility(dev|boss)
+                   harness(任务级 harness 覆盖，''=回落工程/全局), cwd(repo|shadow|''，
+                   工作目录覆盖，''=回落 harness 默认), schedule_cron, enabled,
+                   params(JSON), output_visibility(dev|boss)
 task_run           一次执行：详细字段见 §2.1.1 Run 档案契约（FR-MGR-005）
 report             报告：run_id, title, type, visibility, md_path, summary, created_at,
                    reviewed(bool), reviewer
@@ -57,7 +58,7 @@ repo_status        工作区是否脏（有未提交改动需警示）        �
 harness            name + 解析后的完整启动命令 + CLI 版本      【v1】
 prompt             模板版本 hash + 渲染后全文（落库 task_runs.prompt_text，文件副本
                    runs/<id>/prompt.md）                       【v1】
-overrides          工程级覆盖项（harness/prompt/策略）          【v1】
+overrides          覆盖来源与工程级覆盖项（harness/prompt/策略；来源：任务>工程>全局）【v1】
 components         注入的资源能力清单（SKILL 名 + 版本/hash）   【v1】
 extra_prompt       触发时附加指令                              【v1】
 ci_context         同期 Jenkins 构建号/结果（FR-MGR-010）

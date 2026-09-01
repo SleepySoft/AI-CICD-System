@@ -47,7 +47,7 @@
 | FR-MGR-017 | 分角色鉴权与可插拔鉴权后端 | what/manager.md §权限规格 | chronicler/app/auth.py + routers/users.py + routers/oidc.py（local/oidc 双后端，ADR-0023） | scripts/verify-chronicler.sh（401）；scripts/wire-chronicler.sh（oidc 接线） |
 | FR-MGR-018 | 全局组件配置 | what/manager.md §数据模型 | chronicler/config/components.yaml + chronicler/app/registry.py | 人工：改 enabled 后观察 prompt 注入变化 |
 | FR-MGR-019 | Agent harness 登记（命令模板） | what/manager.md §数据模型 | chronicler/config/harness.yaml + chronicler/app/registry.py + chronicler/app/routers/config.py + chronicler/app/runner.py + chronicler/app/tasks.py + chronicler/app/db.py（ADR-0021） | 人工：配置页增删改 harness 并触发 Run（agent-onboarding.md） |
-| FR-MGR-020 | 工程实体与配置覆盖 | what/manager.md §数据模型 | chronicler/app/projects.py + chronicler/config/settings.yaml（全局默认 harness） | 人工：建工程+覆盖项触发 Run；配置页切全局默认后触发 |
+| FR-MGR-020 | 工程实体与配置覆盖 | what/manager.md §数据模型 | chronicler/app/projects.py + chronicler/config/settings.yaml（全局默认 harness）+ chronicler/app/tasks.py + chronicler/app/db.py（任务级 harness/cwd 覆盖） | 人工：建工程+覆盖项触发 Run；配置页切全局默认后触发；任务级覆盖生效 |
 | FR-MGR-021 | 工程分析策略配置 | what/manager.md §任务类型框架 | chronicler/（M3 规划） | 待实现（M3） |
 | FR-MGR-022 | 组件生命周期管理 | what/manager.md §前端页面 | chronicler/app/tools.py + chronicler/components/（ADR-0027） | 人工：自启开关重启验证/日志/详情/一键部署 |
 | FR-MGR-023 | 组件自检 | chronicler/app/testing.py | chronicler/app/testing.py + 组件 hooks/test.py | CI：Jenkins chronicler-selftest（push 触发）；本地 `python -m chronicler test [--deploy]` |
