@@ -17,6 +17,7 @@ const app = createApp({
     const runs = ref([]);
     const loadingRuns = ref(false);
     const runFilter = ref(null);
+    const taskFilter = ref(null);
     const harnesses = ref([]);
     const components = ref({});
     const prompts = ref([]);
@@ -79,6 +80,16 @@ const app = createApp({
       for (const t of tools.value) (g[t.group || "其他"] ||= []).push(t);
       return g;
     });
+    const groupedTaskDefs = computed(() => {
+      const g = new Map();
+      for (const t of tasks.value) {
+        if (taskFilter.value && t.project_id !== taskFilter.value) continue;
+        const key = t.project_id;
+        if (!g.has(key)) g.set(key, { project_id: key, project_name: projectName(key), tasks: [] });
+        g.get(key).tasks.push(t);
+      }
+      return [...g.values()];
+    });
 
     async function api(path, opts = {}) {
       const resp = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
@@ -98,6 +109,7 @@ const app = createApp({
     }
     function open(url) { window.open(url, "_blank"); }
     function projectName(id) { return projects.value.find(p => p.id === id)?.name || `#${id}`; }
+    function tasksOfProject(id) { return tasks.value.filter(t => t.project_id === id); }
     function runStatusText(s) {
       return { queued: "排队中", running: "运行中", success: "成功", failed: "失败" }[s] || s;
     }
@@ -459,7 +471,7 @@ const app = createApp({
     function onTabChange(name) {
       if (location.hash.slice(1) !== name) history.replaceState(null, "", "#" + name);
       if (name === "home") loadTools();
-      else if (name === "projects") loadProjects();
+      else if (name === "projects") { loadProjects(); loadTasks(); }
       else if (name === "runs") { loadTasks(); loadRuns(); }
       else if (name === "config") loadConfig();
       else if (name === "users") loadUsers();
@@ -485,7 +497,8 @@ const app = createApp({
       toggleAutostart, openToolLogs, refreshToolLogs, openToolDetail, fmtUptime, fmtPorts,
       showNewProject, newProject, showEdit, editProject, editForm,
       showTrigger, triggerForm, showLog, logRunId, logText, showReport, reportRunId, reportText,
-      tasks, loadingTasks, showNewTask, newTaskForm, showTaskEdit, taskEditRow, taskEditForm,
+      tasks, loadingTasks, taskFilter, groupedTaskDefs, tasksOfProject,
+      showNewTask, newTaskForm, showTaskEdit, taskEditRow, taskEditForm,
       showPrompt, promptView, taskPromptSource,
       fmtTime, open, projectName, runStatusText, runTagType, toolStatusText,
       login, logout, onTabChange,

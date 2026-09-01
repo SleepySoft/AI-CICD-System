@@ -101,6 +101,35 @@
             <el-button v-if="isAdmin" size="small" type="primary" @click="showNewProject = true">新建工程</el-button>
           </div>
           <el-table :data="projects" size="small" style="width:100%">
+            <el-table-column type="expand">
+              <template #default="{ row: p }">
+                <div style="padding: 4px 16px 12px 48px">
+                  <div class="group-title" style="margin: 8px 0 6px">任务（{{ tasksOfProject(p.id).length }}）— 展开即执行</div>
+                  <el-table :data="tasksOfProject(p.id)" size="small" style="width:100%">
+                    <el-table-column prop="name" label="任务名" width="220" show-overflow-tooltip></el-table-column>
+                    <el-table-column prop="task_type" label="类型" width="160" show-overflow-tooltip></el-table-column>
+                    <el-table-column label="调度 cron" width="150">
+                      <template #default="{ row }">
+                        <span style="font-family:Consolas,monospace">{{ row.schedule_cron || '（手动）' }}</span>
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="启用" width="90">
+                      <template #default="{ row }">
+                        <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '停用' }}</el-tag>
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="操作">
+                      <template #default="{ row }">
+                        <el-button size="small" type="primary" plain @click="triggerTask(row)">执行</el-button>
+                        <el-button v-if="isAdmin" size="small" text @click="openTaskEdit(row)">编辑</el-button>
+                        <el-button v-if="isAdmin" size="small" text type="danger" @click="removeTask(row)">删除</el-button>
+                      </template>
+                    </el-table-column>
+                  </el-table>
+                  <p v-if="!tasksOfProject(p.id).length" class="muted" style="padding: 8px 0">该工程暂无任务定义，可到「任务」页新建。</p>
+                </div>
+              </template>
+            </el-table-column>
             <el-table-column prop="name" label="名称" width="140"></el-table-column>
             <el-table-column prop="git_url" label="Git 地址" width="300" show-overflow-tooltip></el-table-column>
             <el-table-column label="最近提交" width="200">
@@ -142,36 +171,39 @@
           <div style="margin-bottom: 8px">
             <el-button size="small" @click="loadTasks" :loading="loadingTasks">刷新</el-button>
             <el-button v-if="isAdmin" size="small" type="primary" @click="openNewTask">新建任务</el-button>
+            <el-select v-model="taskFilter" placeholder="全部工程" clearable size="small" style="width:200px; margin-left:10px">
+              <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id"></el-option>
+            </el-select>
           </div>
-          <el-table :data="tasks" size="small" style="width:100%">
-            <el-table-column label="工程" width="150">
-              <template #default="{ row }">{{ projectName(row.project_id) }}</template>
-            </el-table-column>
-            <el-table-column prop="name" label="任务名" width="180" show-overflow-tooltip></el-table-column>
-            <el-table-column prop="task_type" label="类型" width="150" show-overflow-tooltip></el-table-column>
-            <el-table-column label="调度 cron" width="140">
-              <template #default="{ row }">
-                <span style="font-family:Consolas,monospace">{{ row.schedule_cron || '（手动）' }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="启用" width="80">
-              <template #default="{ row }">
-                <el-switch v-if="isAdmin" :model-value="!!row.enabled" size="small" @change="v => toggleTaskEnabled(row, v)"></el-switch>
-                <el-tag v-else :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '停用' }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="创建时间" width="160">
-              <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
-            </el-table-column>
-            <el-table-column v-if="isAdmin" label="操作" width="180">
-              <template #default="{ row }">
-                <el-button size="small" text type="primary" @click="triggerTask(row)">触发</el-button>
-                <el-button size="small" text @click="openTaskEdit(row)">编辑</el-button>
-                <el-button size="small" text type="danger" @click="removeTask(row)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-          <p v-if="!tasks.length" class="muted">暂无任务定义</p>
+          <div v-for="g in groupedTaskDefs" :key="g.project_id" style="margin-bottom:16px">
+            <div class="group-title" style="margin: 14px 0 8px">工程：{{ g.project_name }}（{{ g.tasks.length }}）</div>
+            <el-table :data="g.tasks" size="small" style="width:100%">
+              <el-table-column prop="name" label="任务名" width="180" show-overflow-tooltip></el-table-column>
+              <el-table-column prop="task_type" label="类型" width="150" show-overflow-tooltip></el-table-column>
+              <el-table-column label="调度 cron" width="140">
+                <template #default="{ row }">
+                  <span style="font-family:Consolas,monospace">{{ row.schedule_cron || '（手动）' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="启用" width="80">
+                <template #default="{ row }">
+                  <el-switch v-if="isAdmin" :model-value="!!row.enabled" size="small" @change="v => toggleTaskEnabled(row, v)"></el-switch>
+                  <el-tag v-else :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '停用' }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="创建时间" width="160">
+                <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
+              </el-table-column>
+              <el-table-column v-if="isAdmin" label="操作" width="180">
+                <template #default="{ row }">
+                  <el-button size="small" text type="primary" @click="triggerTask(row)">触发</el-button>
+                  <el-button size="small" text @click="openTaskEdit(row)">编辑</el-button>
+                  <el-button size="small" text type="danger" @click="removeTask(row)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+          <p v-if="!groupedTaskDefs.length" class="muted">暂无任务定义</p>
 
           <div class="group-title">执行记录（Run）</div>
           <div style="margin-bottom: 8px; display:flex; gap:10px; align-items:center">
@@ -487,6 +519,6 @@
 <script src="/vendor/vue.global.prod.js"></script>
 <script src="/vendor/element-plus.full.min.js"></script>
 <script src="/vendor/icons.iife.min.js"></script>
-<script src="/app.js?v=5"></script>
+<script src="/app.js?v=6"></script>
 </body>
 </html>
