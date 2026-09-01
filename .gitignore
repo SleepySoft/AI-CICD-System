@@ -10,6 +10,9 @@ node_modules/
 # 鏈嶅姟鏁版嵁鏍圭洰褰曪紙NFR-008锛宐ind mount 钀界偣锛岀粷涓嶅叆搴擄級
 /data/
 
+# Guard: runtime data must not live inside component dirs (see AGENTS.md)
+chronicler/components/*/data/
+
 # OpenProject 鎵嬪伐瀵煎嚭榛樿钀界偣锛圓DR-0014锛涢渶瀹¤鏃舵敼杈撳嚭鍒?git 浠撳簱鐩綍锛?/exports/
 
 # 澶囦唤钀界偣锛圓DR-0015锛?/backups/

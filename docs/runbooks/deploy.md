@@ -78,7 +78,7 @@ app.localhost 经 Caddy 可达、`DOCKER-SOCK-OK`；各入口可达（域名清�
 | WSL 中 curl 127.0.0.1 被代理拦截（2026-08 实测） | Clash http_proxy | 脚本一律 `curl --noproxy '*'`（权威清单见 AGENTS.md） |
 | Keycloak 健康检查失败（2026-08 实测） | 健康端点在 9000 而非 8080 | 用 `http://localhost:9000/health` |
 | `docker exec` Gitea CLI 报权限错（2026-08 实测） | Gitea CLI 拒绝 root | `docker exec -u git` |
-| gitea 容器停在 Created、autostart 报 `ports are not available ... forbidden by its access permissions`（2026-09-01 实测） | Windows 排除端口区间覆盖 `GITEA_SSH_PORT`（本机 2180-2279 含 2222） | `netsh interface ipv4 show excludedportrange protocol=tcp` 查区间；`.env` 改 `GITEA_SSH_PORT` 到区间外，再 `docker compose -p aisystem --env-file .env -f chronicler/components/gitea/compose.yml up -d gitea`（详见 AGENTS.md 已知环境坑） |
+| gitea 容器停在 Created、autostart 报 `ports are not available ... forbidden by its access permissions`（2026-09-01 实测） | Windows 排除端口区间覆盖 `GITEA_SSH_PORT`（本机 2180-2279 含 2222） | `netsh interface ipv4 show excludedportrange protocol=tcp` 查区间；`.env` 改 `GITEA_SSH_PORT` 到区间外，再在首页工具面板「部署」gitea（手动 compose 须显式 `DATA_ROOT=<仓库根>/data`，见 AGENTS.md 已知环境坑） |
 | 空闲约 60s 后容器全停（2026-08 实测） | WSL2 回收 VM | `.wslconfig` 设 `vmIdleTimeout=-1` |
 | app.localhost 经 Caddy 访问 502 | supervisor 未启动或 Caddy 无 host-gateway | 先确认 `curl --noproxy '*' http://127.0.0.1:8600/api/health` 通；检查 compose 中 caddy 的 `extra_hosts` |
 | 组件全部没起来、容器列表为空（2026-09-01 实测） | 仓库根缺 `.env`：autostart 的 `docker compose --env-file .env` 全败且只写 audit_log，界面无提示 | 创建 `.env`（`cp .env.example .env` 并编辑 `*_change_me`）后重启 supervisor；serve 缺 .env 现在会直接提示并退出 |

@@ -93,6 +93,9 @@ chronicler\.venv-win\Scripts\python.exe -m chronicler serve   # 主入口（唯�
   `ports are not available ... forbidden by its access permissions`，但 netstat 看不到任何占用 →
   用 `netsh interface ipv4 show excludedportrange protocol=tcp` 查区间，把 `.env` 对应端口
   （如 `GITEA_SSH_PORT`）改到区间外（本机实测，2026-09-01）。
+- 手动 `docker compose --env-file .env -f chronicler/components/<name>/compose.yml` 时，`.env` 的
+  `DATA_ROOT=./data` 按 **compose 文件所在目录**解析 → 数据会落入组件目录（`chronicler/components/<name>/data/`）。
+  手动操作须显式 `DATA_ROOT=<仓库根>/data`（或走首页工具面板「部署」，supervisor 注入绝对路径）（本机实测，2026-09-01）。
 - Windows 侧 Python subprocess 捕获输出必须显式 `encoding="utf-8", errors="replace"`
   （`text=True` 用 GBK 解码，遇 UTF-8 提交信息 stdout 变 None，2026-08-27 实测）。
 - Windows 部署时 Docker Desktop 需随登录自启（Settings → General → Start when you sign in），
