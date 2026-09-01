@@ -105,6 +105,9 @@ chronicler\.venv-win\Scripts\python.exe -m chronicler serve   # 主入口（唯�
   HTTP_PROXY/HTTPS_PROXY → curl/pip/git/codex 等直连被墙（developers.openai.com 403）。
   处置见 docs/runbooks/proxy-clash.md；设代理 env 时 NO_PROXY 必须含内网段
   （10.*、192.168.*、172.16-31.*、*.localhost）。
+- 前端资源已本地化（chronicler/app/static/vendor/，vue/element-plus/icons 版本钉死）：
+  勿改回 CDN 引用（公司网络/代理下 unpkg 加载不稳，曾实测登录页渲染原始 {{ }}、
+  图标按钮不可见但可点，2026-09-01）。图标按钮依赖 app.js 全局注册 ElementPlusIconsVue。
 
 ## 路线图（Manager）
 

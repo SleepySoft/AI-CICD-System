@@ -1,7 +1,7 @@
 /* Chronicler supervisor 前端逻辑（Vue3 全局构建，无打包步骤） */
 const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
 
-createApp({
+const app = createApp({
   setup() {
     const user = ref(null);
     const loading = ref(false);
@@ -484,4 +484,7 @@ createApp({
       loadTools, ctlTool, createUser, removeUser, openResetPw, doResetPw, showResetPw, resetPwUser, resetPwForm,
     };
   },
-}).use(ElementPlus).mount("#app");
+});
+
+for (const [name, component] of Object.entries(ElementPlusIconsVue)) app.component(name, component);
+app.use(ElementPlus).mount("#app");
