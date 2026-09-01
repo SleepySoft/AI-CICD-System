@@ -69,6 +69,7 @@ bash scripts/wire-chronicler.sh   # 可选：Chronicler 切 Keycloak 统一登�
 
 - **账号**：有底座时 Keycloak 是唯一账号源（boss 组 = Chronicler admin）；无底座单机用本地账密。详见 `docs/runbooks/deploy.md`。
 - **Keycloak 用户**：添加用户与分组见 `docs/runbooks/keycloak-users.md`；登录页的「通过 Keycloak 统一登录」按钮需先启用 OIDC 后端（见 deploy.md §二.3）。
+- **Web 终端**：Windows 先以管理员运行 `scripts\setup-ssh-server.ps1`（装 OpenSSH Server），再经 http://ssh.localhost 连宿主；Linux/macOS 启用方式见 `docs/runbooks/web-terminal.md`。
 - **接入 agent**：用户自装 CLI 后在 `chronicler/config/harness.yaml` 登记命令模板即可，见 `docs/runbooks/agent-onboarding.md`。
 - **环境坑**（WSL 代理/回收/dockerd 等本机实测）见 `AGENTS.md`「已知环境坑」。
 - **授权合规**：组件全部免费含商用；Python 环境用 Miniforge（规避 Anaconda 商用条款）。
