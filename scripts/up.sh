@@ -1,28 +1,30 @@
 #!/usr/bin/env bash
-# 一键启动（幂等）：共享网络 → supervisor（自启钩子拉起全部自启组件）→ SSO 接线 → 验证
-# 注：组件部署定义在各组件目录（components/<name>/compose.yml），根 compose 已废除（ADR-0027）
+# 一键底座（幂等）：校验 .env 与 supervisor 前置 → 共享网络 → 等核心组件（supervisor autostart 钩子拉起）→ SSO 接线 → 验证
+# 注：组件部署定义在各组件目录（components/<name>/compose.yml），根 compose 已废除（ADR-0027）；
+#     supervisor 唯一启动入口是主入口 `python -m chronicler serve`（缺 .env 会提示并退出），本脚本不再拉起它。
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 if [ ! -f .env ]; then
-    echo "==> .env 不存在，从模板创建（请修改其中的 *_change_me）"
-    cp .env.example .env
+    echo "==> [ERROR] 缺少首要依赖 .env，请先创建并配置："
+    echo "    cp .env.example .env          # WSL/Linux"
+    echo "    Copy-Item .env.example .env   # Windows PowerShell"
+    echo "    并编辑其中所有 *_change_me（保持非空即可）。"
+    exit 1
+fi
+
+echo "==> 检查 supervisor（主入口 python -m chronicler serve 须已运行）"
+if ! curl --noproxy '*' -fsS -o /dev/null http://127.0.0.1:8600/api/health; then
+    echo "==> [ERROR] supervisor 未运行（http://127.0.0.1:8600 无响应）。请先用主入口启动："
+    echo "    chronicler/.venv/bin/python -m chronicler serve                    # WSL/Linux"
+    echo "    chronicler\\.venv-win\\Scripts\\python.exe -m chronicler serve      # Windows"
+    exit 1
 fi
 
 echo "==> 共享网络"
 docker network inspect aisystem >/dev/null 2>&1 || docker network create aisystem
 
-echo "==> 启动 supervisor（其自启钩子会拉起标记自启的组件）"
-if [ -f scripts/start-chronicler.ps1 ] && command -v powershell >/dev/null 2>&1; then
-    powershell -ExecutionPolicy Bypass -File scripts/start-chronicler.ps1 &
-elif [ -x chronicler/.venv/bin/python ]; then
-    nohup chronicler/.venv/bin/python -m chronicler serve > /tmp/chronicler.log 2>&1 &
-else
-    echo "请先安装 chronicler 依赖（见 docs/runbooks/deploy.md）"; exit 1
-fi
-sleep 8
-
-echo "==> 等待核心组件（autostart 钩子拉起中）"
+echo "==> 等待核心组件（supervisor autostart 钩子拉起中）"
 for i in $(seq 1 24); do
   ok=$(docker ps --filter name=aisystem-keycloak-1 --format '{{.Status}}' 2>/dev/null | grep -c healthy || true)
   [ "$ok" = "1" ] && break

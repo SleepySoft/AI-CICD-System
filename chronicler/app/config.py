@@ -3,6 +3,7 @@
 IDE 调试/直接运行时无需手动 source .env——本模块导入时自动加载（不覆盖已有环境变量）。
 """
 import os
+import sys
 from pathlib import Path
 
 PKG_ROOT = Path(__file__).resolve().parent.parent  # chronicler/
@@ -74,6 +75,23 @@ class Cfg:
     @classmethod
     def prompts_override_dir(cls) -> Path:
         return cls.DATA / "prompts"
+
+    @classmethod
+    def require_env(cls, command: str = "serve"):
+        """主入口前置校验（首要依赖）：仓库根 .env 必须存在，否则提示并退出。
+        组件 compose 一律使用 `--env-file <仓库根>/.env`（ADR-0027），缺失会导致
+        autostart 静默全败——与其运行后失败，不如启动即报错。"""
+        env_file = PKG_ROOT.parent / ".env"
+        if not env_file.is_file():
+            print(f"[ERROR] {command} 缺少首要依赖：{env_file} 不存在", file=sys.stderr)
+            print("请先创建并配置（编辑其中所有 *_change_me，保持非空即可）：", file=sys.stderr)
+            print("    cp .env.example .env          # WSL/Linux", file=sys.stderr)
+            print("    Copy-Item .env.example .env   # Windows PowerShell", file=sys.stderr)
+            sys.exit(1)
+        if "_change_me" in env_file.read_text(encoding="utf-8"):
+            print(f"[WARN] {env_file} 仍含 *_change_me 占位值，服务将使用公开默认凭据（仅供本地体验）",
+                  file=sys.stderr)
+        return env_file
 
     @classmethod
     def ensure_dirs(cls):

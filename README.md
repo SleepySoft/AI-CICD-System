@@ -18,15 +18,16 @@ chronicler/.venv/bin/python -m chronicler serve          # 或 install-service.s
 
 # Windows（Docker Desktop 场景）：
 py -m venv chronicler\.venv-win; chronicler\.venv-win\Scripts\pip install -r chronicler\requirements.txt
-powershell -File scripts\start-chronicler.ps1
+chronicler\.venv-win\Scripts\python.exe -m chronicler serve   # 主入口（唯一启动方式）
 ```
 
+启动前先在仓库根创建 `.env`（`cp .env.example .env`，编辑所有 `*_change_me`）；serve 会校验，缺失即提示退出。
 无底座时直接访问 `http://127.0.0.1:8600`（本地账密登录）。
 
 ### 2. 可选底座（compose 栈）
 
 ```bash
-bash scripts/up.sh            # 一键：共享网络 → supervisor（自启钩子拉起自启组件）→ SSO 接线 → 冒烟验证（幂等）
+bash scripts/up.sh            # 底座接线（需 supervisor 已由主入口启动）：校验 .env → 共享网络 → 等核心组件 → SSO 接线 → 冒烟验证（幂等）
 bash scripts/wire-chronicler.sh   # 可选：Chronicler 切 Keycloak 统一登录（.env 设 CHRONICLER_AUTH_BACKEND=oidc）
 ```
 

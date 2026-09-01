@@ -22,7 +22,8 @@
    ```bash
    bash scripts/up.sh
    ```
-   up.sh 只管 compose 栈 + wire-sso + 验证，**不拉起 supervisor**。按需叠加 profile：
+   up.sh 只管底座接线 + wire-sso + 验证，**不拉起 supervisor**（supervisor 须已由主入口启动；
+   缺 .env 时 up.sh 与 serve 都会提示并退出）。按需叠加 profile：
    ```bash
    docker compose --profile knowledge --profile monitor up -d
    docker compose --profile sandbox up -d    # ATR 可选隔离沙箱（ADR-0021）
@@ -36,6 +37,7 @@
 
 在仓库根目录执行（WSL）：
 
+0. 前置 — 仓库根 `.env` 存在（`cp .env.example .env` 并编辑所有 `*_change_me`）；serve 主入口会校验，缺失即提示退出
 1. 建虚拟环境并安装依赖
    ```bash
    python3 -m venv chronicler/.venv
@@ -52,10 +54,10 @@
    ```
    重启 supervisor 后登录页出现「经 Keycloak 统一登录」；groups 映射 boss→admin、其余→user，
    首次登录自动建档。Gitea/Outline 与 Chronicler 共享 Keycloak 会话，无需重复登录。
-4. 启动（二选一） — 监听 8600
+4. 启动（唯一入口） — 监听 8600；`python -m chronicler serve` 是唯一启动方式（不再经启动壳脚本拉起）
    ```bash
-   chronicler/.venv/bin/python -m chronicler serve   # 前台运行
-   bash chronicler/scripts/install-service.sh         # 或注册 systemd 用户服务常驻
+   chronicler/.venv/bin/python -m chronicler serve   # 前台运行（缺 .env 会提示并退出）
+   bash chronicler/scripts/install-service.sh         # 或注册 systemd 用户服务常驻（仍调用主入口）
    ```
 
 访问入口：无底座时直连 http://127.0.0.1:8600 ；两段并存时经 Caddy 访问
@@ -82,6 +84,7 @@ app.localhost 经 Caddy 可达、`DOCKER-SOCK-OK`；底座侧浏览器可访问 
 | `docker exec` Gitea CLI 报权限错（2026-08 实测） | Gitea CLI 拒绝 root | `docker exec -u git` |
 | 空闲约 60s 后容器全停（2026-08 实测） | WSL2 回收 VM | `.wslconfig` 设 `vmIdleTimeout=-1` |
 | app.localhost 经 Caddy 访问 502 | supervisor 未启动或 Caddy 无 host-gateway | 先确认 `curl --noproxy '*' http://127.0.0.1:8600/api/health` 通；检查 compose 中 caddy 的 `extra_hosts` |
+| 组件全部没起来、容器列表为空（2026-09-01 实测） | 仓库根缺 `.env`：autostart 的 `docker compose --env-file .env` 全败且只写 audit_log，界面无提示 | 创建 `.env`（`cp .env.example .env` 并编辑 `*_change_me`）后重启 supervisor；serve 缺 .env 现在会直接提示并退出 |
 
 ## 回滚
 

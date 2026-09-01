@@ -20,6 +20,7 @@ def main():
     if cmd == "serve":
         import uvicorn
         from .app.config import Cfg
+        Cfg.require_env()  # 首要依赖 .env 缺失即提示并退出（唯一启动入口）
         Cfg.ensure_dirs()
         uvicorn.run("chronicler.app.main:app", host=Cfg.HOST, port=Cfg.PORT)
     elif cmd == "test":

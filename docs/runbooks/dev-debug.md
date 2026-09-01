@@ -2,7 +2,7 @@
 
 > 版本：v1.0 · 日期：2026-08-27 · 状态：生效
 > 适用：本机（Windows Docker Desktop 或 WSL）开发/调试 supervisor 与底座
-> 关联：chronicler/、scripts/up.sh、scripts/start-chronicler.ps1、ADR-0020/0023
+> 关联：chronicler/（主入口 chronicler/__main__.py）、scripts/up.sh、ADR-0020/0023
 
 ## 目的
 
@@ -14,25 +14,17 @@
 
 仅首次部署或需要拉起非自启组件时手动：
 
-```powershell
-# Windows（Docker Desktop 需已启动）
-cd C:\D\code\AI-CICD-System
-docker compose up -d
-```
-
-```bash
-# WSL
-cd /mnt/c/D/code/AI-CICD-System && docker compose up -d
-```
+自启组件由 supervisor autostart 钩子自动拉起（FR-MGR-022）；非自启组件在首页工具面板点「部署」
+（docker 组件定义在各组件目录 `chronicler/components/<name>/compose.yml`，ADR-0027）。
 
 ### 2. 启动 supervisor（唯一入口，行为处处一致）
 
-`.env` 由 chronicler/app/config.py **自动加载**（已存在的进程环境变量优先），
-无论怎么启动行为都一致；脚本/服务只是同一命令的壳：
+`.env` 由 chronicler/app/config.py **自动加载**（已存在的进程环境变量优先）；
+`python -m chronicler serve` 是唯一启动方式，缺 .env 会提示并退出：
 
 ```powershell
-# Windows（调试：前台跑；常驻：把 scripts\start-chronicler.ps1 加入开机启动项）
-chronicler\.venv-win\Scripts\python -m chronicler serve
+# Windows（调试：前台跑；常驻：把主入口命令加入开机启动项/任务计划）
+chronicler\.venv-win\Scripts\python.exe -m chronicler serve
 ```
 
 ```bash
@@ -67,11 +59,12 @@ bash scripts/verify-chronicler.sh    # WSL；Windows 用浏览器访问 http://1
 |------|------|------|
 | 页面 500 且日志有 UnicodeDecodeError | Windows GBK 解码坑 | 确认代码已含 `encoding="utf-8"` 修复（AGENTS.md 已知环境坑） |
 | OIDC 登录 token 交换失败 | 代理拦截 127.0.0.1 | 确认进程走 trust_env=False；shell 里测试用 `curl --noproxy '*'` |
-| app.localhost 502 | supervisor 没起或 Caddy 未重载 | 先验 127.0.0.1:8600 直连；再 `docker compose up -d caddy` |
+| app.localhost 502 | supervisor 没起或 Caddy 未重载 | 先验 127.0.0.1:8600 直连；再在首页工具面板重启 caddy（或 `docker start aisystem-caddy-1`） |
 | 改了代码不生效 | 后台旧进程还在 | 停掉 8600 端口的旧进程再启动（Windows：`Get-NetTCPConnection -LocalPort 8600` 找 PID） |
 | PyCharm 调试报端口占用 | 后台服务实例占着 8600 | 调试配置加环境变量 `CHRONICLER_PORT=8601` 错开（经 8601 直连调试，不影响正式入口）；或先停服务实例 |
-| 容器全部消失 | Docker Desktop 未启动 | 启动 Docker Desktop 后 `docker compose up -d`（restart 策略自动恢复） |
+| 容器全部消失 | Docker Desktop 未启动 | 启动 Docker Desktop 后重启 supervisor（autostart 钩子按标记拉起）；先确认仓库根 `.env` 存在 |
 
 ## 回滚（如适用）
 
-调试出问题想回到干净状态：`docker compose restart`（底座）；supervisor 直接 Ctrl+C 重启进程即可，数据都在 `data/chronicler/` 不受影响。
+调试出问题想回到干净状态：底座组件在首页工具面板重启（或 `docker restart aisystem-<name>-1`）；
+supervisor 直接 Ctrl+C 重启进程即可，数据都在 `data/private/chronicler/` 不受影响。
