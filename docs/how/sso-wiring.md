@@ -1,6 +1,6 @@
 # SSO 接线机制（Keycloak OIDC）
 
-> 版本：v1.0 · 日期：2026-08-25 · 状态：生效
+> 版本：v1.1 · 日期：2026-09-01 · 状态：生效
 > 定位：统一认证的内部机制；SSO 契约（组、角色映射）见 ../what/environment.md §2.3
 > 关联需求：FR-ENV-005、UR-006、BR-008
 
@@ -19,12 +19,12 @@
 部分客户端密钥必须在运行时生成并回写，由脚本完成：
 
 - `scripts/wire-sso.sh`：创建 Gitea 管理员（Gitea CLI 拒绝 root，须 `docker exec -u git`）+ 注册 Gitea 的 Keycloak 登录源，boss 组自动管理员。
-- `scripts/wire-manager.sh`：向 Keycloak 注册 Manager 客户端，回写密钥到 Manager 环境。
+- `scripts/wire-chronicler.sh`：向 Keycloak 注册 Chronicler 客户端（可选 OIDC 后端，ADR-0023）。
 - `scripts/check-kc.sh`：验证 realm 导入与端点可用性。
 
 ### 2.3 角色映射机制
 
-token 的 `groups` claim 是统一的角色载体：Manager 后端校验 JWT 取 `groups` 映射 boss/dev/admin；Outline 用集合级权限；Gitea 用组织/团队；Homepage 按组显隐入口。
+token 的 `groups` claim 是统一的角色载体：Chronicler 后端校验 JWT 取 `groups` 映射 boss→admin、其余→user；Outline 用集合级权限；Gitea 用组织/团队。
 
 ### 2.4 已知坑（详见 AGENTS.md）
 

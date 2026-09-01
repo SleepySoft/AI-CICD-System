@@ -1,12 +1,12 @@
 # 干系人需求（UR）
 
-> 版本：v1.0 · 日期：2026-08-25 · 状态：生效
+> 版本：v1.1 · 日期：2026-09-01 · 状态：生效
 > 定位：干系人（dev / boss / Agent）在具体场景下的诉求。角色定义见 `../what/environment.md` SSO 契约。
 
 ### UR-001 dev 一键部署整套环境
 - 状态: 生效 | 上层: BR-001 | 优先级: P0
-- 描述: 开发者在 WSL/VM/裸 Docker 上用同一份 Compose 启动环境，按 profile 选择组件。
-- 验收: `cp .env.example .env && docker compose up -d` 拉起核心栈；按需 profile 可叠加。
+- 描述: 开发者在 WSL/VM/裸 Docker 上用同一套组件定义启动环境，按需选择组件（ADR-0027）。
+- 验收: 创建 `.env` 后用主入口启动 supervisor（`python -m chronicler serve`，缺 .env 会提示并退出），autostart 组件自动拉起；`bash scripts/up.sh` 完成底座接线；非自启组件在工具面板按需部署。
 
 ### UR-002 dev 在可复现容器中构建与测试
 - 状态: 生效 | 上层: BR-001 | 优先级: P0

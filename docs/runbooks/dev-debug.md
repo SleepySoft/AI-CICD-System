@@ -1,6 +1,6 @@
 # Runbook: 手动启动与调试 Chronicler
 
-> 版本：v1.0 · 日期：2026-08-27 · 状态：生效
+> 版本：v1.1 · 日期：2026-09-01 · 状态：生效
 > 适用：本机（Windows Docker Desktop 或 WSL）开发/调试 supervisor 与底座
 > 关联：chronicler/（主入口 chronicler/__main__.py）、scripts/up.sh、ADR-0020/0023
 
@@ -47,11 +47,11 @@ bash scripts/verify-chronicler.sh    # WSL；Windows 用浏览器访问 http://1
 | 断点调试 | supervisor 是普通本地进程（ADR-0020 的红利）：PyCharm/VS Code 直接调试 `chronicler/__main__.py`（已内置包上下文垫片，脚本模式也能跑）；更规范的做法是运行配置选 **Module name: `chronicler`**（等价 `python -m chronicler`） |
 | 热重载 | `uvicorn chronicler.app.main:app --reload --port 8600`（改 Python 即重启） |
 | 前端 | 改 `chronicler/app/static/*` 后**刷新浏览器即可**，无需重启 |
-| 配置 | `chronicler/config/*.yaml` 与 `tools.d/*.yaml` 改文件即热生效；`data/chronicler/config/` 同名文件覆盖内置 |
-| 服务日志 | 前台终端直接看；后台启动的在 `data/chronicler/supervisor.log` |
-| Run 日志 | `data/chronicler/runs/<run_id>/run.log`（或页面「任务」→ 日志） |
+| 配置 | `chronicler/config/harness.yaml` 与组件 `plugin.yaml` 改文件即热生效；`data/private/chronicler/config/` 同名文件覆盖内置 |
+| 服务日志 | 前台终端直接看；systemd 常驻用 `journalctl --user -u chronicler` |
+| Run 日志 | `data/private/chronicler/runs/<run_id>/run.log`（或页面「任务」→ 日志） |
 | 容器日志 | 首页组件卡片「日志」按钮，或 `docker logs aisystem-<name>-1` |
-| 数据库 | `data/chronicler/chronicler.db`（SQLite，可用 `sqlite3` 或 DBeaver 直查） |
+| 数据库 | `data/private/chronicler/chronicler.db`（SQLite，可用 `sqlite3` 或 DBeaver 直查） |
 
 ## 常见问题
 

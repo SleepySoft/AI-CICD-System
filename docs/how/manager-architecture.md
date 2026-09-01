@@ -1,6 +1,6 @@
 # Manager 架构与执行机制
 
-> 版本：v1.1 · 日期：2026-08-27 · 状态：生效
+> 版本：v1.2 · 日期：2026-09-01 · 状态：生效
 > 定位：Manager 的内部实现机制（架构、执行管线、CI 集成、部署形态）；规格契约见 ../what/manager.md
 > 关联需求：FR-MGR-003 ~ FR-MGR-011
 
@@ -66,9 +66,9 @@ FastAPI + SQLAlchemy 2 + Alembic（异步、自带 OpenAPI）；APScheduler（As
 
 ### 2.5 部署形态
 
-运行拓扑（ADR-0020，推翻 ADR-0019）：Manager 不在 compose 内，而是部署在 **docker 宿主侧的 supervisor 进程**——跟随 dockerd 同环境部署（WSL 原生 dockerd → 部在 WSL；Docker Desktop → 部在 Windows；Linux/macOS → 本机），经本地 Docker API（unix socket / npipe，尊重 `DOCKER_HOST` 与显式配置）控制栈。推荐 Linux/WSL，Windows 可用但不推荐。supervisor 同时吸收引导职责：开机自启（平台原生服务管理器：systemd / launchd / 任务计划）+ 探活 + 异常时执行 `scripts/up.sh` 救栈；不维护任何跨边界会话。
+运行拓扑（ADR-0020，推翻 ADR-0019）：Manager 不在 compose 内，而是部署在 **docker 宿主侧的 supervisor 进程**——跟随 dockerd 同环境部署（WSL 原生 dockerd → 部在 WSL；Docker Desktop → 部在 Windows；Linux/macOS → 本机），经本地 Docker API（unix socket / npipe，尊重 `DOCKER_HOST` 与显式配置）控制栈。推荐 Linux/WSL，Windows 可用但不推荐。supervisor 同时吸收引导职责：开机自启（平台原生服务管理器：systemd / launchd / 任务计划）+ 探活；组件异常时执行 `scripts/up.sh` 救底座栈（ADR-0029 起 up.sh 不再拉起 supervisor 本体，supervisor 自愈由服务管理器 Restart 策略负责）；不维护任何跨边界会话。
 
-入口与依赖：管理台仍为 `app.localhost`——v1 已落地为 Caddy `extra_hosts: host-gateway` 回源 `host.docker.internal:8600`，supervisor 监听宿主 8600（本地账密，不接 Keycloak；ADR-0023）；工具 API 全经 Caddy `*.localhost` 消费，无新开端口。数据仍落 `${DATA_ROOT:-./data}/chronicler`（NFR-008），supervisor 直读 `.env`。
+入口与依赖：管理台仍为 `app.localhost`——v1 已落地为 Caddy `extra_hosts: host-gateway` 回源 `host.docker.internal:8600`，supervisor 监听宿主 8600（本地账密，不接 Keycloak；ADR-0023）；工具 API 全经 Caddy `*.localhost` 消费，无新开端口。数据仍落 `${DATA_ROOT:-./data}/private/chronicler`（NFR-008，ADR-0026 二分），supervisor 直读 `.env`（缺失时主入口提示并退出，ADR-0029）。
 
 平台选择原则："在哪个环境跑，就用哪个环境的 docker"。Docker Desktop 仅作用户自带许可的可选运行时（NFR-001 注记），免费默认路径为 WSL/原生 dockerd（docker 须 systemd 常驻，`vmIdleTimeout=-1` 作双保险）。
 

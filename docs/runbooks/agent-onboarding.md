@@ -1,6 +1,6 @@
 # Runbook: 接入一家新 Agent（用户自装 harness 模式）
 
-> 版本：v1.1 · 日期：2026-08-27 · 状态：生效
+> 版本：v1.2 · 日期：2026-09-01 · 状态：生效
 > 适用：supervisor（Chronicler）已在宿主运行（见 deploy.md 第二节），操作者为 admin 角色
 > 关联：chronicler/config/harness.yaml、ADR-0021（用户自装 harness）、ADR-0023（v1 仅 once 会话）、FR-MGR-019
 > 旧的 manager/agents.yaml + scripts/agents/*.sh 安装脚本体系已随 manager/ 删除，本文替代旧流程
@@ -9,7 +9,7 @@
 
 让 supervisor 能驱动一家新 agent 执行任务。ADR-0021 起，agent CLI 的**安装与登录由用户在自己的
 宿主（WSL）自行完成**，supervisor 只登记一条 harness 命令模板；terminal-runtime/ATR 降为可选
-sandbox profile，不再承担 agent 生命周期。
+沙箱组件（ADR-0021），不再承担 agent 生命周期。
 
 ## 步骤
 
@@ -19,7 +19,7 @@ sandbox profile，不再承担 agent 生命周期。
    - OAuth/网页登录类：装完人工跑一次交互式登录，凭据落在用户 HOME 下持久生效；
    - API key 类：把密钥写进 `.env`（如 `LLM_API_KEY=...`），**绝不写进 YAML**。
 2. **登记 harness**：在 `chronicler/config/harness.yaml` 的 `harnesses:` 下加一条记录。
-   配置热更新，改文件即生效；需环境差异化时，在 `data/chronicler/config/harness.yaml`
+   配置热更新，改文件即生效；需环境差异化时，在 `data/private/chronicler/config/harness.yaml`
    放同名文件覆盖包内置配置。字段：
 
    | 字段 | 说明 |
@@ -54,5 +54,5 @@ bash scripts/verify-chronicler.sh   # supervisor 冒烟（含受保护 API 401 �
 
 ## 回滚
 
-删除 `chronicler/config/harness.yaml`（或 `data/chronicler/config/harness.yaml` 覆盖文件）中
+删除 `chronicler/config/harness.yaml`（或 `data/private/chronicler/config/harness.yaml` 覆盖文件）中
 对应记录即下架，热更新立即生效；宿主上 CLI 本体与登录凭据由用户自行清理。

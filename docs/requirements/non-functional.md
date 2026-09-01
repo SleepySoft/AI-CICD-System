@@ -1,6 +1,6 @@
 # 非功能需求（NFR）
 
-> 版本：v1.1 · 日期：2026-08-27 · 状态：生效
+> 版本：v1.2 · 日期：2026-09-01 · 状态：生效
 > 定位：质量属性与横切约束。`[一票否决]` 项是选型的前置过滤条件，违反即淘汰。
 
 ### NFR-001 [一票否决] 全部组件免费（含商用）
@@ -10,13 +10,13 @@
 
 ### NFR-002 密钥不落明文、不入库
 - 状态: 生效 | 上层: - | 优先级: P0
-- 描述: 仓库内只提交 `.env.example`；运行时密钥存 Docker secret、supervisor 进程环境变量（`harness.yaml` 的 `${VAR}` 引用，ADR-0021）或加密列。supervisor v1 本地账密后端（ADR-0023）仅限内网/单机使用，暴露公网必须换 OIDC 后端。
+- 描述: 仓库内只提交 `.env.example`；运行时密钥存仓库根 `.env`（已 gitignore）、supervisor 进程环境变量（`harness.yaml` 的 `${VAR}` 引用，ADR-0021）或加密列。supervisor v1 本地账密后端（ADR-0023）仅限内网/单机使用，暴露公网必须换 OIDC 后端。
 - 验收: 仓库全文检索无真实密钥；注册表/配置中密钥只出现 `${VAR}` 引用名；公网部署走 OIDC。
 
 ### NFR-003 资源占用可控、组件按需启停
 - 状态: 生效 | 上层: UR-001 | 优先级: P0
-- 描述: 核心栈可在 4C/8G/60G 运行；重负载组件（Android 构建等）经 profile 按需启用。
-- 验收: core profile 在 4C8G 机器启动并通过冒烟；Android 相关服务默认不启动。资源分档见 `../what/environment.md`。
+- 描述: 核心栈可在 4C/8G/60G 运行；重负载组件（Android 构建、本地模型等）默认不自启，按需部署。
+- 验收: autostart 核心组件在 4C8G 机器启动并通过冒烟；重负载组件默认不启动。资源分档见 `../what/environment.md`。
 
 ### NFR-004 一键部署、断点续装、冒烟可验证
 - 状态: 生效 | 上层: UR-001 | 优先级: P0
@@ -30,8 +30,8 @@
 
 ### NFR-006 三种交付形态同源
 - 状态: 生效 | 上层: UR-001 | 优先级: P1
-- 描述: Docker Compose 是容器栈的唯一事实源；WSL rootfs 与 VM 镜像只是其封装，不单独维护配置。supervisor（Manager 宿主形态，决策见 `../adr/0020-manager-out-of-docker-supervisor.md`）独立于 compose，作为第二交付件由平台原生服务管理器托管。
-- 验收: WSL/VM 镜像构建脚本复用仓库内 compose，无独立配置副本；supervisor 有独立安装器/服务注册，不侵入 compose 配置。
+- 描述: 组件目录 compose.yml 是容器栈的唯一事实源（ADR-0027）；WSL rootfs 与 VM 镜像只是其封装，不单独维护配置。supervisor（Chronicler 宿主形态，决策见 `../adr/0020-manager-out-of-docker-supervisor.md`）独立于 compose，作为第二交付件由平台原生服务管理器托管。
+- 验收: WSL/VM 镜像构建脚本复用仓库内组件定义，无独立配置副本；supervisor 有独立安装器/服务注册（主入口 `python -m chronicler serve` 或 systemd），不侵入组件配置。
 
 ### NFR-007 Agent 调用成本可控
 - 状态: 生效 | 上层: BR-002 | 优先级: P2
@@ -41,7 +41,7 @@
 ### NFR-008 数据显式持久化，升级不丢数据
 - 状态: 生效 | 上层: - | 优先级: P0
 - 描述: 所有服务持久化数据经 bind mount 显式落到宿主磁盘目录（`${DATA_ROOT:-./data}/<服务名>`）；镜像升级、容器重建、编排变更不得影响数据；禁止命名卷存业务数据。
-- 验收: compose 中无业务数据命名卷；`docker compose down` + 镜像升级 + `up -d` 后数据完整；数据目录可在宿主直接查看（决策见 `../adr/0012-data-on-host-bind-mounts.md`）。
+- 验收: 组件 compose 中无业务数据命名卷；容器全部删除 + 镜像升级 + 重建后数据完整；数据目录可在宿主直接查看（决策见 `../adr/0012-data-on-host-bind-mounts.md`）。
 
 ### NFR-009 系统数据优先 Git 管理
 - 状态: 生效 | 上层: - | 优先级: P1

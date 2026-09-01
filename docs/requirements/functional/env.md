@@ -1,17 +1,17 @@
 # 功能需求：环境编排（ENV）
 
-> 版本：v1.0 · 日期：2026-08-25 · 状态：生效
-> 定位：compose 编排、统一入口、门户与监控的功能需求；规格见 `../../what/environment.md`
+> 版本：v1.1 · 日期：2026-09-01 · 状态：生效
+> 定位：组件编排、统一入口、门户与监控的功能需求；规格见 `../../what/environment.md`
 
 ### FR-ENV-001 Docker Compose 统一编排
 - 状态: 生效 | 上层: UR-001, NFR-006 | 优先级: P0
-- 描述: 全部服务由仓库根 `docker-compose.yml` 编排，按 profile（knowledge/requirements/monitor/localai/browsers）分组。
-- 验收: `docker compose config -q` 通过；各 profile 可独立叠加启动。
+- 描述: 全部服务由组件目录定义（`chronicler/components/<name>/compose.yml` + `plugin.yaml` 注册，ADR-0027）；supervisor 按 `autostart` 标记拉起，或由用户在首页工具面板按需部署。
+- 验收: 组件 compose 校验通过（`docker compose --env-file .env -f <组件 compose.yml> config -q`）；autostart 标记的组件随 supervisor 启动自动拉起（FR-MGR-022）。
 
 ### FR-ENV-002 统一域名入口
 - 状态: 生效 | 上层: UR-006 | 优先级: P0
 - 描述: 所有 Web 系统经 Caddy 反代以 `*.localhost` 子域名访问。
-- 验收: 浏览器访问 git/ci/sso/portal/app 等子域名均可达对应服务。
+- 验收: 浏览器访问 git/ci/sso/app 等子域名均可达对应服务。
 
 ### FR-ENV-003 统一门户导航
 - 状态: 生效 | 上层: UR-006 | 优先级: P1
