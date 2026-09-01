@@ -45,6 +45,8 @@ def list_projects() -> list[dict]:
         p["overrides"] = loads(p["overrides"])
         p["synced"] = repo_dir(p["id"]).is_dir()
         p["last_commit"] = _last_commit(p["id"]) if p["synced"] else None
+        p["last_synced_at"] = p.get("last_synced_at") or None
+        p["last_sync_error"] = p.get("last_sync_error") or ""
     return rows
 
 
@@ -66,7 +68,8 @@ def update_project(pid: int, fields: dict) -> dict:
 
 
 def sync_project(pid: int) -> dict:
-    """clone 或 fetch；本地路径/文件协议同样支持（git_url 可为 /path 或 file://）"""
+    """clone 或 fetch；本地路径/文件协议同样支持（git_url 可为 /path 或 file://）
+    成功记录 last_synced_at 并清空 last_sync_error；失败记录错误后抛给 API（工程视图展示同步问题）"""
     p = get_project(pid)
     dest = repo_dir(pid)
     try:
@@ -78,15 +81,24 @@ def sync_project(pid: int) -> dict:
                 _git(["-C", str(dest), "reset", "--hard", f"origin/{branch}"])
         else:
             dest.parent.mkdir(parents=True, exist_ok=True)
-            clone_args = ["clone", p["git_url"], str(dest)]
-            if p.get("default_branch"):
-                clone_args = ["clone", "-b", p["default_branch"], p["git_url"], str(dest)]
+            clone_args = (["clone", "-b", p["default_branch"], p["git_url"], str(dest)]
+                          if p.get("default_branch") else ["clone", p["git_url"], str(dest)])
             r = _git(clone_args, timeout=600)
         if r.returncode != 0:
-            raise HTTPException(status_code=502, detail=f"git 同步失败：{r.stderr.strip()[:500]}")
+            raise RuntimeError(f"git 同步失败：{r.stderr.strip()[:500]}")
+        execute("UPDATE projects SET last_synced_at=strftime('%s','now'), last_sync_error='' WHERE id=?", (pid,))
+        return {"ok": True, "last_commit": _last_commit(pid)}
     except subprocess.TimeoutExpired:
+        _mark_sync_error(pid, "git 同步超时")
         raise HTTPException(status_code=504, detail="git 同步超时")
-    return {"ok": True, "last_commit": _last_commit(pid)}
+    except Exception as e:
+        msg = getattr(e, "detail", None) or str(e)
+        _mark_sync_error(pid, str(msg)[:500])
+        raise
+
+
+def _mark_sync_error(pid: int, msg: str) -> None:
+    execute("UPDATE projects SET last_sync_error=? WHERE id=?", (msg, pid))
 
 
 def _git(args: list[str], timeout: int = 120) -> subprocess.CompletedProcess:
@@ -101,8 +113,14 @@ def _git(args: list[str], timeout: int = 120) -> subprocess.CompletedProcess:
 
 
 def _last_commit(pid: int) -> str | None:
-    r = _git(["-C", str(repo_dir(pid)), "log", "-1", "--format=%h %s"])
-    return r.stdout.strip() if r.returncode == 0 else None
+    """最近提交：hash + 提交时间 + 主题（%x1f 作分隔符，主题可能含任意字符）"""
+    r = _git(["-C", str(repo_dir(pid)), "log", "-1",
+              "--format=%h%x1f%ad%x1f%s", "--date=format:%Y-%m-%d %H:%M"])
+    out = r.stdout.strip()
+    if r.returncode != 0 or not out:
+        return None
+    parts = (out.split("\x1f", 2) + ["", ""])[:3]
+    return {"hash": parts[0], "date": parts[1], "subject": parts[2]}
 
 
 def reset_clone(pid: int) -> dict:

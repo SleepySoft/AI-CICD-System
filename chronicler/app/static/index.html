@@ -101,18 +101,30 @@
             <el-button v-if="isAdmin" size="small" type="primary" @click="showNewProject = true">新建工程</el-button>
           </div>
           <el-table :data="projects" size="small" style="width:100%">
-            <el-table-column prop="name" label="名称" width="160"></el-table-column>
-            <el-table-column prop="git_url" label="Git 地址" show-overflow-tooltip></el-table-column>
-            <el-table-column prop="last_commit" label="最近提交" width="120" show-overflow-tooltip></el-table-column>
-            <el-table-column label="已同步" width="80">
+            <el-table-column prop="name" label="名称" width="140"></el-table-column>
+            <el-table-column prop="git_url" label="Git 地址" width="300" show-overflow-tooltip></el-table-column>
+            <el-table-column label="最近提交" width="200">
               <template #default="{ row }">
-                <el-tag :type="row.synced ? 'success' : 'warning'" size="small">{{ row.synced ? '是' : '否' }}</el-tag>
+                <el-tooltip v-if="row.last_commit" :content="row.last_commit.subject" placement="top">
+                  <span style="font-family:Consolas,monospace; font-size:12px">{{ row.last_commit.hash }} · {{ row.last_commit.date }}</span>
+                </el-tooltip>
+                <span v-else class="muted">—</span>
               </template>
             </el-table-column>
-            <el-table-column label="创建时间" width="160">
+            <el-table-column label="最后同步" width="180">
+              <template #default="{ row }">
+                <el-tooltip v-if="row.last_sync_error" :content="'同步失败：' + row.last_sync_error" placement="top">
+                  <span style="color:#f56c6c">⚠ 同步失败</span>
+                </el-tooltip>
+                <span v-else-if="row.last_synced_at">{{ fmtTime(row.last_synced_at) }}</span>
+                <span v-else-if="row.synced" class="muted">待同步</span>
+                <span v-else class="muted">从未同步</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="创建时间" width="170">
               <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
             </el-table-column>
-            <el-table-column v-if="isAdmin" label="操作" width="150">
+            <el-table-column v-if="isAdmin" label="操作" width="190" align="center">
               <template #default="{ row }">
                 <el-tooltip content="同步（拉取最新代码）" placement="top"><el-button size="small" text type="primary" icon="Refresh" @click="syncProject(row)"></el-button></el-tooltip>
                 <el-tooltip content="重置克隆（删本地重新拉）" placement="top"><el-button size="small" text type="warning" icon="RefreshLeft" @click="resetClone(row)"></el-button></el-tooltip>

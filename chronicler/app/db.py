@@ -98,6 +98,10 @@ def _migrate():
         db().execute("ALTER TABLE projects ADD COLUMN default_branch TEXT DEFAULT ''")
     if "shadow_repo" not in {r["name"] for r in q("PRAGMA table_info(projects)")}:
         db().execute("ALTER TABLE projects ADD COLUMN shadow_repo TEXT DEFAULT ''")
+    if "last_synced_at" not in {r["name"] for r in q("PRAGMA table_info(projects)")}:
+        db().execute("ALTER TABLE projects ADD COLUMN last_synced_at REAL DEFAULT 0")
+    if "last_sync_error" not in {r["name"] for r in q("PRAGMA table_info(projects)")}:
+        db().execute("ALTER TABLE projects ADD COLUMN last_sync_error TEXT DEFAULT ''")
     db().commit()
 
 

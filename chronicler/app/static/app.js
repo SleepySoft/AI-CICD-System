@@ -127,7 +127,16 @@ const app = createApp({
 
     async function loadProjects() {
       loadingProjects.value = true;
-      try { projects.value = await api("/api/projects"); } catch (e) { toast.err(e); }
+      try {
+        projects.value = (await api("/api/projects")).map(p => {
+          // 兼容后端未重启时的旧格式（字符串 "hash subject"）
+          if (p.last_commit && typeof p.last_commit === "string") {
+            const m = p.last_commit.match(/^(\S+)\s?(.*)$/);
+            p.last_commit = { hash: m?.[1] || p.last_commit, date: "", subject: m?.[2] || "" };
+          }
+          return p;
+        });
+      } catch (e) { toast.err(e); }
       finally { loadingProjects.value = false; }
     }
     function parseJson(text, field) {
@@ -152,7 +161,7 @@ const app = createApp({
     }
     async function syncProject(p) {
       try { await api(`/api/projects/${p.id}/sync`, { method: "POST" }); toast.ok(`已触发同步：${p.name}`); setTimeout(loadProjects, 2000); }
-      catch (e) { toast.err(e); }
+      catch (e) { toast.err(e); setTimeout(loadProjects, 1500); }
     }
     async function resetClone(p) {
       try {
@@ -161,7 +170,10 @@ const app = createApp({
           "重置克隆", { type: "warning", confirmButtonText: "重置", cancelButtonText: "取消" });
         await api(`/api/projects/${p.id}/reset-clone`, { method: "POST" });
         toast.ok("已重置并重新拉取"); setTimeout(loadProjects, 2000);
-      } catch (e) { if (e !== "cancel" && e?.message) toast.err(e); }
+      } catch (e) {
+        if (e !== "cancel" && e?.message) toast.err(e);
+        setTimeout(loadProjects, 1500);
+      }
     }
     function openEdit(p) {
       editProject.value = p;
