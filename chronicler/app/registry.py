@@ -6,6 +6,7 @@
 import hashlib
 import os
 import re
+from pathlib import Path
 
 import yaml
 from fastapi import HTTPException
@@ -13,6 +14,16 @@ from fastapi import HTTPException
 from .config import PKG_ROOT, Cfg
 
 _ENV_REF = re.compile(r"^\$\{(\w+)\}$")
+_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+
+
+def _write_data_yaml(name: str, data, header: str = "") -> Path:
+    """写 DATA 覆盖文件（LF 行尾；父目录自动创建）"""
+    out = Cfg.DATA / "config" / name
+    out.parent.mkdir(parents=True, exist_ok=True)
+    text = header + yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
+    out.write_text(text, encoding="utf-8", newline="\n")
+    return out
 
 
 def _load_yaml(name: str, key: str) -> list | dict:
@@ -32,6 +43,79 @@ def get_harness(name: str) -> dict:
     if not h:
         raise HTTPException(status_code=404, detail=f"未知 harness：{name}")
     return h
+
+
+def _validate_harness(h: dict) -> dict:
+    """harness 条目契约校验（页面增删改与任务执行共用）；返回规范化条目"""
+    name = str(h.get("name", "")).strip()
+    if not _NAME_RE.match(name):
+        raise HTTPException(status_code=422, detail="name 需为英数/连字符/下划线开头且非空")
+    command = str(h.get("command_template", "")).strip()
+    if not command:
+        raise HTTPException(status_code=422, detail="command_template 不能为空")
+    if h.get("session") not in (None, "once", "persistent"):
+        raise HTTPException(status_code=422, detail="session 仅支持 once|persistent")
+    if h.get("report_mode") not in (None, "file", "stdout"):
+        raise HTTPException(status_code=422, detail="report_mode 仅支持 file|stdout")
+    if h.get("cwd") not in (None, "repo", "shadow"):
+        raise HTTPException(status_code=422, detail="cwd 仅支持 repo|shadow")
+    if h.get("env") is not None and not isinstance(h.get("env"), dict):
+        raise HTTPException(status_code=422, detail="env 需为键值映射")
+    try:
+        timeout = int(h.get("timeout_sec", 1800))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="timeout_sec 需为整数")
+    if timeout <= 0:
+        raise HTTPException(status_code=422, detail="timeout_sec 需为正整数")
+    return {
+        "name": name,
+        "desc": str(h.get("desc", "")).strip(),
+        "command_template": command,
+        "session": h.get("session") or "once",
+        "report_mode": h.get("report_mode") or "file",
+        "cwd": h.get("cwd") or "repo",
+        "stdin_prompt": bool(h.get("stdin_prompt")),
+        "env": dict(h.get("env") or {}),
+        "timeout_sec": timeout,
+    }
+
+
+def save_harnesses(harnesses: list) -> dict:
+    """写 DATA 覆盖 harness.yaml（整表替换，含内置条目；页面增删改均走此接口）"""
+    cleaned = [_validate_harness(h) for h in harnesses]
+    if len({h["name"] for h in cleaned}) != len(cleaned):
+        raise HTTPException(status_code=422, detail="harness name 重复")
+    header = ("# Agent harness 注册表（配置页写入的覆盖文件；data/config 同名文件覆盖包内置）\n"
+              "# 字段说明见 chronicler/config/harness.yaml 头注释与 docs/runbooks/agent-onboarding.md\n")
+    out = _write_data_yaml("harness.yaml", {"harnesses": cleaned}, header)
+    return {"ok": True, "path": str(out), "count": len(cleaned)}
+
+
+def load_settings() -> dict:
+    """全局设置：DATA 覆盖优先，其次包内置 config/settings.yaml"""
+    override = Cfg.DATA / "config" / "settings.yaml"
+    path = override if override.is_file() else Cfg.CONFIG_DIR / "settings.yaml"
+    if not path.is_file():
+        return {}
+    with open(path, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_settings(settings: dict) -> dict:
+    """保存全局设置到 DATA 覆盖文件"""
+    if not isinstance(settings, dict):
+        raise HTTPException(status_code=422, detail="settings 需为键值映射")
+    out = _write_data_yaml("settings.yaml", settings)
+    return {"ok": True, "path": str(out)}
+
+
+def get_default_harness() -> str:
+    """全局默认 harness：settings.yaml 优先，其次 CHRONICLER_DEFAULT_HARNESS，最后 dummy"""
+    name = str(load_settings().get("default_harness") or
+               os.environ.get("CHRONICLER_DEFAULT_HARNESS", "dummy"))
+    names = {h["name"] for h in load_harnesses()}
+    return name if name in names else "dummy"
 
 
 def skill_path(name: str) -> str | None:

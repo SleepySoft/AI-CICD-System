@@ -13,12 +13,14 @@ class TaskBody(BaseModel):
     project_id: int
     name: str
     task_type: str
+    cwd: str = ""
     schedule_cron: str = ""
     enabled: bool = True
 
 
 class TaskPatch(BaseModel):
     name: str | None = None
+    cwd: str | None = None
     schedule_cron: str | None = None
     webhook: bool | None = None
     enabled: bool | None = None
@@ -33,7 +35,7 @@ async def list_(project_id: int | None = None, user: dict = Depends(current_user
 @router.post("")
 async def create(body: TaskBody, user: dict = Depends(require_admin)):
     t = tasks.create_task(body.project_id, body.name, body.task_type,
-                          body.schedule_cron, body.enabled)
+                          body.schedule_cron, body.enabled, body.cwd)
     audit(user["username"], "task.create", t["name"])
     return t
 

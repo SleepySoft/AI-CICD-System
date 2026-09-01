@@ -18,12 +18,14 @@ repo_source        代码源：name, url(任意 git 远端，含 GitHub/Gitea), 
                    default_branch, sync_cron, last_synced_at, last_commit,
                    shadow_repo(project_shadow 影子库 URL，FR-MGR-013)
 agent_profile      Agent harness 配置：name, command(可执行命令 + 参数模板，如 --yolo),
+                   prompt_form(file|stdin), report_form(file|stdout), cwd(repo|shadow),
                    session_cap(persistent|oneshot|resume，会话能力声明), model, base_url,
                    api_key_ref(密钥存加密列或挂载 secret), max_runtime_sec
 prompt_template    Prompt 库：name, scope(system|task), content(支持 {{变量}}), version,
                    builtin(bool), updated_by, updated_at
 task_def           任务定义：name, type(见 §2.3), repo_ids[], agent_id, prompt_id,
-                   schedule_cron, enabled, params(JSON), output_visibility(dev|boss)
+                   cwd(repo|shadow|''，工作目录覆盖，''=回落 harness 默认), schedule_cron,
+                   enabled, params(JSON), output_visibility(dev|boss)
 task_run           一次执行：详细字段见 §2.1.1 Run 档案契约（FR-MGR-005）
 report             报告：run_id, title, type, visibility, md_path, summary, created_at,
                    reviewed(bool), reviewer
@@ -53,7 +55,8 @@ project            工程 id/name/git_url                        【v1】
 repo_base_commit   分析基于的提交 SHA（全量，非短 hash）        【v1】
 repo_status        工作区是否脏（有未提交改动需警示）        【v1】repo_dirty
 harness            name + 解析后的完整启动命令 + CLI 版本      【v1】
-prompt             模板版本 hash + 渲染后全文路径               【v1】
+prompt             模板版本 hash + 渲染后全文（落库 task_runs.prompt_text，文件副本
+                   runs/<id>/prompt.md）                       【v1】
 overrides          工程级覆盖项（harness/prompt/策略）          【v1】
 components         注入的资源能力清单（SKILL 名 + 版本/hash）   【v1】
 extra_prompt       触发时附加指令                              【v1】
@@ -144,7 +147,7 @@ GET    /api/health                   供 Uptime Kuma
 
 ### 2.5 前端页面清单
 
-v1 已落地：`/login`（SSO 主入口 + 本地应急） · 首页（组件卡片：状态/启停/自启开关/日志/详情，FR-ENV-003、FR-MGR-022） · 工程（登记/同步/覆盖项） · 任务（Run 列表/日志/报告/触发） · 配置（harness/components/prompts 只读） · 用户管理(admin)。
+v1 已落地：`/login`（SSO 主入口 + 本地应急） · 首页（组件卡片：状态/启停/自启开关/日志/详情，FR-ENV-003、FR-MGR-022） · 工程（登记/同步/覆盖项） · 任务（Run 列表/日志/报告/触发） · 配置（全局默认 harness 选择 + harness 增删改，FR-MGR-019/020；components/prompts 查看，prompts 可编辑） · 用户管理(admin)。
 规划：`/` 项目全景（FR-MGR-012） · `/reports` 报告中心 · `/assets` 资产库（FR-MGR-013/014） · `/review` 待审区 · `/settings` 系统设置（FR-MGR-015）
 
 ### 2.6 里程碑

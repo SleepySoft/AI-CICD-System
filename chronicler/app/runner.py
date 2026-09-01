@@ -3,6 +3,10 @@
 v1 边界：仅 once 会话（持久/resume 为 ADR-0021 标注的 TBD，后续版本）；
 手动触发；日志落文件，前端轮询（SSE 留待后续）。
 Run 档案契约见 docs/what/manager.md §2.1.1（A 输入快照 / B 执行过程 / C 产物清单）。
+
+harness 命令形式可配置（FR-MGR-019）：prompt 经 {prompt_file} 文件或 stdin 管道
+（stdin_prompt）传入；报告经 {report_file} 文件（report_mode=file，如 codex -o）或
+stdout 捕获（report_mode=stdout，如 kimi --print）产出；cwd 可选工程仓库/shadow 库。
 """
 import json
 import os
@@ -20,6 +24,8 @@ from .config import PKG_ROOT, Cfg
 from .db import audit, dumps, execute, q, q1
 
 _harness_locks: dict[str, threading.Lock] = {}
+STALE_QUEUE_GRACE_SEC = 600    # queued 超过 10 分钟仍未开始 = 悬挂
+STALE_RUN_GRACE_SEC = 120      # running 超过 harness 超时后再宽限 2 分钟
 
 
 def _harness_lock(name: str) -> threading.Lock:
@@ -55,6 +61,62 @@ def _render_prompt(template: str, project: dict, extra: dict) -> str:
     for k, v in vars_.items():
         out = out.replace("{{" + k + "}}", str(v))
     return out
+
+
+def _decode_bytes(data: bytes) -> str:
+    """按行解码：每行优先 UTF-8，单行失败回落本地编码（Windows 中文环境 GBK/cp936）。
+    逐行回落避免文件里单个非 UTF-8 字节（或运行中读到半截写缓冲）把整份内容拖进
+    GBK 重解导致整页乱码；日志/报告统一按 UTF-8 落盘。"""
+    import locale
+    fallback = locale.getpreferredencoding(False) or "utf-8"
+    out = []
+    for line in data.splitlines(keepends=True):
+        try:
+            out.append(line.decode("utf-8"))
+        except UnicodeDecodeError:
+            out.append(line.decode(fallback, errors="replace"))
+    return "".join(out)
+
+
+def _exec(command: str, cwd: str, env: dict, stdin_data: str | None,
+          log_file, timeout_sec: int) -> tuple[int, str]:
+    """执行 harness 命令：stdout 实时写入日志（供前端轮询），整份返回给调用方；
+    stderr 合并进 stdout。子进程输出按 UTF-8（回落本地编码）解码后以 UTF-8 落盘
+    （Windows GBK 坑，AGENTS.md 已登记）；并默认注入 PYTHONUTF8 强制 Python CLI 输出 UTF-8。"""
+    env = dict(env)
+    env.setdefault("PYTHONUTF8", "1")
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    proc = subprocess.Popen(command, shell=True, cwd=cwd, env=env,
+                            stdin=subprocess.PIPE if stdin_data is not None else None,
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    captured: list[str] = []
+
+    def _drain():
+        with open(log_file, "a", encoding="utf-8") as log:
+            for raw in proc.stdout:
+                line = _decode_bytes(raw)
+                log.write(line)
+                log.flush()
+                captured.append(line)
+
+    reader = threading.Thread(target=_drain, daemon=True)
+    reader.start()
+    if stdin_data is not None:
+        try:
+            proc.stdin.write(stdin_data.encode("utf-8"))
+        except (BrokenPipeError, ValueError):
+            pass
+        finally:
+            proc.stdin.close()
+    try:
+        proc.wait(timeout=timeout_sec)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+        reader.join(timeout=10)
+        raise
+    reader.join(timeout=10)
+    return proc.returncode, "".join(captured)
 
 
 def _ci_context(project: dict) -> dict:
@@ -116,6 +178,8 @@ def _audit_push_failure(run: dict, e: Exception):
 
 def _classify_error(err: str) -> str:
     e = err.lower()
+    if "悬挂" in err:
+        return "悬挂"
     if "超时" in err or "timeout" in e:
         return "超时"
     if any(k in e for k in ("429", "quota", "rate limit")):
@@ -127,17 +191,45 @@ def _classify_error(err: str) -> str:
     return "其他"
 
 
+def sweep_stale_runs(now: float | None = None) -> int:
+    """状态悬挂检测（FR-MGR-005 执行过程兜底）：queued/running 超过阈值仍未结束
+    （进程被中断 / supervisor 重启 / 执行线程死亡等未落库场景）→ 自动标记 failed，
+    并写审计。由调度器每分钟调用。"""
+    now = time.time() if now is None else now
+    marked = 0
+    for r in q("SELECT * FROM task_runs WHERE status IN ('queued','running')"):
+        started = r.get("started_at") or now
+        snap = json.loads(r.get("input_snapshot") or "{}")
+        timeout = int(snap.get("harness_timeout") or 1800)
+        if r["status"] == "queued":
+            stale = now - started > STALE_QUEUE_GRACE_SEC
+        else:
+            stale = now - started > timeout + STALE_RUN_GRACE_SEC
+        if not stale:
+            continue
+        n = execute("UPDATE task_runs SET status='failed', error=?, error_class='悬挂',"
+                    " finished_at=? WHERE id=? AND status IN ('queued','running')",
+                    ("状态悬挂：超过阈值仍未结束（进程可能被中断或 supervisor 重启），已自动标记失败",
+                     now, r["id"]))
+        if n:
+            audit("supervisor", "run.stale", f"run#{r['id']}", f"{r['status']}->failed")
+            marked += 1
+    return marked
+
+
 def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
-            prompt_override: str = "") -> dict:
+            prompt_override: str = "", cwd_override: str = "") -> dict:
     project = projects.get_project(project_id)
     if not projects.repo_dir(project_id).is_dir():
         projects.sync_project(project_id)  # 未 clone 则先同步
 
     overrides = project.get("overrides") or {}
-    harness_name = overrides.get("harness") or os.environ.get("CHRONICLER_DEFAULT_HARNESS", "shell")
+    harness_name = overrides.get("harness") or registry.get_default_harness()
     harness = registry.get_harness(harness_name)
     if harness.get("session", "once") != "once":
         raise RuntimeError(f"harness {harness_name} 声明为持久会话，v1 暂不支持（ADR-0021 TBD）")
+    # 工作目录解析：任务定义覆盖（cwd_override）> harness 默认（cwd）> 工程仓库
+    cwd = cwd_override if cwd_override in ("repo", "shadow") else harness.get("cwd", "repo")
 
     if prompt_override:
         # 工程级 prompt 覆盖（任务自带模板）；版本=内容 hash（FR-MGR-011）
@@ -154,6 +246,8 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
         "overrides": overrides,
         "harness_command": harness["command_template"],
         "harness_version": _harness_version(harness),
+        "harness_timeout": int(harness.get("timeout_sec", 1800)),
+        "cwd": cwd,
         "components": [{"name": c["name"], "skill": c["skill"],
                         "skill_hash": _file_hash(c["skill"])} for c in registry.injectable_components()],
         "ci_context": _ci_context(project),
@@ -171,11 +265,13 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
         "report_file": str(run_dir / "report.md"),
         "prompt_file": str(run_dir / "prompt.md"),
     })
-    threading.Thread(target=_run, args=(run_id, harness, prompt), daemon=True).start()
+    # A 段：渲染后 prompt 全文落库（任务列表可查看；文件副本 runs/<id>/prompt.md 同步保留）
+    execute("UPDATE task_runs SET prompt_text=? WHERE id=?", (prompt, run_id))
+    threading.Thread(target=_run, args=(run_id, harness, prompt, cwd), daemon=True).start()
     return get_run(run_id)
 
 
-def _run(run_id: int, harness: dict, prompt: str):
+def _run(run_id: int, harness: dict, prompt: str, cwd: str = "repo"):
     run = get_run(run_id)
     repo = projects.repo_dir(run["project_id"])
     run_dir = Cfg.runs_dir() / str(run_id)
@@ -191,22 +287,23 @@ def _run(run_id: int, harness: dict, prompt: str):
         repo_dir=_q(str(repo)),
         shadow_dir=_q(str(projects.shadow_dir(run["project_id"]))))
     env = {**os.environ, **registry.resolve_env(harness.get("env"))}
+    cwd_path = str(projects.shadow_dir(run["project_id"])) if cwd == "shadow" else str(repo)
+    stdin_data = prompt if harness.get("stdin_prompt") else None
+    capture_report = harness.get("report_mode") == "stdout"
 
     execute("UPDATE task_runs SET status='running', log_path=? WHERE id=?",
             (str(log_file), run_id))
     with _harness_lock(harness["name"]):
         try:
-            stdin_data = prompt if harness.get("stdin_prompt") else None
             with open(log_file, "w", encoding="utf-8") as log:
                 log.write(f"$ {command}\n\n")
-                log.flush()
-                proc = subprocess.run(command, shell=True, cwd=str(repo), env=env,
-                                      input=stdin_data, text=bool(stdin_data),
-                                      stdout=log, stderr=subprocess.STDOUT,
-                                      timeout=harness.get("timeout_sec", 1800))
+            returncode, stdout = _exec(command, cwd_path, env, stdin_data, log_file,
+                                       int(harness.get("timeout_sec", 1800)))
+            if capture_report and stdout.strip():
+                report_file.write_text(stdout, encoding="utf-8", newline="\n")
             artifacts = []
             # 产出契约优先于退出码（kimi 等 CLI 收尾阶段会误报非零）：有产物即成功
-            if proc.returncode == 0 or report_file.is_file():
+            if returncode == 0 or report_file.is_file():
                 if report_file.is_file():
                     artifacts.append(_publish(run, report_file))
                 sha, shadow_arts = _commit_shadow(run)  # ADR-0028：统一提交，报告 artifact 回填 commit
@@ -215,11 +312,11 @@ def _run(run_id: int, harness: dict, prompt: str):
                         a["commit"] = a.get("commit") or sha
                 artifacts.extend(shadow_arts)
             if artifacts:
-                warn = "" if proc.returncode == 0 else f"（harness 退出码 {proc.returncode}，产物已在，判成功）"
+                warn = "" if returncode == 0 else f"（harness 退出码 {returncode}，产物已在，判成功）"
                 execute("UPDATE task_runs SET status='success', artifacts=?, error=?, finished_at=? WHERE id=?",
                         (dumps(artifacts), warn, time.time(), run_id))
             else:
-                err = "" if proc.returncode == 0 else f"exit code {proc.returncode}"
+                err = "" if returncode == 0 else f"exit code {returncode}"
                 if not artifacts:
                     err = (err + "；" if err else "") + "未产出报告文件"
                 execute("UPDATE task_runs SET status='failed', error=?, error_class=?, finished_at=? WHERE id=?",
@@ -275,7 +372,8 @@ def _publish(run: dict, report_file) -> dict:
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / name
     action = "updated" if dest.exists() else "created"
-    dest.write_bytes(report_file.read_bytes())
+    # 统一按 UTF-8 落盘（报告可能由 GBK 输出的 CLI 生成，先解码归一）
+    dest.write_text(_decode_bytes(report_file.read_bytes()), encoding="utf-8", newline="\n")
     execute("UPDATE task_runs SET report_path=? WHERE id=?", (str(dest), run["id"]))
     return {"kind": "report", "path": str(dest), "action": action,
             "size_bytes": dest.stat().st_size, "commit": None}
@@ -295,9 +393,12 @@ def get_run(run_id: int) -> dict:
 
 
 def list_runs(project_id: int | None = None, limit: int = 50) -> list[dict]:
+    cols = ("id, project_id, task_type, status, trigger, harness, prompt_version, log_path,"
+            " report_path, error, error_class, runner_env, artifacts, created_by,"
+            " started_at, finished_at")
     if project_id:
-        rows = q("SELECT * FROM task_runs WHERE project_id=? ORDER BY id DESC LIMIT ?",
+        rows = q(f"SELECT {cols} FROM task_runs WHERE project_id=? ORDER BY id DESC LIMIT ?",
                  (project_id, limit))
     else:
-        rows = q("SELECT * FROM task_runs ORDER BY id DESC LIMIT ?", (limit,))
+        rows = q(f"SELECT {cols} FROM task_runs ORDER BY id DESC LIMIT ?", (limit,))
     return rows

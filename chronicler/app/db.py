@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS task_defs (
     project_id INTEGER NOT NULL REFERENCES projects(id),
     name TEXT NOT NULL,
     task_type TEXT NOT NULL,                     -- 对应 prompts/<task_type>.md
+    cwd TEXT DEFAULT '',                         -- 工作目录覆盖：''=harness 默认 | repo | shadow
     prompt_override TEXT DEFAULT '',             -- 非空=工程级覆盖全局模板（FR-MGR-011 版本=hash）
     schedule_cron TEXT DEFAULT '',               -- 空=仅手动；hook/联动预留 webhook 字段
     webhook INTEGER DEFAULT 0,                   -- 预留：push 等事件联动
@@ -55,6 +56,7 @@ CREATE TABLE IF NOT EXISTS task_runs (
     error_class TEXT DEFAULT '',                 -- B 段：网络|配额|解析|超时|其他
     runner_env TEXT DEFAULT '',                  -- B 段：执行环境（平台+supervisor 版本）
     artifacts TEXT DEFAULT '[]',                 -- C 段：产物清单 JSON[{kind,path,action,size_bytes,commit}]
+    prompt_text TEXT DEFAULT '',                 -- A 段：本次实际执行的渲染后 prompt 全文（任务列表可查看）
     created_by TEXT DEFAULT '',
     started_at REAL, finished_at REAL
 );
@@ -102,6 +104,10 @@ def _migrate():
         db().execute("ALTER TABLE projects ADD COLUMN last_synced_at REAL DEFAULT 0")
     if "last_sync_error" not in {r["name"] for r in q("PRAGMA table_info(projects)")}:
         db().execute("ALTER TABLE projects ADD COLUMN last_sync_error TEXT DEFAULT ''")
+    if "cwd" not in {r["name"] for r in q("PRAGMA table_info(task_defs)")}:
+        db().execute("ALTER TABLE task_defs ADD COLUMN cwd TEXT DEFAULT ''")
+    if "prompt_text" not in {r["name"] for r in q("PRAGMA table_info(task_runs)")}:
+        db().execute("ALTER TABLE task_runs ADD COLUMN prompt_text TEXT DEFAULT ''")
     db().commit()
 
 

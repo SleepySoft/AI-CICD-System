@@ -32,7 +32,7 @@
 | FR-MGR-002 | Agent 终端 | what/manager.md §前端页面 | chronicler/components/terminal-runtime/（可选隔离沙箱，ADR-0021） | 人工：部署 terminal-runtime 后访问 term.localhost/ui |
 | FR-MGR-003 | 代码源管理 | what/manager.md §数据模型 | chronicler/（M2 规划） | 待实现（M2） |
 | FR-MGR-004 | 任务多方式触发 | what/manager.md §数据模型 | chronicler/（M2-M3 规划） | 待实现（M3） |
-| FR-MGR-005 | 一切皆 Run | what/manager.md §数据模型 | chronicler/app/runner.py（输入快照已冻结；重放/重跑待续） | 人工：查看 Run 输入快照 |
+| FR-MGR-005 | 一切皆 Run | what/manager.md §数据模型 | chronicler/app/runner.py（输入快照 + prompt 全文落库 + 状态悬挂扫描）+ chronicler/app/tasks.py（调度器每分钟调用） | 人工：查看 Run 输入快照与「提示词」；悬挂 Run 自动转失败 |
 | FR-MGR-006 | SSE 实时日志 | what/manager.md §API 概要 | chronicler/（M2 规划） | 待实现（M2） |
 | FR-MGR-007 | 内置六类任务 | what/manager.md §任务类型框架 | chronicler/prompts/（六类模板齐备）；执行依赖真实 harness 配置 | 人工：触发各任务类型产生 Run |
 | FR-MGR-008 | 报告分级可见 | what/manager.md §权限规格 | chronicler/（M3 规划） | 待实现（M3） |
@@ -46,8 +46,8 @@
 | FR-MGR-016 | 任务来源适配与降级 | what/manager.md §任务类型框架 | chronicler/（M3 规划） | 待实现（M3） |
 | FR-MGR-017 | 分角色鉴权与可插拔鉴权后端 | what/manager.md §权限规格 | chronicler/app/auth.py + routers/users.py + routers/oidc.py（local/oidc 双后端，ADR-0023） | scripts/verify-chronicler.sh（401）；scripts/wire-chronicler.sh（oidc 接线） |
 | FR-MGR-018 | 全局组件配置 | what/manager.md §数据模型 | chronicler/config/components.yaml + chronicler/app/registry.py | 人工：改 enabled 后观察 prompt 注入变化 |
-| FR-MGR-019 | Agent harness 登记（命令模板） | what/manager.md §数据模型 | chronicler/config/harness.yaml + chronicler/app/runner.py（ADR-0021） | 人工：登记 harness 后触发 Run |
-| FR-MGR-020 | 工程实体与配置覆盖 | what/manager.md §数据模型 | chronicler/app/projects.py | 人工：建工程+覆盖项触发 Run |
+| FR-MGR-019 | Agent harness 登记（命令模板） | what/manager.md §数据模型 | chronicler/config/harness.yaml + chronicler/app/registry.py + chronicler/app/routers/config.py + chronicler/app/runner.py + chronicler/app/tasks.py + chronicler/app/db.py（ADR-0021） | 人工：配置页增删改 harness 并触发 Run（agent-onboarding.md） |
+| FR-MGR-020 | 工程实体与配置覆盖 | what/manager.md §数据模型 | chronicler/app/projects.py + chronicler/config/settings.yaml（全局默认 harness） | 人工：建工程+覆盖项触发 Run；配置页切全局默认后触发 |
 | FR-MGR-021 | 工程分析策略配置 | what/manager.md §任务类型框架 | chronicler/（M3 规划） | 待实现（M3） |
 | FR-MGR-022 | 组件生命周期管理 | what/manager.md §前端页面 | chronicler/app/tools.py + chronicler/components/（ADR-0027） | 人工：自启开关重启验证/日志/详情/一键部署 |
 | FR-MGR-023 | 组件自检 | chronicler/app/testing.py | chronicler/app/testing.py + 组件 hooks/test.py | CI：Jenkins chronicler-selftest（push 触发）；本地 `python -m chronicler test [--deploy]` |

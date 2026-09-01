@@ -1,25 +1,36 @@
 # Agent harness 注册表（ADR-0021：用户自装 harness，supervisor 只登记命令模板）
-# 新增一家 agent = 此处一条记录；安装/登录由用户在其宿主自行完成。
+# 新增一家 agent = 此处一条记录（或配置页「新增 Harness」，admin 操作会写入
+# data/private/chronicler/config/harness.yaml 覆盖文件）；安装/登录由用户在其宿主自行完成。
+#
 # 字段：
-#   name              唯一标识
-#   command_template  启动命令模板，支持变量：{prompt_file} {report_file} {repo_dir}
-#                     以 shell 执行（cwd = 工程仓库目录）
+#   name              唯一标识（英数连字符）
+#   desc              一句话描述（页面展示用）
+#   command_template  启动命令模板，以 shell 执行。支持变量：
+#                     {prompt_file} {report_file} {repo_dir} {shadow_dir}
+#                     （均按当前平台正确加引号；cwd 默认 = 工程仓库目录）
+#   stdin_prompt      true = prompt 全文经 stdin 管道传入（如 kimi/codex 的 stdin 模式）；
+#                     false/缺省 = harness 自己读 {prompt_file}（如 aider --message-file）
+#   report_mode       file（缺省）= harness 写 {report_file}（如 codex -o）；
+#                     stdout = supervisor 捕获 stdout 落为报告（如 kimi --print）
+#   cwd               repo（缺省，工程仓库目录）| shadow（工程 shadow 库目录）
 #   session           会话能力声明：once（一次性，v1 仅此）| persistent（预留，TBD）
 #   env               注入的环境变量；"${VAR}" 从 supervisor 进程环境解析（密钥不落明文）
 #   timeout_sec       单次执行超时
 harnesses:
   - name: aider
-    desc: AI pair programming（OpenAI 兼容接口）
+    desc: AI pair programming（OpenAI 兼容接口；prompt 走 --message-file，报告需 harness 落盘）
     command_template: "aider --message-file {prompt_file} --yes-always --no-auto-commits"
+    report_mode: file
     session: once
     env:
       OPENAI_API_BASE: https://api.moonshot.cn/v1
       OPENAI_API_KEY: "${LLM_API_KEY}"
     timeout_sec: 1800
   - name: kimi
-    desc: Kimi CLI（本机已装已登录；print 非交互模式，prompt 经 stdin 传入）
+    desc: Kimi CLI（本机已装已登录；print 非交互模式，prompt 经 stdin 传入，报告取 stdout）
     command_template: "kimi --print --output-format text --input-format text -w {repo_dir}"
     stdin_prompt: true            # prompt 全文经 stdin 管道传入（--input-format text 要求）
+    report_mode: stdout           # kimi 输出在 stdout，supervisor 捕获为报告
     session: once
     env:
       PYTHONUTF8: "1"             # kimi 是 Python 应用；Windows GBK 控制台会炸（实测 U+2212）
@@ -29,20 +40,24 @@ harnesses:
     desc: Kimi CLI 续会话模式（--continue：延续该工程目录的上次会话，保持上下文）
     command_template: "kimi --print --output-format text --input-format text --continue -w {repo_dir}"
     stdin_prompt: true
+    report_mode: stdout
     session: once                 # 进程一次性；上下文由 kimi 自身会话存储续接（ADR-0021 resume 语义落地）
     env:
       PYTHONUTF8: "1"
       PYTHONIOENCODING: "utf-8"
     timeout_sec: 1800
-  - name: shell
-    desc: 冒烟测试用假 harness：不做 AI 调用，把 prompt 原样写成报告（跨平台 python 一行）
-    command_template: "python -c \"import shutil,sys;shutil.copyfile(sys.argv[1],sys.argv[2])\" {prompt_file} {report_file}"
+  - name: codex
+    desc: OpenAI Codex CLI（exec 非交互；prompt 经 stdin，报告经 -o 写文件，read-only 沙箱）
+    command_template: "codex exec --skip-git-repo-check --sandbox read-only -C {repo_dir} -o {report_file}"
+    stdin_prompt: true
+    report_mode: file             # codex 用 -o 自己写报告文件
     session: once
     env: {}
-    timeout_sec: 60
-  - name: shell-shadow
-    desc: 冒烟测试用假 harness（shadow 版）：写一张测试卡片进 shadow 库 + 复制 prompt 为报告
+    timeout_sec: 3600
+  - name: dummy
+    desc: 冒烟测试用假 harness：不做 AI 调用，写一张测试卡片进 shadow 库 + 把 prompt 原样复制为报告
     command_template: "python -c \"from pathlib import Path;import shutil,sys;Path(sys.argv[1],'know-how').mkdir(parents=True,exist_ok=True);Path(sys.argv[1],'know-how','smoke-card.md').write_text('# smoke card',encoding='utf-8');shutil.copyfile(sys.argv[2],sys.argv[3])\" {shadow_dir} {prompt_file} {report_file}"
+    report_mode: file
     session: once
     env: {}
     timeout_sec: 60

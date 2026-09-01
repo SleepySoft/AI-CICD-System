@@ -47,9 +47,10 @@ bash scripts/verify-chronicler.sh    # WSL；Windows 用浏览器访问 http://1
 | 断点调试 | supervisor 是普通本地进程（ADR-0020 的红利）：PyCharm/VS Code 直接调试 `chronicler/__main__.py`（已内置包上下文垫片，脚本模式也能跑）；更规范的做法是运行配置选 **Module name: `chronicler`**（等价 `python -m chronicler`） |
 | 热重载 | `uvicorn chronicler.app.main:app --reload --port 8600`（改 Python 即重启） |
 | 前端 | 改 `chronicler/app/static/*` 后**刷新浏览器即可**，无需重启 |
-| 配置 | `chronicler/config/harness.yaml` 与组件 `plugin.yaml` 改文件即热生效；`data/private/chronicler/config/` 同名文件覆盖内置 |
+| 配置 | `chronicler/config/harness.yaml`、`chronicler/config/settings.yaml` 与组件 `plugin.yaml` 改文件即热生效；`data/private/chronicler/config/` 同名文件覆盖内置；页面「配置」可改全局默认 harness 与增删改 harness（admin，同样落 DATA 覆盖） |
 | 服务日志 | 前台终端直接看；systemd 常驻用 `journalctl --user -u chronicler` |
 | Run 日志 | `data/private/chronicler/runs/<run_id>/run.log`（或页面「任务」→ 日志） |
+| Run 提示词 | `data/private/chronicler/runs/<run_id>/prompt.md`（或页面「任务」→ 提示词；渲染后全文同时落库 task_runs.prompt_text） |
 | 容器日志 | 首页组件卡片「日志」按钮，或 `docker logs aisystem-<name>-1` |
 | 数据库 | `data/private/chronicler/chronicler.db`（SQLite，可用 `sqlite3` 或 DBeaver 直查） |
 

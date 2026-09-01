@@ -1,0 +1,3 @@
+# 全局设置（配置页可改，admin 保存后写入 data/private/chronicler/config/settings.yaml 覆盖文件）
+# default_harness: 任务未配置工程级覆盖时使用的 harness（页面「配置」可切换）
+default_harness: dummy

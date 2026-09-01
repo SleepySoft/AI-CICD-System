@@ -22,6 +22,10 @@
     .log-view { background: #1e1e1e; color: #d4d4d4; font-family: Consolas, "Courier New", monospace; font-size: 12px; line-height: 1.35; padding: 12px; border-radius: 6px; white-space: pre-wrap; word-break: break-all; overflow: auto; height: 60vh; margin: 0; }
     .mono textarea { font-family: Consolas, "Courier New", monospace; font-size: 12px; }
     .muted { color: #909399; font-size: 12px; }
+    @keyframes run-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+    .run-blink { animation: run-blink 1.8s ease-in-out infinite; }
+    @keyframes run-row-pulse { 0%,100% { background-color: transparent; } 50% { background-color: rgba(64,158,255,0.14); } }
+    .el-table .run-row-active > td.el-table__cell { animation: run-row-pulse 2.4s ease-in-out infinite; }
   </style>
 </head>
 <body>
@@ -185,6 +189,12 @@
                   <span style="font-family:Consolas,monospace">{{ row.schedule_cron || '（手动）' }}</span>
                 </template>
               </el-table-column>
+              <el-table-column label="工作目录" width="100">
+                <template #default="{ row }">
+                  <el-tag v-if="row.cwd" size="small" type="warning" effect="plain">{{ row.cwd }}</el-tag>
+                  <span v-else class="muted">默认</span>
+                </template>
+              </el-table-column>
               <el-table-column label="启用" width="80">
                 <template #default="{ row }">
                   <el-switch v-if="isAdmin" :model-value="!!row.enabled" size="small" @change="v => toggleTaskEnabled(row, v)"></el-switch>
@@ -213,7 +223,7 @@
             <el-button size="small" @click="loadRuns" :loading="loadingRuns">刷新</el-button>
             <el-button v-if="isAdmin" size="small" type="primary" @click="openTrigger">触发任务</el-button>
           </div>
-          <el-table :data="runs" size="small" style="width:100%">
+          <el-table :data="runs" size="small" style="width:100%" :row-class-name="runRowClass">
             <el-table-column prop="id" label="ID" width="70"></el-table-column>
             <el-table-column label="工程" width="140">
               <template #default="{ row }">{{ projectName(row.project_id) }}</template>
@@ -221,7 +231,10 @@
             <el-table-column prop="task_type" label="任务类型" width="140"></el-table-column>
             <el-table-column label="状态" width="90">
               <template #default="{ row }">
-                <el-tag :type="runTagType(row.status)" size="small">{{ runStatusText(row.status) }}</el-tag>
+                <el-tag :type="runTagType(row.status)" size="small"
+                        :class="{ 'run-blink': row.status === 'running' || row.status === 'queued' }">
+                  {{ runStatusText(row.status) }}
+                </el-tag>
               </template>
             </el-table-column>
             <el-table-column prop="harness" label="Harness" width="110" show-overflow-tooltip></el-table-column>
@@ -229,10 +242,13 @@
               <template #default="{ row }">{{ fmtTime(row.started_at) }}</template>
             </el-table-column>
             <el-table-column prop="error" label="错误" show-overflow-tooltip></el-table-column>
-            <el-table-column label="操作" width="130">
+            <el-table-column label="操作" width="200">
               <template #default="{ row }">
-                <el-button size="small" text type="primary" @click="openLog(row)">日志</el-button>
-                <el-button size="small" text @click="openReport(row)">报告</el-button>
+                <div style="white-space:nowrap">
+                  <el-button size="small" text type="primary" @click="openLog(row)">日志</el-button>
+                  <el-button size="small" text @click="openRunPrompt(row)">提示词</el-button>
+                  <el-button size="small" text @click="openReport(row)">报告</el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -241,11 +257,30 @@
 
         <!-- ============ 配置 ============ -->
         <el-tab-pane label="配置" name="config">
+          <div class="group-title">全局默认 Harness</div>
+          <div class="card-box" style="max-width:640px">
+            <div class="tool-desc">任务未设置工程级覆盖时使用的 agent（FR-MGR-020）。注意：若某工程在「工程设置 → Agent harness 覆盖」配置了值，该工程以工程覆盖为准，不受这里影响。</div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <el-select v-model="defaultHarness" :disabled="!isAdmin" style="flex:1">
+                <el-option v-for="h in harnesses" :key="h.name" :label="h.name + ' — ' + h.desc" :value="h.name"></el-option>
+              </el-select>
+              <el-button v-if="isAdmin" type="primary" @click="saveDefaultHarness" :loading="acting">保存默认</el-button>
+            </div>
+          </div>
           <div class="group-title">Harness 列表</div>
+          <div v-if="isAdmin" style="margin-bottom:10px">
+            <el-button size="small" type="primary" plain @click="openHarnessForm(null)">+ 新增 Harness</el-button>
+          </div>
           <div class="card-box" v-for="h in harnesses" :key="h.name">
             <div class="tool-name">{{ h.name }}
-              <el-tag v-if="h.session" size="small" effect="plain">会话</el-tag>
+              <el-tag v-if="h.stdin_prompt" size="small" type="success" effect="plain">stdin</el-tag>
+              <el-tag size="small" type="info" effect="plain">报告:{{ h.report_mode === 'stdout' ? 'stdout' : '文件' }}</el-tag>
+              <el-tag size="small" type="info" effect="plain">cwd:{{ h.cwd }}</el-tag>
               <el-tag size="small" type="info" effect="plain">超时 {{ h.timeout_sec }}s</el-tag>
+              <span v-if="isAdmin" style="float:right">
+                <el-button size="small" text type="primary" @click="openHarnessForm(h)">编辑</el-button>
+                <el-button size="small" text type="danger" @click="removeHarness(h)">删除</el-button>
+              </span>
             </div>
             <div class="tool-desc">{{ h.desc }}</div>
             <div class="muted" style="font-family:Consolas,monospace">{{ h.command_template }}</div>
@@ -373,6 +408,51 @@
       </template>
     </el-dialog>
 
+    <!-- Harness 编辑（新增/编辑，admin；写入 DATA 覆盖 harness.yaml） -->
+    <el-dialog v-model="showHarnessForm" :title="editingHarnessName ? '编辑 Harness - ' + editingHarnessName : '新增 Harness'" width="720px">
+      <el-form label-position="top" size="small">
+        <el-form-item label="name（唯一标识，英数/连字符/下划线，保存后不可改）">
+          <el-input v-model="harnessForm.name" :disabled="!!editingHarnessName" placeholder="my-agent"></el-input>
+        </el-form-item>
+        <el-form-item label="desc（一句话描述）"><el-input v-model="harnessForm.desc"></el-input></el-form-item>
+        <el-form-item label="command_template（shell 执行，cwd 见下方；变量 {prompt_file} {report_file} {repo_dir} {shadow_dir}）">
+          <el-input v-model="harnessForm.command_template" type="textarea" :rows="3"
+                    placeholder="codex exec --skip-git-repo-check --sandbox read-only -C {repo_dir} -o {report_file}"></el-input>
+        </el-form-item>
+        <el-form-item label="prompt 传入方式">
+          <el-radio-group v-model="harnessForm.prompt_mode">
+            <el-radio-button label="stdin">stdin 管道</el-radio-button>
+            <el-radio-button label="file">{prompt_file} 文件</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="报告产出方式">
+          <el-radio-group v-model="harnessForm.report_mode">
+            <el-radio-button label="file">harness 写 {report_file}</el-radio-button>
+            <el-radio-button label="stdout">supervisor 捕获 stdout</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="工作目录">
+          <el-radio-group v-model="harnessForm.cwd">
+            <el-radio-button label="repo">工程仓库</el-radio-button>
+            <el-radio-button label="shadow">shadow 库</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="超时（秒）"><el-input-number v-model="harnessForm.timeout_sec" :min="10" :step="60"></el-input-number></el-form-item>
+        <el-form-item label="环境变量（值含 ${VAR} 时从 supervisor 进程环境解析，密钥不落明文；编辑时已有键值不回显，留空=保持原值）">
+          <div v-for="(row, i) in harnessForm.env" :key="i" style="display:flex;gap:6px;margin-bottom:6px;width:100%">
+            <el-input v-model="row.key" placeholder="VAR_NAME" style="width:220px"></el-input>
+            <el-input v-model="row.value" placeholder="值、${VAR} 引用或留空保持原值" style="flex:1"></el-input>
+            <el-button @click="harnessForm.env.splice(i,1)">-</el-button>
+          </div>
+          <el-button size="small" text type="primary" @click="harnessForm.env.push({key:'',value:''})">+ 环境变量</el-button>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showHarnessForm = false">取消</el-button>
+        <el-button type="primary" @click="saveHarness" :loading="acting">保存</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 新建任务 -->
     <el-dialog v-model="showNewTask" title="新建任务" width="520px">
       <el-form label-position="top" size="small">
@@ -385,6 +465,12 @@
         <el-form-item label="任务类型">
           <el-select v-model="newTaskForm.task_type" style="width:100%" placeholder="选择预置模板">
             <el-option v-for="p in prompts" :key="p.task_type" :label="p.task_type + '（' + p.version + '）'" :value="p.task_type"></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="工作目录（留空=harness 默认；repo=工程仓库，shadow=shadow 库）">
+          <el-select v-model="newTaskForm.cwd" clearable placeholder="harness 默认" style="width:100%">
+            <el-option label="repo（工程仓库）" value="repo"></el-option>
+            <el-option label="shadow（shadow 库）" value="shadow"></el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="调度 cron（留空=仅手动触发）"><el-input v-model="newTaskForm.schedule_cron" placeholder="0 9 * * *"></el-input></el-form-item>
@@ -400,6 +486,12 @@
     <el-dialog v-model="showTaskEdit" :title="'编辑任务 - ' + (taskEditRow?.name || '')" width="600px">
       <el-form label-position="top" size="small">
         <el-form-item label="任务名称"><el-input v-model="taskEditForm.name"></el-input></el-form-item>
+        <el-form-item label="工作目录（留空=harness 默认；repo=工程仓库，shadow=shadow 库）">
+          <el-select v-model="taskEditForm.cwd" clearable placeholder="harness 默认" style="width:100%">
+            <el-option label="repo（工程仓库）" value="repo"></el-option>
+            <el-option label="shadow（shadow 库）" value="shadow"></el-option>
+          </el-select>
+        </el-form-item>
         <el-form-item label="调度 cron（留空=仅手动触发）"><el-input v-model="taskEditForm.schedule_cron" placeholder="0 9 * * *"></el-input></el-form-item>
         <el-form-item label="启用"><el-switch v-model="taskEditForm.enabled"></el-switch></el-form-item>
         <el-form-item label="Webhook（预留，暂未开放）">
@@ -462,6 +554,11 @@
     <!-- 报告 -->
     <el-dialog v-model="showReport" :title="'任务 #' + reportRunId + ' 报告'" width="80%" top="6vh">
       <pre class="log-view">{{ reportText }}</pre>
+    </el-dialog>
+
+    <!-- 本次执行的提示词（A 段快照） -->
+    <el-dialog v-model="showRunPrompt" :title="'任务 #' + runPromptId + ' 本次提示词'" width="80%" top="6vh">
+      <pre class="log-view">{{ runPromptText || '（暂无记录）' }}</pre>
     </el-dialog>
 
     <!-- 重置密码（OIDC 模式管理员通道） -->
