@@ -1,8 +1,8 @@
 # Chronicler（supervisor）规格（数据模型 / API / 任务框架 / 权限 / 页面）
 
-> 版本：v1.3 · 日期：2026-08-27 · 状态：生效
+> 版本：v1.4 · 日期：2026-09-02 · 状态：生效
 > 定位：Chronicler（原 Manager，宿主侧 supervisor，ADR-0020/0022）对外可见的契约与规格；内部机制（架构、执行管线、CI 集成）见 ../how/manager-architecture.md
-> 关联需求：FR-MGR-001 ~ FR-MGR-021、FR-TASK-002、FR-TASK-003、BR-008
+> 关联需求：FR-MGR-001 ~ FR-MGR-026、FR-TASK-002、FR-TASK-003、BR-008
 > v1 实现注记：存储 SQLite（ADR-0023），鉴权本地账密 admin/user（Keycloak 后端预留），agent 为宿主自装 harness（ADR-0021）；仍属规划的能力在文中标注
 
 ## 1. WHY
@@ -16,7 +16,8 @@ Manager 是环境之上的"管理程序"：配置代码源、配置 Agent、编�
 ```
 repo_source        代码源：name, url(任意 git 远端，含 GitHub/Gitea), auth(ssh key/token 引用),
                    default_branch, sync_cron, last_synced_at, last_commit,
-                   shadow_repo(project_shadow 影子库 URL，FR-MGR-013)
+                   shadow_repo(project_shadow 影子库 URL，FR-MGR-013),
+                   publish_policy(JSON：按产物类型配置 review|direct|local，FR-MGR-026)
 agent_profile      Agent harness 配置：name, command(可执行命令 + 参数模板，如 --yolo),
                    prompt_form(file|stdin), report_form(file|stdout), cwd(repo|shadow),
                    session_cap(persistent|oneshot|resume，会话能力声明), model, base_url,
@@ -30,8 +31,9 @@ task_def           任务定义：name, type(见 §2.3), repo_ids[], agent_id, p
 task_run           一次执行：详细字段见 §2.1.1 Run 档案契约（FR-MGR-005）
 report             报告：run_id, title, type, visibility, md_path, summary, created_at,
                    reviewed(bool), reviewer
-review_item        待审区条目：run_id, kind(knowhow|doc|common-module|...),
-                   payload(JSON/diff), status(pending|approved|rejected), decided_by
+review_item        待审区条目：run_id, kind(knowhow|doc|common-module|...), git_repo,
+                   base_branch, head_branch, commit_sha, pr_number, pr_url,
+                   status(pending|approved|rejected|merged|conflict), decided_by
 asset              可复用资产索引：scope(project|global), kind(experience|component),
                    source_run_id, git_repo, git_path, status(pending|approved|promoted),
                    title, summary, created_at —— 内容本体在 git（NFR-009），DB 仅存索引
@@ -84,6 +86,8 @@ artifacts[]        每个产物：kind(report|doc|knowhow|code-snippet)、path�
                    【v1】（报告类产物已记；doc/knowhow 类随 M3/M4）
 artifact_commit    产物落入 git 的提交 SHA（报告库/shadow 库/目标仓库）
                    【v1】shadow 仓提交 SHA 已回填（ADR-0028）
+publication        mode(review|direct|local)、base_commit、branch、push_status、
+                   pr_number、pr_url、publish_error（与 Run 执行状态独立）
 review_refs[]      关联的待审区条目（FR-MGR-009）
 asset_refs[]       上升入资产库的条目（FR-MGR-013/014）
 ```
@@ -138,6 +142,18 @@ GET    /api/health                   供 Uptime Kuma
 
 自定义任务：选 repo + agent + prompt + cron 即成新任务（`type=custom`）。
 
+### 2.3.1 Git 发布与审核契约
+
+FR-MGR-009/013/014/026 共用同一个 Git 变更审核模型，完整决策见 ../adr/0033-chronicler-owned-git-publication.md：
+
+- Agent harness 只生成约定内容；分支准备、`git add/commit`、push 与创建 PR 均由 Chronicler 执行，仓库写凭据不注入 harness。
+- `review`：从目标默认分支基线创建 `chronicler/task-<task_id>/run-<run_id>`，提交并推送后创建 Gitea PR；页面展示来源 Run、文件列表、diff 与 PR 链接，人工在合并前审核。
+- `direct`：不创建 PR；仅当远端默认分支仍等于 Run 基线时推送，基线变化则标记冲突，禁止 force push。
+- `local`：创建本地提交但不推送，适用于未配置远端或离线场景。
+- 文档与项目内知识默认采用工程配置；项目经验提升到全局资产库始终产生独立的 `review` 变更，不能继承项目的 `direct` 策略。
+- Run 的分析状态与发布状态相互独立；内容生成成功后，push 或建 PR 失败只令发布进入可重试的失败状态，不重新调用 Agent。
+- Gitea 是首个 PR provider；其它 Git 远端在没有 provider 适配器时可使用 `direct/local`，或仅推送审核分支并给出外部建 PR 提示。
+
 ### 2.4 权限规格（FR-MGR-008、FR-MGR-017）
 
 - 鉴权后端可插拔（ADR-0023）：`local` 本地账密（零依赖默认）/ `oidc` Keycloak（`CHRONICLER_AUTH_BACKEND` 切换，接线见 ../runbooks/deploy.md 与 scripts/wire-chronicler.sh）。
@@ -149,7 +165,7 @@ GET    /api/health                   供 Uptime Kuma
 ### 2.5 前端页面清单
 
 v1 已落地：`/login`（SSO 主入口 + 本地应急） · 首页（组件卡片：状态/启停/自启开关/日志/详情，FR-ENV-003、FR-MGR-022） · 工程（登记/同步/覆盖项） · 任务（Run 列表/日志/报告/触发） · 配置（全局默认 harness 选择 + harness 增删改，FR-MGR-019/020；components/prompts 查看，prompts 可编辑） · 用户管理(admin)。
-规划：`/` 项目全景（FR-MGR-012） · `/reports` 报告中心 · `/assets` 资产库（FR-MGR-013/014） · `/review` 待审区 · `/settings` 系统设置（FR-MGR-015）
+规划：`/` 项目全景（FR-MGR-012） · `/reports` 报告中心 · `/assets` 资产库（FR-MGR-013/014） · `/review` Git 变更审核（文件 diff、PR 状态、批准/驳回/外部链接） · `/settings` 系统设置（FR-MGR-015）
 
 ### 2.6 里程碑
 
@@ -158,7 +174,7 @@ v1 已落地：`/login`（SSO 主入口 + 本地应急） · 首页（组件卡�
 | M1 骨架 ✅ | FastAPI + OIDC + 工具总览 + Agent 终端 + 接入 compose | boss/dev 登录看到不同视图 |
 | M2 代码源与执行器 | repo 同步 + harness 执行器（宿主直起）+ 手动触发 + SSE 日志 | 跑一次"总结 README"任务看流式日志 |
 | M3 内置任务 | 6 类内置任务 + prompt 库 + 报告中心 | 日报/gap 报告产出，可见性正确 |
-| M4 待审闭环 | review 区 + 卡片转正 + shadow/全局资产库 + 文档站更新 | 蒸馏卡片审批后入 project_shadow 并可检索，可上升全局库 |
+| M4 待审闭环 | Git review 区 + 文档/卡片 PR + shadow/全局资产库 + 文档站更新 | 页面可查看 Run 产物 diff；项目经验经两级审核上升全局库；可配置 direct/local |
 | M5 CI 综合 | Jenkins 结果接入 + 综合报告 + webhook 触发 | 综合报告含构建结果；push 触发任务 |
 | M6 加固 | supervisor Nuitka 打包 + prompt 加密 + 审计 + 限流 | 二进制内无源码与明文 prompt |
 

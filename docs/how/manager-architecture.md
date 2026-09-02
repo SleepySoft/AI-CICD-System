@@ -1,8 +1,8 @@
 # Manager 架构与执行机制
 
-> 版本：v1.2 · 日期：2026-09-01 · 状态：生效
+> 版本：v1.3 · 日期：2026-09-02 · 状态：生效
 > 定位：Manager 的内部实现机制（架构、执行管线、CI 集成、部署形态）；规格契约见 ../what/manager.md
-> 关联需求：FR-MGR-003 ~ FR-MGR-011
+> 关联需求：FR-MGR-003 ~ FR-MGR-026
 
 ## 1. WHY / WHAT 摘要
 
@@ -50,11 +50,25 @@ FastAPI + SQLAlchemy 2 + Alembic（异步、自带 OpenAPI）；APScheduler（As
        不可信/CI 任务可选 terminal-runtime 沙箱执行）
   → 流式回传日志(SSE)；超时/异常 → Run(failed) + 错误归因(网络/配额/解析失败)
   → output_parser 解析（约定产出为 frontmatter+Markdown，或 JSON 指令块）
-  → persister：报告→reports/ 卷+元数据入库；知识卡片→ai-inbox/；索引→Qdrant
+  → persister：报告/文档/知识候选写入 project_shadow 工作树并登记产物
+  → Git publisher：Chronicler 按 review|direct|local 策略提交；review 模式推送任务分支并创建 Gitea PR
   → 通知：门户角标 + 可选 webhook（企业微信/邮件，后置）
 ```
 
-并发控制：全局信号量（默认 2 个并发 Run）+ 每仓库串行锁（避免同仓库并发分析造成 diff 基线错乱）。
+并发控制：全局信号量（默认 2 个并发 Run）+ 每工程代码仓串行锁 + 每 shadow 仓串行锁。shadow 锁覆盖分支准备、Agent 写入、提交与工作树恢复，避免不同 harness 并发切换同一工作树；harness 自身仍可因全局状态另设串行锁。
+
+### 2.3.1 Git 发布管线（FR-MGR-009/013/014/026）
+
+1. Run 创建后冻结目标默认分支及 `base_commit`；Chronicler 获取对应 shadow 仓锁。
+2. `review` 模式从基线创建 `chronicler/task-<task_id>/run-<run_id>`；`direct` 和 `local` 也先在隔离任务分支完成内容生成，避免 Agent 直接改变默认分支。
+3. Agent 仅写产物；Chronicler 检查工作树、记录文件清单，以固定机器身份执行 `git add/commit`，提交信息包含 Run/Task ID。
+4. `review` 将任务分支 push 到远端，通过 Gitea `POST /api/v1/repos/{owner}/{repo}/pulls` 创建 PR；以 repo + head branch 查询已有 PR，使失败重试不重复创建。
+5. `direct` 在 push 前 fetch 并比较远端默认分支与 `base_commit`；一致时将任务提交快进到默认分支，不一致则 `publish_status=conflict`，不自动 rebase、不 force push。
+6. `local` 保留本地任务分支与提交，不访问远端。
+7. 发布结果单独记录为 `pending|local|pushed|pr_created|merged|conflict|failed`；发布失败可从既有提交重试，不重新执行 harness。
+8. 项目经验提升全局时，从已批准的项目提交复制候选内容并附来源元数据，在全局资产库创建新的任务分支与 PR；它是独立审核，不做跨仓库 Git merge。
+
+Gitea 凭据仅由 Chronicler 的 Git publisher/API client 读取。PR 首版由 Gitea 页面完成批准与合并，Chronicler 审核页负责展示 diff、状态和跳转；后续可增加代理合并 API，但不改变上述提交所有权。
 
 ### 2.4 CI/CD 集成（只消费、不越界）
 
@@ -85,3 +99,4 @@ FastAPI + SQLAlchemy 2 + Alembic（异步、自带 OpenAPI）；APScheduler（As
 | 运行拓扑 | docker 宿主侧 supervisor，跟随 dockerd 同环境部署（推翻容器化+引导器） | ../adr/0020-manager-out-of-docker-supervisor.md |
 | Agent 执行位置 | 用户自装 harness，宿主执行；terminal-runtime 降为可选沙箱（部分推翻 ADR-0017） | ../adr/0021-agent-user-installed-harness.md |
 | v1 形态 | SQLite + 本地账密 + 一次性会话（闭环 ADR-0022 悬置的单机瘦身项） | ../adr/0023-supervisor-v1-form.md |
+| AI 产物 Git 发布 | Agent 只生成内容；Chronicler 统一分支、提交、push、建 PR；全局提升强制二次审核 | ../adr/0033-chronicler-owned-git-publication.md |

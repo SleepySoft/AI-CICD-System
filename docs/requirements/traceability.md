@@ -1,6 +1,6 @@
 # 追溯矩阵
 
-> 版本：v1.4 · 日期：2026-09-01 · 状态：生效
+> 版本：v1.5 · 日期：2026-09-02 · 状态：生效
 > 定位：需求 ID ↔ 设计章节 ↔ 实现位置 ↔ 验证手段。Agent 做 gap 分析的输入；改代码必须同步本表。
 
 ## 功能需求（FR）
@@ -36,12 +36,12 @@
 | FR-MGR-006 | SSE 实时日志 | what/manager.md §API 概要 | chronicler/（M2 规划） | 待实现（M2） |
 | FR-MGR-007 | 内置六类任务 | what/manager.md §任务类型框架 | chronicler/prompts/（六类模板齐备）；执行依赖真实 harness 配置 | 人工：触发各任务类型产生 Run |
 | FR-MGR-008 | 报告分级可见 | what/manager.md §权限规格 | chronicler/（M3 规划） | 待实现（M3） |
-| FR-MGR-009 | 待审闭环 | what/manager.md §数据模型 | chronicler/（M4 规划） | 待实现（M4） |
+| FR-MGR-009 | 待审闭环 | what/manager.md §Git 发布与审核契约 | chronicler/（M4 规划；ADR-0033） | 待实现（M4）：创建 PR 后在审核页查看 diff 并批准/驳回 |
 | FR-MGR-010 | CI 结果消费 | what/manager.md §数据模型 | chronicler/app/runner.py _ci_context（最小实现：快照记录同期构建） | 人工：Run 快照含 ci_context |
 | FR-MGR-011 | Prompt 库版本化 | what/manager.md §数据模型 | chronicler/（M3 规划） | 待实现（M3） |
 | FR-MGR-012 | 项目全景仪表盘 | what/manager.md §前端页面 | chronicler/（M3 规划） | 待实现（M3） |
 | FR-MGR-013 | 项目影子库 | what/manager.md §数据模型 | chronicler/app/projects.py（ensure_shadow_repo + Gitea 自动建仓）+ runner._commit_shadow（ADR-0028） | 人工：触发任务后查 artifacts 的 commit/pushed 与 Gitea 仓 |
-| FR-MGR-014 | 全局资产库 | what/manager.md §数据模型 | chronicler/（M4 规划） | 待实现（M4） |
+| FR-MGR-014 | 全局资产库 | what/manager.md §Git 发布与审核契约 | chronicler/（M4 规划；ADR-0033） | 待实现（M4）：项目经验提升产生全局库 PR，审核合并后进入默认分支 |
 | FR-MGR-015 | 资源能力注入（skill 化） | what/manager.md §契约要点 | chronicler/app/registry.py（injectable_components）+ chronicler/components/\<name\>/SKILL.md（ADR-0024/0025） | 人工：触发 Run 后查 prompt 快照含 SKILL 路径 |
 | FR-MGR-016 | 任务来源适配与降级 | what/manager.md §任务类型框架 | chronicler/（M3 规划） | 待实现（M3） |
 | FR-MGR-017 | 分角色鉴权与可插拔鉴权后端 | what/manager.md §权限规格 | chronicler/app/auth.py + routers/users.py + routers/oidc.py（local/oidc 双后端，ADR-0023） | scripts/verify-chronicler.sh（401）；scripts/wire-chronicler.sh（oidc 接线） |
@@ -53,6 +53,7 @@
 | FR-MGR-023 | 组件自检 | chronicler/app/testing.py | chronicler/app/testing.py + 组件 hooks/test.py | CI：Jenkins chronicler-selftest（push 触发）；本地 `python -m chronicler test [--deploy]` |
 | FR-MGR-024 | 人机 Web 终端（Human Terminal） | what/manager.md §前端页面 | chronicler/components/sshwifty/（P0，ADR-0030）+ chronicler/app/terminal（P1 规划） | 人工：浏览器打开终端进入工作区，会话含注入上下文 |
 | FR-MGR-025 | 手动会话上下文注入 | what/manager.md §前端页面（P1 Human Terminal） | chronicler/（P1 规划；ADR-0032） | 待实现（P1） |
+| FR-MGR-026 | AI 产物 Git 发布策略 | what/manager.md §Git 发布与审核契约 | chronicler/app/runner.py + projects.py（当前仅 direct 雏形；review/local 与发布状态待实现，ADR-0033） | 待实现：分别验证 review/direct/local；review 重试不重复建 PR |
 | FR-TASK-001 | 任务前端提交 | what/task-mgmt.md §角色分工 | chronicler/components/openproject/ | 人工：建包后 API 检索 |
 | FR-TASK-002 | AI 任务领取 | what/task-mgmt.md §API 契约 | .agents/skills/openproject/（Manager M2 起自动化） | 人工：按 skill 领任务置 in progress |
 | FR-TASK-003 | AI 状态回写 | what/task-mgmt.md §状态机 | .agents/skills/openproject/ + OpenProject workflow 配置 | 人工：回写成功且置 closed 被拒 |
