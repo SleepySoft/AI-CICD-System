@@ -31,6 +31,10 @@ bash scripts/up.sh            # 底座接线（需 supervisor 已由主入口启
 bash scripts/wire-chronicler.sh   # 可选：Chronicler 切 Keycloak 统一登录（.env 设 CHRONICLER_AUTH_BACKEND=oidc）
 ```
 
+> **端口受限环境**（如公司电脑不允许占用 80）：在 `.env` 中设 `HTTP_PORT=8080` 后重启 Caddy
+> （`docker compose -f chronicler/components/caddy/compose.yml up -d --force-recreate caddy`），
+> 访问地址变为 `http://app.localhost:8080`。
+
 底座就绪后 Chronicler 经 `http://app.localhost` 访问（Caddy 回源宿主）。
 组件按需部署：首页点「部署」即可（部署定义在各组件目录 `chronicler/components/<name>/compose.yml`，
 如 openproject 需求管理、uptime-kuma 监控、ollama 本地模型、browsers、terminal-runtime 沙箱）。
