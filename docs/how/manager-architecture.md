@@ -51,7 +51,7 @@ FastAPI + SQLAlchemy 2 + Alembic（异步、自带 OpenAPI）；APScheduler（As
   → 流式回传日志(SSE)；超时/异常 → Run(failed) + 错误归因(网络/配额/解析失败)
   → output_parser 解析（约定产出为 frontmatter+Markdown，或 JSON 指令块）
   → persister：报告/文档/知识候选写入 project_shadow 工作树并登记产物
-  → Git publisher：Chronicler 按 review|direct|local 策略提交；review 模式推送任务分支并创建 Gitea PR
+  → Git publisher：当前由 Chronicler 以 direct 提交并推送 main；review/local 后续扩展
   → 通知：门户角标 + 可选 webhook（企业微信/邮件，后置）
 ```
 
@@ -59,13 +59,17 @@ FastAPI + SQLAlchemy 2 + Alembic（异步、自带 OpenAPI）；APScheduler（As
 
 ### 2.3.1 Git 发布管线（FR-MGR-009/013/014/026）
 
+当前已实现 direct 基础管线：冻结策略与 shadow HEAD → 获取 shadow 仓锁 → 确认工作树干净 → 切换或规范分支为 `main` → Agent 写产物 → Chronicler 提交 → push `HEAD:main` → 独立记录 publication。该路径不创建任务分支或 PR；远端默认分支基线比较尚未实现。
+
+以下为 ADR-0033 规定的完整目标管线，其中 review/local、direct 基线冲突保护和全局经验提升仍待实现：
+
 1. Run 创建后冻结目标默认分支及 `base_commit`；Chronicler 获取对应 shadow 仓锁。
-2. `review` 模式从基线创建 `chronicler/task-<task_id>/run-<run_id>`；`direct` 和 `local` 也先在隔离任务分支完成内容生成，避免 Agent 直接改变默认分支。
+2. `review` 模式从基线创建 `chronicler/task-<task_id>/run-<run_id>`；`local` 使用本地任务分支；`direct` 不建任务分支，直接在干净的目标默认分支生成和提交。
 3. Agent 仅写产物；Chronicler 检查工作树、记录文件清单，以固定机器身份执行 `git add/commit`，提交信息包含 Run/Task ID。
 4. `review` 将任务分支 push 到远端，通过 Gitea `POST /api/v1/repos/{owner}/{repo}/pulls` 创建 PR；以 repo + head branch 查询已有 PR，使失败重试不重复创建。
 5. `direct` 在 push 前 fetch 并比较远端默认分支与 `base_commit`；一致时将任务提交快进到默认分支，不一致则 `publish_status=conflict`，不自动 rebase、不 force push。
 6. `local` 保留本地任务分支与提交，不访问远端。
-7. 发布结果单独记录为 `pending|local|pushed|pr_created|merged|conflict|failed`；发布失败可从既有提交重试，不重新执行 harness。
+7. 发布结果单独记录；v1 direct 已产生 `pending|unchanged|local|pushed|failed`，完整流程扩展为 `pr_created|merged|conflict`；发布失败可从既有提交重试，不重新执行 harness。
 8. 项目经验提升全局时，从已批准的项目提交复制候选内容并附来源元数据，在全局资产库创建新的任务分支与 PR；它是独立审核，不做跨仓库 Git merge。
 
 Gitea 凭据仅由 Chronicler 的 Git publisher/API client 读取。PR 首版由 Gitea 页面完成批准与合并，Chronicler 审核页负责展示 diff、状态和跳转；后续可增加代理合并 API，但不改变上述提交所有权。

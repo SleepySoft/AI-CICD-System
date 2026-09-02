@@ -3,7 +3,7 @@
 > 版本：v1.4 · 日期：2026-09-02 · 状态：生效
 > 定位：Chronicler（原 Manager，宿主侧 supervisor，ADR-0020/0022）对外可见的契约与规格；内部机制（架构、执行管线、CI 集成）见 ../how/manager-architecture.md
 > 关联需求：FR-MGR-001 ~ FR-MGR-026、FR-TASK-002、FR-TASK-003、BR-008
-> v1 实现注记：存储 SQLite（ADR-0023），鉴权本地账密 admin/user（Keycloak 后端预留），agent 为宿主自装 harness（ADR-0021）；仍属规划的能力在文中标注
+> v1 实现注记：存储 SQLite（ADR-0023），鉴权本地账密 admin/user（Keycloak 后端预留），agent 为宿主自装 harness（ADR-0021）；Git 发布已落 direct 基础框架（main 直接提交/推送，不建 PR），远端基线保护及 review/local 仍属规划
 
 ## 1. WHY
 
@@ -87,7 +87,7 @@ artifacts[]        每个产物：kind(report|doc|knowhow|code-snippet)、path�
 artifact_commit    产物落入 git 的提交 SHA（报告库/shadow 库/目标仓库）
                    【v1】shadow 仓提交 SHA 已回填（ADR-0028）
 publication        mode(review|direct|local)、base_commit、branch、push_status、
-                   pr_number、pr_url、publish_error（与 Run 执行状态独立）
+                   pr_number、pr_url、publish_error（与 Run 执行状态独立）【v1：direct】
 review_refs[]      关联的待审区条目（FR-MGR-009）
 asset_refs[]       上升入资产库的条目（FR-MGR-013/014）
 ```
@@ -145,6 +145,8 @@ GET    /api/health                   供 Uptime Kuma
 ### 2.3.1 Git 发布与审核契约
 
 FR-MGR-009/013/014/026 共用同一个 Git 变更审核模型，完整决策见 ../adr/0033-chronicler-owned-git-publication.md：
+
+当前实现边界：仅开放 `direct`。Chronicler 检查 shadow 工作树干净后切换或规范为 `main`，直接提交并 push `HEAD:main`，不创建任务分支或 PR；Run 已记录独立 publication。下列基线冲突保护及 `review/local` 是目标契约，尚未实现。
 
 - Agent harness 只生成约定内容；分支准备、`git add/commit`、push 与创建 PR 均由 Chronicler 执行，仓库写凭据不注入 harness。
 - `review`：从目标默认分支基线创建 `chronicler/task-<task_id>/run-<run_id>`，提交并推送后创建 Gitea PR；页面展示来源 Run、文件列表、diff 与 PR 链接，人工在合并前审核。
