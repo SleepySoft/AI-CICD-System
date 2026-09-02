@@ -111,7 +111,7 @@ chronicler\.venv-win\Scripts\python.exe -m chronicler serve   # 主入口（唯�
 
 ## 路线图（Manager）
 
-M2 代码源管理 + harness 执行器（宿主直起，ADR-0021）→ M3 内置任务（code-insight/日报/gap分析/合规/knowhow蒸馏/综合报告）
+M2 代码源管理 + harness 执行器（宿主直起，ADR-0021）→ M3 内置任务（项目分析/文档更新/日报/综合报告/项目经验沉淀，5 任务复用 4 个 Prompt 家族，ADR-0034）
 → M4 待审闭环 → M5 CI 综合报告 → M6 supervisor Nuitka 保密打包。详见 docs/what/manager.md §里程碑。
 
 ## 文档同步债（剩余）

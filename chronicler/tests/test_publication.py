@@ -35,14 +35,18 @@ class PublicationPolicyTest(unittest.TestCase):
                     patch.object(projects, "shadow_dir", return_value=work), \
                     patch.object(projects, "get_project", return_value=project):
                 projects.prepare_shadow_direct(1)
-                (work / "docs.md").write_text("generated\n", encoding="utf-8")
+                (work / "docs").mkdir()
+                (work / "know-how").mkdir()
+                (work / "docs" / "index.md").write_text("generated\n", encoding="utf-8")
+                (work / "know-how" / "card.md").write_text("knowledge\n", encoding="utf-8")
                 sha, artifacts, publication = runner._commit_shadow(
-                    {"id": 42, "project_id": 1, "task_type": "structured-docs",
+                    {"id": 42, "project_id": 1, "task_type": "documentation-update",
                      "input_snapshot": {"shadow_base_commit": "base"}},
                     "direct")
 
             self.assertTrue(sha)
             self.assertTrue(artifacts)
+            self.assertEqual({"doc", "knowhow"}, {item["kind"] for item in artifacts})
             self.assertEqual("pushed", publication["push_status"])
             self.assertEqual(["main"], git("-C", str(work), "branch",
                                            "--format=%(refname:short)").stdout.split())

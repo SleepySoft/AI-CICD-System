@@ -311,7 +311,7 @@
           </el-table>
           <div class="group-title">提示词</div>
           <el-table :data="prompts" size="small" style="width:100%">
-            <el-table-column prop="task_type" label="任务类型" width="200"></el-table-column>
+            <el-table-column prop="name" label="Prompt 家族" width="220"></el-table-column>
             <el-table-column prop="version" label="版本" width="120"></el-table-column>
             <el-table-column label="已被覆盖" width="100">
               <template #default="{ row }">
@@ -473,8 +473,8 @@
         </el-form-item>
         <el-form-item label="任务名称"><el-input v-model="newTaskForm.name" placeholder="每日代码洞察"></el-input></el-form-item>
         <el-form-item label="任务类型">
-          <el-select v-model="newTaskForm.task_type" style="width:100%" placeholder="选择预置模板">
-            <el-option v-for="p in prompts" :key="p.task_type" :label="p.task_type + '（' + p.version + '）'" :value="p.task_type"></el-option>
+          <el-select v-model="newTaskForm.task_type" style="width:100%" placeholder="选择任务职责">
+            <el-option v-for="t in taskTypes" :key="t.name" :label="t.name + ' — ' + t.desc" :value="t.name"></el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="Agent harness 覆盖（留空=工程覆盖/全局默认，任务级优先）">
@@ -530,7 +530,7 @@
     </el-dialog>
 
     <!-- 提示词查看/编辑 -->
-    <el-drawer v-model="showPrompt" :title="'提示词 - ' + promptView.task_type" size="60%">
+    <el-drawer v-model="showPrompt" :title="'提示词 - ' + promptView.name" size="60%">
       <div style="margin-bottom:10px">
         <el-tag size="small" effect="plain">版本 {{ promptView.version }}</el-tag>
         <el-tag :type="promptView.overridden ? 'warning' : 'info'" size="small" style="margin-left:8px">
@@ -555,7 +555,7 @@
         </el-form-item>
         <el-form-item label="任务类型">
           <el-select v-model="triggerForm.task_type" style="width:100%">
-            <el-option v-for="p in prompts" :key="p.task_type" :label="p.task_type + '（' + p.version + '）'" :value="p.task_type"></el-option>
+            <el-option v-for="t in taskTypes" :key="t.name" :label="t.name + ' — ' + t.desc" :value="t.name"></el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="附加提示（可选）"><el-input v-model="triggerForm.extra_prompt" type="textarea" :rows="4"></el-input></el-form-item>

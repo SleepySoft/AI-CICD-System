@@ -20,7 +20,7 @@ import httpx
 from fastapi import HTTPException
 
 from . import projects, registry
-from .config import PKG_ROOT, Cfg
+from .config import Cfg
 from .db import audit, dumps, execute, q, q1
 
 _harness_locks: dict[str, threading.Lock] = {}
@@ -46,6 +46,17 @@ def _shadow_lock(project_id: int) -> threading.Lock:
 def _q(path: str) -> str:
     """跨平台路径引号：Windows cmd 用双引号，POSIX 用 shlex（ADR-0020 多平台）"""
     return f'"{path}"' if os.name == "nt" else shlex.quote(path)
+
+
+def _report_delivery(harness: dict, report_file: str) -> str:
+    """按 harness 契约告诉 Agent 如何交付完整报告，避免 stdout/file 语义冲突。"""
+    if harness.get("report_mode") == "stdout":
+        return ("将完整 Markdown 作为最终响应输出到 stdout；不要只给摘要或文件路径。"
+                "Supervisor 会捕获最终输出并保存为报告文件。")
+    if "{report_file}" in harness.get("command_template", ""):
+        return ("将完整 Markdown 作为最终响应；harness 会自动把最终响应保存到报告文件，"
+                "无需在仓库中另建报告副本。")
+    return f"使用文件写入能力将完整 Markdown 写入 `{report_file}`；不要只在最终响应中给摘要。"
 
 
 def _render_prompt(template: str, project: dict, extra: dict) -> str:
@@ -228,6 +239,7 @@ def sweep_stale_runs(now: float | None = None) -> int:
 def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
             prompt_override: str = "", cwd_override: str = "", harness_override: str = "") -> dict:
     project = projects.get_project(project_id)
+    task_spec = registry.get_task_type(task_type)
     if not projects.repo_dir(project_id).is_dir():
         projects.sync_project(project_id)  # 未 clone 则先同步
 
@@ -245,7 +257,9 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
         import hashlib
         template, prompt_version = prompt_override, hashlib.sha1(prompt_override.encode()).hexdigest()[:8]
     else:
-        template, prompt_version = registry.load_prompt(task_type)
+        template, prompt_version, task_spec = registry.load_task_prompt(task_type)
+
+    ci_context = _ci_context(project)
 
     # A 段输入快照（§2.1.1，执行前冻结）
     snapshot = {
@@ -259,11 +273,13 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
         "harness_version": _harness_version(harness),
         "harness_timeout": int(harness.get("timeout_sec", 1800)),
         "cwd": cwd,
+        "prompt_name": task_spec["prompt"],
+        "task_mode": task_spec["mode"],
         "publish_policy": registry.get_publish_policy(project),
         "shadow_base_commit": projects.shadow_head(project_id),
         "components": [{"name": c["name"], "skill": c["skill"],
                         "skill_hash": _file_hash(c["skill"])} for c in registry.injectable_components()],
-        "ci_context": _ci_context(project),
+        "ci_context": ci_context,
     }
     run_id = execute(
         "INSERT INTO task_runs(project_id, task_type, status, harness, prompt_version,"
@@ -273,10 +289,15 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
          dumps(snapshot), actor, time.time(), _runner_env()))
     # prompt 在 run_id 分配后渲染（需要 {{report_file}}/{{prompt_file}} 等运行路径变量）
     run_dir = Cfg.runs_dir() / str(run_id)
+    report_file = str(run_dir / "report.md")
     prompt = _render_prompt(template, project, {
         "extra": extra_prompt,
-        "report_file": str(run_dir / "report.md"),
+        "report_file": report_file,
         "prompt_file": str(run_dir / "prompt.md"),
+        "repo_head": snapshot["repo_head"],
+        "task_mode": task_spec["mode"],
+        "ci_context": json.dumps(ci_context, ensure_ascii=False, indent=2),
+        "report_delivery": _report_delivery(harness, report_file),
     })
     # A 段：渲染后 prompt 全文落库（任务列表可查看；文件副本 runs/<id>/prompt.md 同步保留）
     execute("UPDATE task_runs SET prompt_text=? WHERE id=?", (prompt, run_id))
@@ -387,7 +408,10 @@ def _commit_shadow(run: dict, publish_policy: str) -> tuple[str | None, list[dic
     for line in status.splitlines():
         path = line[3:].strip()
         full = shadow / path
-        arts.append({"kind": "knowhow" if "knowhow" in run["task_type"] else "shadow",
+        normalized = path.replace("\\", "/")
+        kind = ("knowhow" if normalized.startswith("know-how/") else
+            "doc" if normalized.startswith("docs/") else "shadow")
+        arts.append({"kind": kind,
                      "path": str(full), "action": "created" if line.startswith("??") else "updated",
                      "size_bytes": full.stat().st_size if full.is_file() else 0,
                      "commit": sha, "pushed": pushed})

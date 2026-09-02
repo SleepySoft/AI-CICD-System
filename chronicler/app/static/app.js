@@ -27,6 +27,7 @@ const app = createApp({
                               report_mode: "file", cwd: "repo", timeout_sec: 1800, env: [] });
     const components = ref({});
     const prompts = ref([]);
+    const taskTypes = ref([]);
     const tools = ref([]);
     const loadingTools = ref(false);
     const showToolLog = ref(false);
@@ -64,7 +65,7 @@ const app = createApp({
     const taskEditForm = ref({ name: "", harness: "", cwd: "", schedule_cron: "", enabled: true,
                                webhook: "", prompt_override: "" });
     const showPrompt = ref(false);
-    const promptView = ref({ task_type: "", version: "", content: "", overridden: false });
+    const promptView = ref({ name: "", version: "", content: "", overridden: false });
     const showLog = ref(false);
     const logRunId = ref(null);
     const logText = ref("");
@@ -83,9 +84,10 @@ const app = createApp({
     const taskPromptSource = computed(() => {
       if (!taskEditRow.value) return "";
       if (taskEditForm.value.prompt_override.trim()) return "当前生效：本任务自定义覆盖";
-      const p = prompts.value.find(x => x.task_type === taskEditRow.value.task_type);
+      const type = taskTypes.value.find(x => x.name === taskEditRow.value.task_type);
+      const p = prompts.value.find(x => x.name === type?.prompt);
       if (!p) return "当前生效：全局模板";
-      return `当前生效：全局模板 ${p.version}（${p.overridden ? "覆盖副本" : "内置"}）`;
+      return `当前生效：${type.prompt} / ${type.mode} ${p.version}（${p.overridden ? "覆盖副本" : "内置"}）`;
     });
     const groupedTools = computed(() => {
       const g = {};
@@ -241,7 +243,7 @@ const app = createApp({
     }
     function openNewTask() {
       newTaskForm.value = { project_id: projects.value[0]?.id || null, name: "",
-                            task_type: prompts.value[0]?.task_type || "", harness: "", cwd: "",
+                            task_type: taskTypes.value[0]?.name || "", harness: "", cwd: "",
                             schedule_cron: "", enabled: true };
       showNewTask.value = true;
     }
@@ -307,15 +309,15 @@ const app = createApp({
       finally { acting.value = false; }
     }
     async function openPrompt(p) {
-      promptView.value = { task_type: p.task_type, version: p.version, content: "加载中…", overridden: p.overridden };
+      promptView.value = { name: p.name, version: p.version, content: "加载中…", overridden: p.overridden };
       showPrompt.value = true;
-      try { promptView.value = await api(`/api/config/prompts/${encodeURIComponent(p.task_type)}/content`); }
+      try { promptView.value = await api(`/api/config/prompts/${encodeURIComponent(p.name)}/content`); }
       catch (e) { toast.err(e); showPrompt.value = false; }
     }
     async function savePrompt() {
       acting.value = true;
       try {
-        const r = await api(`/api/config/prompts/${encodeURIComponent(promptView.value.task_type)}`,
+        const r = await api(`/api/config/prompts/${encodeURIComponent(promptView.value.name)}`,
                             { method: "PUT", body: JSON.stringify({ content: promptView.value.content }) });
         toast.ok(`已保存为覆盖副本${r.version ? `（${r.version}）` : ""}`);
         promptView.value.overridden = true;
@@ -326,8 +328,8 @@ const app = createApp({
     async function resetPrompt() {
       try {
         await ElementPlus.ElMessageBox.confirm(
-          `确认删除「${promptView.value.task_type}」的覆盖副本并回落到内置模板？`, "恢复内置", { type: "warning" });
-        await api(`/api/config/prompts/${encodeURIComponent(promptView.value.task_type)}/override`, { method: "DELETE" });
+          `确认删除「${promptView.value.name}」的覆盖副本并回落到内置模板？`, "恢复内置", { type: "warning" });
+        await api(`/api/config/prompts/${encodeURIComponent(promptView.value.name)}/override`, { method: "DELETE" });
         toast.ok("已恢复内置模板");
         await openPrompt(promptView.value);
         loadConfig();
@@ -356,7 +358,7 @@ const app = createApp({
       if (runPollTimer) { clearInterval(runPollTimer); runPollTimer = null; }
     }
     function openTrigger() {
-      triggerForm.value = { project_id: runFilter.value || projects.value[0]?.id || null, task_type: prompts.value[0]?.task_type || "", extra_prompt: "" };
+      triggerForm.value = { project_id: runFilter.value || projects.value[0]?.id || null, task_type: taskTypes.value[0]?.name || "", extra_prompt: "" };
       showTrigger.value = true;
     }
     async function triggerRun() {
@@ -395,13 +397,14 @@ const app = createApp({
 
     async function loadConfig() {
       try {
-        const [loadedHarnesses, loadedComponents, loadedPrompts, settings] = await Promise.all([
+        const [loadedHarnesses, loadedComponents, loadedPrompts, loadedTaskTypes, settings] = await Promise.all([
           api("/api/config/harnesses"), api("/api/config/components"),
-          api("/api/config/prompts"), api("/api/config/settings"),
+          api("/api/config/prompts"), api("/api/config/task-types"), api("/api/config/settings"),
         ]);
         harnesses.value = loadedHarnesses;
         components.value = loadedComponents;
         prompts.value = loadedPrompts;
+        taskTypes.value = loadedTaskTypes;
         defaultHarness.value = settings.default_harness || "";
         defaultPublishPolicy.value = settings.default_publish_policy || "direct";
       } catch (e) { toast.err(e); }
@@ -613,7 +616,7 @@ const app = createApp({
     return {
       user, loading, acting, loginError, loginForm, authBackend, ssoLogin, showLocalLogin, tab, isAdmin,
       projects, loadingProjects, runs, loadingRuns, runFilter,
-      harnesses, components, componentList, prompts,
+      harnesses, components, componentList, prompts, taskTypes,
       defaultHarness, defaultPublishPolicy, showHarnessForm, editingHarnessName, harnessForm,
       tools, loadingTools, groupedTools, users, newUser,
       showToolLog, toolLogName, toolLogText, showToolDetail, toolDetail,

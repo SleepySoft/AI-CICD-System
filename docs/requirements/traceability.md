@@ -1,6 +1,6 @@
 # 追溯矩阵
 
-> 版本：v1.5 · 日期：2026-09-02 · 状态：生效
+> 版本：v1.6 · 日期：2026-09-02 · 状态：生效
 > 定位：需求 ID ↔ 设计章节 ↔ 实现位置 ↔ 验证手段。Agent 做 gap 分析的输入；改代码必须同步本表。
 
 ## 功能需求（FR）
@@ -34,7 +34,7 @@
 | FR-MGR-004 | 任务多方式触发 | what/manager.md §数据模型 | chronicler/（M2-M3 规划） | 待实现（M3） |
 | FR-MGR-005 | 一切皆 Run | what/manager.md §数据模型 | chronicler/app/runner.py（输入快照 + prompt 全文落库 + 状态悬挂扫描）+ chronicler/app/tasks.py（调度器每分钟调用） | 人工：查看 Run 输入快照与「提示词」；悬挂 Run 自动转失败 |
 | FR-MGR-006 | SSE 实时日志 | what/manager.md §API 概要 | chronicler/（M2 规划） | 待实现（M2） |
-| FR-MGR-007 | 内置六类任务 | what/manager.md §任务类型框架 | chronicler/prompts/（六类模板齐备）；执行依赖真实 harness 配置 | 人工：触发各任务类型产生 Run |
+| FR-MGR-007 | 内置任务与 Prompt 家族 | what/manager.md §任务类型框架 | chronicler/app/registry.py（5 任务→4 Prompt 映射）+ chronicler/prompts/（4 家族）+ tasks.py + routers/config.py（ADR-0034） | `python -m unittest chronicler.tests.test_prompts`；页面分别显示 5 个任务和 4 个 Prompt |
 | FR-MGR-008 | 报告分级可见 | what/manager.md §权限规格 | chronicler/（M3 规划） | 待实现（M3） |
 | FR-MGR-009 | 待审闭环 | what/manager.md §Git 发布与审核契约 | chronicler/（M4 规划；ADR-0033） | 待实现（M4）：创建 PR 后在审核页查看 diff 并批准/驳回 |
 | FR-MGR-010 | CI 结果消费 | what/manager.md §数据模型 | chronicler/app/runner.py _ci_context（最小实现：快照记录同期构建） | 人工：Run 快照含 ci_context |

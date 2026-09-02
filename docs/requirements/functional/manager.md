@@ -1,6 +1,6 @@
 # 功能需求：Manager 管理服务（MGR）
 
-> 版本：v1.5 · 日期：2026-09-02 · 状态：生效
+> 版本：v1.6 · 日期：2026-09-02 · 状态：生效
 > 定位：Manager（supervisor/Chronicler，ADR-0020/0022）的功能需求；规格（数据模型/API/权限）见 `../../what/manager.md`，机制见 `../../how/manager-architecture.md`
 
 ### FR-MGR-001 工具总览面板
@@ -33,10 +33,10 @@
 - 描述: 运行中的任务经 SSE 流式输出日志。
 - 验收: 任务运行期间前端日志实时滚动，无需刷新。
 
-### FR-MGR-007 内置六类分析任务
+### FR-MGR-007 内置任务与 Prompt 家族
 - 状态: 生效 | 上层: BR-002, BR-003, BR-004, BR-006 | 优先级: P1
-- 描述: 内置 code-insight / daily-report / deviation-analysis / compliance-check / knowhow-distill / comprehensive-report，另支持 custom 任务。
-- 验收: 每类任务以默认模板开箱可跑，产出进入报告中心或待审区。
+- 描述: 内置 project-analysis / documentation-update / daily-report / comprehensive-report / knowledge-capture 五类任务，复用 project-analysis / documentation-update / periodic-report / knowledge-capture 四个 Prompt 家族；任务类型通过 registry 绑定 Prompt 与模式，另支持 custom 任务。
+- 验收: 五类任务均可从任务列表选择并以默认模板运行；日报与综合报告使用同一 Prompt 的不同模式；Prompt 库只展示四个家族；历史任务类型可映射到新家族继续运行。
 
 ### FR-MGR-008 报告中心与分级可见
 - 状态: 生效 | 上层: UR-004, BR-008 | 优先级: P1

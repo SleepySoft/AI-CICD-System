@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS task_defs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     project_id INTEGER NOT NULL REFERENCES projects(id),
     name TEXT NOT NULL,
-    task_type TEXT NOT NULL,                     -- 对应 prompts/<task_type>.md
+    task_type TEXT NOT NULL,                     -- 经 registry 映射到 Prompt 家族/模式
     harness TEXT DEFAULT '',                     -- harness 覆盖：''=回落工程/全局 | harness 名
     cwd TEXT DEFAULT '',                         -- 工作目录覆盖：''=harness 默认 | repo | shadow
     prompt_override TEXT DEFAULT '',             -- 非空=工程级覆盖全局模板（FR-MGR-011 版本=hash）
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS task_defs (
 CREATE TABLE IF NOT EXISTS task_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     project_id INTEGER NOT NULL REFERENCES projects(id),
-    task_type TEXT NOT NULL,                     -- code-insight | daily-report | custom
+    task_type TEXT NOT NULL,                     -- project-analysis | daily-report | ...
     status TEXT NOT NULL DEFAULT 'queued',       -- queued|running|success|failed
     trigger TEXT NOT NULL DEFAULT 'manual',
     harness TEXT NOT NULL,

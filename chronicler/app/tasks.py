@@ -1,17 +1,16 @@
 """任务定义与调度（FR-MGR-004 前置形态）：工程挂任务，手动/cron 触发，可停用不删配置
 
-任务 = 工程 + task_type（对应 prompts/<task_type>.md）+ 可选 prompt 覆盖 + 触发配置。
+任务 = 工程 + task_type（经 registry 映射到 Prompt 家族/模式）+ 可选 prompt 覆盖 + 触发配置。
 webhook/联动触发为预留字段，本次不实装。
 """
 import threading
 import time
 
-from . import projects, runner
+from . import projects, registry, runner
 from .db import execute, q, q1
 
-# 预置任务类型（新建工程默认全挂上）：对应 chronicler/prompts/*.md
-PRESET_TASKS = ["daily-report", "code-insight", "deviation-analysis",
-                "compliance-check", "knowhow-distill", "structured-docs"]
+# 五个预置任务复用四个 Prompt 家族；日报/综合报告共享 periodic-report。
+PRESET_TASKS = [item["name"] for item in registry.TASK_TYPES]
 
 
 def create_task(project_id: int, name: str, task_type: str, schedule_cron: str = "",

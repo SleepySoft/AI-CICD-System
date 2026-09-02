@@ -1,6 +1,6 @@
 # Chronicler（supervisor）规格（数据模型 / API / 任务框架 / 权限 / 页面）
 
-> 版本：v1.4 · 日期：2026-09-02 · 状态：生效
+> 版本：v1.5 · 日期：2026-09-02 · 状态：生效
 > 定位：Chronicler（原 Manager，宿主侧 supervisor，ADR-0020/0022）对外可见的契约与规格；内部机制（架构、执行管线、CI 集成）见 ../how/manager-architecture.md
 > 关联需求：FR-MGR-001 ~ FR-MGR-026、FR-TASK-002、FR-TASK-003、BR-008
 > v1 实现注记：存储 SQLite（ADR-0023），鉴权本地账密 admin/user（Keycloak 后端预留），agent 为宿主自装 harness（ADR-0021）；Git 发布已落 direct 基础框架（main 直接提交/推送，不建 PR），远端基线保护及 review/local 仍属规划
@@ -24,7 +24,8 @@ agent_profile      Agent harness 配置：name, command(可执行命令 + 参数
                    api_key_ref(密钥存加密列或挂载 secret), max_runtime_sec
 prompt_template    Prompt 库：name, scope(system|task), content(支持 {{变量}}), version,
                    builtin(bool), updated_by, updated_at
-task_def           任务定义：name, type(见 §2.3), repo_ids[], agent_id, prompt_id,
+task_type_registry 任务类型：name, prompt_name, mode, desc；任务职责与模板文件解耦
+task_def           任务定义：name, type(引用 task_type_registry，见 §2.3), repo_ids[], agent_id, prompt_id,
                    harness(任务级 harness 覆盖，''=回落工程/全局), cwd(repo|shadow|''，
                    工作目录覆盖，''=回落 harness 默认), schedule_cron, enabled,
                    params(JSON), output_visibility(dev|boss)
@@ -50,7 +51,7 @@ audit_log          审计：actor, action, target, detail, at
 
 ```
 run_id             档案 ID                                    【v1】
-task_type          任务种类（code-insight/daily-report/…）     【v1】
+task_type          任务种类（project-analysis/daily-report/…）【v1】
 trigger            manual|cron|webhook                        【v1】（v1 仅 manual）
 created_by         触发人（审计追溯）                          【v1】
 queued_at          入队时间                                    【v1】
@@ -129,16 +130,19 @@ GET    /api/health                   供 Uptime Kuma
 
 ### 2.3 任务类型框架（TaskType Registry）
 
-每类任务注册四件套：`collector()`（采集输入）→ `prompt_vars()`（组装变量）→ `output_parser()`（解析产出）→ `persister()`（落库/分发）。
+任务类型定义“何时运行、采用什么模式、产出进入哪里”，Prompt 家族定义 Agent 的职责和输出契约，两者通过 registry 显式映射（ADR-0034）。同一 Prompt 可以服务多个执行任务，避免按报告章节拆成重复模板。
 
-| 内置任务 | 输入 | 产出 |
-|---------|------|------|
-| `code-insight` | 仓库增量 diff + 既有 WHY/WHAT/HOW 文档 | 结构化文档草稿 → 待审区 → 文档站 |
-| `daily-report` | 当日 commits + diff + issue + Jenkins 当日构建结果 | 日报（默认 boss 可见） |
-| `deviation-analysis` | 需求/任务（OpenProject 适配器或文本文件，降级见 FR-MGR-016）+ 代码 + 文档 | gap 报告（含严重度）+ 可选自动建 issue |
-| `compliance-check` | 文档站 + 脚本目录 + 合规规则模板 | 合规报告（违规清单+整改建议） |
-| `knowhow-distill` | commit 区间/目录/会话上下文 | 知识卡片 → 待审 → project_shadow（可再上升全局资产库） |
-| `comprehensive-report` | 各报告 + CI 汇总 + 需求进度 | boss 专属综合报告 |
+| 内置任务 | Prompt / mode | 职责 | 产出 |
+|---------|---------------|------|------|
+| `project-analysis` | `project-analysis` / `full` | 只读诊断架构、关键流程、需求一致性与工程风险 | 有证据的项目分析报告 |
+| `documentation-update` | `documentation-update` / `incremental` | 将已验证事实按需求、WHY/WHAT/HOW、ADR、runbook 边界增量维护 | `project_shadow/docs/` + 更新摘要 |
+| `daily-report` | `periodic-report` / `daily` | 聚合最近 24 小时 Git、CI、需求和阻塞 | 精简日报 |
+| `comprehensive-report` | `periodic-report` / `comprehensive` | 聚合阶段成果、质量趋势、风险和下一周期行动 | 管理层周期综合报告 |
+| `knowledge-capture` | `knowledge-capture` / `focused` | 从指定 Run、提交或故障提取少量可验证经验，并先查重 | `project_shadow/know-how/` + 提取摘要 |
+
+职责边界：项目分析只报告、不改文档；文档更新消费需求、实现和已验证分析，不重新做全项目审计；周期报告聚合已有事实，不替代分析；经验沉淀要求具体来源且允许零产出，不做泛化代码摘要。事实优先级统一为：生效需求 > 代码/测试/配置 > 已接受 ADR/正式文档 > Git 历史 > 既有报告与 AI 草稿。
+
+存量兼容：`code-insight`、`deviation-analysis`、`compliance-check` 映射到 `project-analysis` 的不同 mode，`structured-docs` 映射到 `documentation-update`，`knowhow-distill` 映射到 `knowledge-capture`；兼容类型不再出现在新建任务选项和预置任务中。
 
 自定义任务：选 repo + agent + prompt + cron 即成新任务（`type=custom`）。
 
@@ -175,7 +179,7 @@ v1 已落地：`/login`（SSO 主入口 + 本地应急） · 首页（组件卡�
 |--------|------|------|
 | M1 骨架 ✅ | FastAPI + OIDC + 工具总览 + Agent 终端 + 接入 compose | boss/dev 登录看到不同视图 |
 | M2 代码源与执行器 | repo 同步 + harness 执行器（宿主直起）+ 手动触发 + SSE 日志 | 跑一次"总结 README"任务看流式日志 |
-| M3 内置任务 | 6 类内置任务 + prompt 库 + 报告中心 | 日报/gap 报告产出，可见性正确 |
+| M3 内置任务 | 5 类内置任务 + 4 个 Prompt 家族 + 报告中心 | 项目分析/文档更新/日报/综合报告/经验沉淀职责清晰，产出可追溯 |
 | M4 待审闭环 | Git review 区 + 文档/卡片 PR + shadow/全局资产库 + 文档站更新 | 页面可查看 Run 产物 diff；项目经验经两级审核上升全局库；可配置 direct/local |
 | M5 CI 综合 | Jenkins 结果接入 + 综合报告 + webhook 触发 | 综合报告含构建结果；push 触发任务 |
 | M6 加固 | supervisor Nuitka 打包 + prompt 加密 + 审计 + 限流 | 二进制内无源码与明文 prompt |

@@ -1,6 +1,6 @@
 # 文档索引
 
-> 版本：v1.1 · 日期：2026-09-02 · 状态：生效
+> 版本：v1.2 · 日期：2026-09-02 · 状态：生效
 > 定位：docs/ 全部文档的目录与状态总表；写作规范见 `.agents/skills/docs-management/`
 
 ## 文档总表
@@ -66,6 +66,7 @@
 | ADR-0031 Web 终端目标选型（宿主 sshd） | adr/0031-web-terminal-target-host-sshd.md | adr | 已接受 |
 | ADR-0032 手动会话注入契约（约定文件+动态 SKILL+chai） | adr/0032-manual-session-skill-injection.md | adr | 已接受 |
 | ADR-0033 AI 产物由 Chronicler 统一 Git 发布与 PR 审核 | adr/0033-chronicler-owned-git-publication.md | adr | 已接受 |
+| ADR-0034 任务类型与 Prompt 家族通过 registry 解耦 | adr/0034-task-prompt-family-registry.md | adr | 已接受 |
 | 部署与初始化 | runbooks/deploy.md | runbooks | 生效 |
 | 备份与恢复 | runbooks/backup-restore.md | runbooks | 生效 |
 | 接入新 Agent | runbooks/agent-onboarding.md | runbooks | 生效 |

@@ -17,6 +17,27 @@ _ENV_REF = re.compile(r"^\$\{(\w+)\}$")
 _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 PUBLISH_POLICIES = ("direct",)
 
+TASK_TYPES = (
+    {"name": "project-analysis", "prompt": "project-analysis", "mode": "full",
+     "desc": "项目全景分析：架构、需求一致性、工程风险与优先行动"},
+    {"name": "documentation-update", "prompt": "documentation-update", "mode": "incremental",
+     "desc": "从需求与实现中提取并增量维护 WHY/WHAT/HOW 项目文档"},
+    {"name": "daily-report", "prompt": "periodic-report", "mode": "daily",
+     "desc": "聚合最近 24 小时提交、CI、需求与阻塞"},
+    {"name": "comprehensive-report", "prompt": "periodic-report", "mode": "comprehensive",
+     "desc": "聚合阶段进展、质量趋势、风险与下一周期行动"},
+    {"name": "knowledge-capture", "prompt": "knowledge-capture", "mode": "focused",
+     "desc": "从指定 Run、提交或故障中沉淀可验证的项目经验"},
+)
+
+LEGACY_TASK_TYPES = {
+    "code-insight": {"prompt": "project-analysis", "mode": "architecture"},
+    "deviation-analysis": {"prompt": "project-analysis", "mode": "requirements"},
+    "compliance-check": {"prompt": "project-analysis", "mode": "compliance"},
+    "structured-docs": {"prompt": "documentation-update", "mode": "incremental"},
+    "knowhow-distill": {"prompt": "knowledge-capture", "mode": "focused"},
+}
+
 
 def _write_data_yaml(name: str, data, header: str = "") -> Path:
     """写 DATA 覆盖文件（LF 行尾；父目录自动创建）"""
@@ -126,6 +147,24 @@ def get_publish_policy(project: dict | None = None) -> str:
     return policy if policy in PUBLISH_POLICIES else "direct"
 
 
+def get_task_type(task_type: str) -> dict:
+    """解析任务到 Prompt 家族与模式；旧任务类型仅作存量兼容。"""
+    current = next((dict(item) for item in TASK_TYPES if item["name"] == task_type), None)
+    if current:
+        return current
+    if task_type == "custom":
+        return {"name": "custom", "prompt": "", "mode": "custom",
+                "desc": "使用任务级 Prompt 覆盖的自定义任务"}
+    legacy = LEGACY_TASK_TYPES.get(task_type)
+    if legacy:
+        return {"name": task_type, "desc": "旧任务类型（兼容）", "legacy": True, **legacy}
+    raise HTTPException(status_code=404, detail=f"未知任务类型：{task_type}")
+
+
+def list_task_types() -> list[dict]:
+    return [dict(item) for item in TASK_TYPES]
+
+
 def skill_path(name: str) -> str | None:
     """组件的 SKILL.md 路径（用户覆盖目录优先）；不存在返回 None（ADR-0025：存在即注入）"""
     for base in (Cfg.DATA / "components" / name, PKG_ROOT / "components" / name):
@@ -170,15 +209,24 @@ def resolve_env(env_spec: dict | None) -> dict[str, str]:
     return out
 
 
-def load_prompt(task_type: str) -> tuple[str, str]:
+def load_prompt(prompt_name: str) -> tuple[str, str]:
     """返回 (内容, 版本hash)。DATA/prompts 覆盖优先（FR-MGR-011 版本=内容 hash）"""
-    name = f"{task_type}.md"
+    name = f"{prompt_name}.md"
     override = Cfg.prompts_override_dir() / name
     path = override if override.is_file() else Cfg.PROMPTS_DIR / name
     if not path.is_file():
-        raise HTTPException(status_code=404, detail=f"未知任务类型：{task_type}（缺少 prompt 模板 {name}）")
+        raise HTTPException(status_code=404, detail=f"未知 Prompt：{prompt_name}（缺少模板 {name}）")
     content = path.read_text(encoding="utf-8")
     return content, hashlib.sha1(content.encode()).hexdigest()[:8]
+
+
+def load_task_prompt(task_type: str) -> tuple[str, str, dict]:
+    """按任务类型加载对应 Prompt 家族，返回内容、版本和任务规格。"""
+    spec = get_task_type(task_type)
+    if not spec["prompt"]:
+        raise HTTPException(status_code=422, detail="custom 任务必须提供 Prompt 覆盖")
+    content, version = load_prompt(spec["prompt"])
+    return content, version, spec
 
 
 def save_prompt_override(task_type: str, content: str) -> dict:

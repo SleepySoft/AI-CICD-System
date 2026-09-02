@@ -104,12 +104,17 @@ async def components(user: dict = Depends(current_user)):
     return registry.load_components()
 
 
+@router.get("/task-types")
+async def task_types(user: dict = Depends(current_user)):
+    return registry.list_task_types()
+
+
 @router.get("/prompts")
 async def prompts(user: dict = Depends(current_user)):
     out = []
     for path in sorted(Cfg.PROMPTS_DIR.glob("*.md")):
         content, version = registry.load_prompt(path.stem)
-        out.append({"task_type": path.stem, "version": version,
+        out.append({"name": path.stem, "version": version,
                     "overridden": (Cfg.prompts_override_dir() / path.name).is_file(),
                     "size": len(content)})
     return out
@@ -118,7 +123,7 @@ async def prompts(user: dict = Depends(current_user)):
 @router.get("/prompts/{name}/content")
 async def prompt_content(name: str, user: dict = Depends(current_user)):
     content, version = registry.load_prompt(name)
-    return {"task_type": name, "version": version, "content": content,
+    return {"name": name, "version": version, "content": content,
             "overridden": (Cfg.prompts_override_dir() / f"{name}.md").is_file()}
 
 

@@ -1,6 +1,6 @@
 # Manager 架构与执行机制
 
-> 版本：v1.3 · 日期：2026-09-02 · 状态：生效
+> 版本：v1.4 · 日期：2026-09-02 · 状态：生效
 > 定位：Manager 的内部实现机制（架构、执行管线、CI 集成、部署形态）；规格契约见 ../what/manager.md
 > 关联需求：FR-MGR-003 ~ FR-MGR-026
 
@@ -21,7 +21,7 @@ Manager 管"分析与洞察"，消费 CI 结果、不替代 CI（Non-Goal 见 ..
 │ Manager 后端 (FastAPI) —— docker 宿主侧进程（compose 外，ADR-0020）          │
 │ ├─ API 层        /api/repos /agents /prompts /tasks /runs /reports /review  │
 │ ├─ 调度器        APScheduler（cron 定时 + 手动触发 + Webhook 触发）           │
-│ ├─ 任务框架      TaskType 注册表（内置 6 类 + 自定义）                        │
+│ ├─ 任务框架      TaskType 注册表（5 个任务 → 4 个 Prompt 家族 + 自定义）      │
 │ ├─ 执行器        宿主直起 harness 进程（ADR-0021）；本地 Docker API 控栈      │
 │ ├─ CI/CD 集成    Jenkins REST API 轮询/推送 + Gitea Webhook                  │
 │ └─ 鉴权          Keycloak OIDC；boss/dev 角色 → 报告可见性过滤               │
@@ -57,6 +57,8 @@ FastAPI + SQLAlchemy 2 + Alembic（异步、自带 OpenAPI）；APScheduler（As
 
 并发控制：全局信号量（默认 2 个并发 Run）+ 每工程代码仓串行锁 + 每 shadow 仓串行锁。shadow 锁覆盖分支准备、Agent 写入、提交与工作树恢复，避免不同 harness 并发切换同一工作树；harness 自身仍可因全局状态另设串行锁。
 
+任务解析（ADR-0034）：`registry.TASK_TYPES` 是新任务清单，记录 `name/prompt/mode/desc`；runner 在冻结 Run 快照前解析任务，将 `prompt_name`、`task_mode`、`repo_head` 与 `ci_context` 注入模板。配置 API 分别提供 task-types 和 prompts，前端因此显示 5 个可执行任务与 4 个可编辑模板。`LEGACY_TASK_TYPES` 只在执行旧 task_def 时解析，不参与新工程预置。
+
 ### 2.3.1 Git 发布管线（FR-MGR-009/013/014/026）
 
 当前已实现 direct 基础管线：冻结策略与 shadow HEAD → 获取 shadow 仓锁 → 确认工作树干净 → 切换或规范分支为 `main` → Agent 写产物 → Chronicler 提交 → push `HEAD:main` → 独立记录 publication。该路径不创建任务分支或 PR；远端默认分支基线比较尚未实现。
@@ -80,7 +82,7 @@ Gitea 凭据仅由 Chronicler 的 Git publisher/API client 读取。PR 首版由
 |------|------|
 | Manager ← Jenkins | 任务执行前后调 Jenkins REST（`/job/xxx/lastBuild/api/json`）拉取构建结果写入 `ci_context`；综合报告按时间窗聚合 |
 | Manager ← Gitea | Webhook（push/merge）→ `/api/webhooks/gitea` → 触发绑定该 repo 的任务（可配防抖） |
-| Manager → CI/CD | 只读为主；`deviation-analysis` 可建 Gitea issue；不反向操控流水线 |
+| Manager → CI/CD | 只读消费结果；分析任务不反向操控流水线 |
 
 ### 2.5 部署形态
 
@@ -104,3 +106,4 @@ Gitea 凭据仅由 Chronicler 的 Git publisher/API client 读取。PR 首版由
 | Agent 执行位置 | 用户自装 harness，宿主执行；terminal-runtime 降为可选沙箱（部分推翻 ADR-0017） | ../adr/0021-agent-user-installed-harness.md |
 | v1 形态 | SQLite + 本地账密 + 一次性会话（闭环 ADR-0022 悬置的单机瘦身项） | ../adr/0023-supervisor-v1-form.md |
 | AI 产物 Git 发布 | Agent 只生成内容；Chronicler 统一分支、提交、push、建 PR；全局提升强制二次审核 | ../adr/0033-chronicler-owned-git-publication.md |
+| 任务与 Prompt 分类 | 5 个任务通过 registry 复用 4 个职责明确的 Prompt 家族，旧类型仅兼容 | ../adr/0034-task-prompt-family-registry.md |
