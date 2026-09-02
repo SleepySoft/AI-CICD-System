@@ -34,6 +34,15 @@ async def trigger(body: TriggerBody, user: dict = Depends(require_admin)):
     return run
 
 
+@router.get("/change-preview")
+async def change_preview(project_id: int, task_type: str,
+                         user: dict = Depends(require_admin)):
+    from .. import change_detection, projects, registry
+    registry.get_task_type(task_type)
+    projects.sync_project(project_id)
+    return change_detection.capture(project_id, task_type)
+
+
 @router.get("/{run_id}")
 async def detail(run_id: int, user: dict = Depends(current_user)):
     return runner.get_run(run_id)

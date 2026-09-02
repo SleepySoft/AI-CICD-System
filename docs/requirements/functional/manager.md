@@ -1,6 +1,6 @@
 # 功能需求：Manager 管理服务（MGR）
 
-> 版本：v1.6 · 日期：2026-09-02 · 状态：生效
+> 版本：v1.7 · 日期：2026-09-02 · 状态：生效
 > 定位：Manager（supervisor/Chronicler，ADR-0020/0022）的功能需求；规格（数据模型/API/权限）见 `../../what/manager.md`，机制见 `../../how/manager-architecture.md`
 
 ### FR-MGR-001 工具总览面板
@@ -132,3 +132,13 @@
 - 状态: 生效 | 上层: UR-005, UR-009, BR-007 | 优先级: P1
 - 描述: Chronicler 统一负责 AI 产物的 Git 提交与发布，工程可按产物类型配置 `review`（任务分支 + Pull Request）、`direct`（直接提交默认分支）或 `local`（仅本地提交）策略；项目经验提升为全局资产固定使用 `review`。
 - 验收: `review` 产生关联 Run 的任务分支、提交和可访问 PR；`direct` 在远端基线未变化时更新默认分支且不创建 PR；`local` 不推送；Run 可查看发布策略、分支、提交、PR URL 与独立发布状态；harness 无需持有仓库推送或 Gitea API 凭据。
+
+### FR-MGR-027 Run 有效输入快照与增量摘要
+- 状态: 生效 | 上层: UR-011 | 优先级: P1
+- 描述: 每次 Run 在 Agent 启动前冻结有效输入快照，至少包含同步后的主仓 Git revision，并可包含管理员配置的 command probe 指纹；与同一任务上次成功 Run 比较后记录基线 Run、revision 区间、提交/文件/行数和 probe 变化或探测失败。
+- 验收: Run 历史可查看基线 Run、base/head revision、提交数、文件与行数变化；无变化、历史分叉、首次执行、probe 失败分别可辨；同一摘要注入本次 Prompt。
+
+### FR-MGR-028 增量感知的自动执行策略
+- 状态: 生效 | 上层: UR-011 | 优先级: P1
+- 描述: 任务可配置 `always`、`repo-changed`、`inputs-changed`；手动触发始终允许但在开始前展示增量，自动触发无相关变化时创建 `skipped` Run，探测失败时不得按无变化跳过。
+- 验收: 三种策略可保存并生效；无增量的 cron 在 `always` 下执行、在相应 changed 策略下产生含跳过原因的 `skipped` Run；手动触发无增量时确认后仍执行；未知状态继续执行并在 Run 中可见。

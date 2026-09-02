@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS task_defs (
     cwd TEXT DEFAULT '',                         -- 工作目录覆盖：''=harness 默认 | repo | shadow
     prompt_override TEXT DEFAULT '',             -- 非空=工程级覆盖全局模板（FR-MGR-011 版本=hash）
     schedule_cron TEXT DEFAULT '',               -- 空=仅手动；hook/联动预留 webhook 字段
+    change_policy TEXT DEFAULT 'always',         -- always|repo-changed|inputs-changed（FR-MGR-028）
+    change_probes TEXT DEFAULT '[]',             -- command probe 配置 JSON（FR-MGR-027）
     webhook INTEGER DEFAULT 0,                   -- 预留：push 等事件联动
     enabled INTEGER DEFAULT 1,                   -- 关闭=停止自动触发但不删配置
     created_at REAL NOT NULL,
@@ -44,9 +46,10 @@ CREATE TABLE IF NOT EXISTS task_defs (
 );
 CREATE TABLE IF NOT EXISTS task_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER REFERENCES task_defs(id) ON DELETE SET NULL, -- 直接触发为空；任务触发关联精确基线
     project_id INTEGER NOT NULL REFERENCES projects(id),
     task_type TEXT NOT NULL,                     -- project-analysis | daily-report | ...
-    status TEXT NOT NULL DEFAULT 'queued',       -- queued|running|success|failed
+    status TEXT NOT NULL DEFAULT 'queued',       -- queued|running|success|failed|skipped
     trigger TEXT NOT NULL DEFAULT 'manual',
     harness TEXT NOT NULL,
     prompt_version TEXT NOT NULL,                -- 内容 hash（FR-MGR-011）
@@ -111,6 +114,13 @@ def _migrate():
         db().execute("ALTER TABLE task_defs ADD COLUMN cwd TEXT DEFAULT ''")
     if "harness" not in {r["name"] for r in q("PRAGMA table_info(task_defs)")}:
         db().execute("ALTER TABLE task_defs ADD COLUMN harness TEXT DEFAULT ''")
+    if "change_policy" not in {r["name"] for r in q("PRAGMA table_info(task_defs)")}:
+        db().execute("ALTER TABLE task_defs ADD COLUMN change_policy TEXT DEFAULT 'always'")
+    if "change_probes" not in {r["name"] for r in q("PRAGMA table_info(task_defs)")}:
+        db().execute("ALTER TABLE task_defs ADD COLUMN change_probes TEXT DEFAULT '[]'")
+    if "task_id" not in {r["name"] for r in q("PRAGMA table_info(task_runs)")}:
+        db().execute("ALTER TABLE task_runs ADD COLUMN task_id INTEGER"
+                     " REFERENCES task_defs(id) ON DELETE SET NULL")
     if "prompt_text" not in {r["name"] for r in q("PRAGMA table_info(task_runs)")}:
         db().execute("ALTER TABLE task_runs ADD COLUMN prompt_text TEXT DEFAULT ''")
     db().commit()

@@ -3,10 +3,11 @@
 任务 = 工程 + task_type（经 registry 映射到 Prompt 家族/模式）+ 可选 prompt 覆盖 + 触发配置。
 webhook/联动触发为预留字段，本次不实装。
 """
+import json
 import threading
 import time
 
-from . import projects, registry, runner
+from . import change_detection, projects, registry, runner
 from .db import execute, q, q1
 
 # 五个预置任务复用四个 Prompt 家族；日报/综合报告共享 periodic-report。
@@ -14,16 +15,24 @@ PRESET_TASKS = [item["name"] for item in registry.TASK_TYPES]
 
 
 def create_task(project_id: int, name: str, task_type: str, schedule_cron: str = "",
-                enabled: bool = True, cwd: str = "", harness: str = "") -> dict:
+                enabled: bool = True, cwd: str = "", harness: str = "",
+                change_policy: str = "always", change_probes=None) -> dict:
     projects.get_project(project_id)
+    registry.get_task_type(task_type)
+    if change_policy not in change_detection.CHANGE_POLICIES:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=422, detail=f"未知 change_policy：{change_policy}")
+    probes = change_detection.normalize_probes(change_probes)
     if q1("SELECT id FROM task_defs WHERE project_id=? AND task_type=?",
           (project_id, task_type)):
         from fastapi import HTTPException
         raise HTTPException(status_code=409, detail="该工程已有同类型任务")
     tid = execute(
-        "INSERT INTO task_defs(project_id, name, task_type, harness, cwd, schedule_cron, enabled, created_at)"
-        " VALUES (?,?,?,?,?,?,?,strftime('%s','now'))",
-        (project_id, name, task_type, harness, cwd, schedule_cron, 1 if enabled else 0))
+        "INSERT INTO task_defs(project_id, name, task_type, harness, cwd, schedule_cron,"
+        " change_policy, change_probes, enabled, created_at)"
+        " VALUES (?,?,?,?,?,?,?,?,?,strftime('%s','now'))",
+        (project_id, name, task_type, harness, cwd, schedule_cron, change_policy,
+         json.dumps(probes, ensure_ascii=False), 1 if enabled else 0))
     return get_task(tid)
 
 
@@ -48,19 +57,33 @@ def get_task(tid: int) -> dict:
     if not t:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="任务不存在")
+    t["change_probes"] = change_detection.normalize_probes(t.get("change_probes"))
+    t["change_policy"] = t.get("change_policy") or "always"
     return t
 
 
 def list_tasks(project_id: int | None = None) -> list[dict]:
     if project_id:
-        return q("SELECT * FROM task_defs WHERE project_id=? ORDER BY id", (project_id,))
-    return q("SELECT * FROM task_defs ORDER BY project_id, id")
+        rows = q("SELECT * FROM task_defs WHERE project_id=? ORDER BY id", (project_id,))
+    else:
+        rows = q("SELECT * FROM task_defs ORDER BY project_id, id")
+    for row in rows:
+        row["change_probes"] = change_detection.normalize_probes(row.get("change_probes"))
+        row["change_policy"] = row.get("change_policy") or "always"
+    return rows
 
 
 def update_task(tid: int, fields: dict) -> dict:
     get_task(tid)
+    if "change_policy" in fields and fields["change_policy"] not in change_detection.CHANGE_POLICIES:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=422, detail=f"未知 change_policy：{fields['change_policy']}")
+    if "change_probes" in fields:
+        fields["change_probes"] = json.dumps(
+            change_detection.normalize_probes(fields["change_probes"]), ensure_ascii=False)
     allowed = {k: v for k, v in fields.items()
-               if k in ("name", "schedule_cron", "webhook", "enabled", "prompt_override", "cwd", "harness")}
+               if k in ("name", "schedule_cron", "change_policy", "change_probes",
+                        "webhook", "enabled", "prompt_override", "cwd", "harness")}
     if allowed:
         sets = ", ".join(f"{k}=?" for k in allowed)
         execute(f"UPDATE task_defs SET {sets} WHERE id=?", (*allowed.values(), tid))
@@ -69,11 +92,13 @@ def update_task(tid: int, fields: dict) -> dict:
 
 def delete_task(tid: int):
     t = get_task(tid)
+    execute("UPDATE task_runs SET task_id=NULL WHERE task_id=?", (tid,))
     execute("DELETE FROM task_defs WHERE id=?", (tid,))
     return {"ok": True, "name": t["name"]}
 
 
 def delete_project_tasks(project_id: int):
+    execute("UPDATE task_runs SET task_id=NULL WHERE project_id=?", (project_id,))
     execute("DELETE FROM task_defs WHERE project_id=?", (project_id,))
 
 
@@ -83,9 +108,18 @@ def trigger_task(tid: int, actor: str, extra_prompt: str = "") -> dict:
     if t.get("prompt_override"):
         return runner.trigger(t["project_id"], t["task_type"], actor, extra_prompt,
                               prompt_override=t["prompt_override"], cwd_override=t.get("cwd", ""),
-                              harness_override=t.get("harness", ""))
+                              harness_override=t.get("harness", ""), task_id=t["id"],
+                              change_policy=t["change_policy"], change_probes=t["change_probes"])
     return runner.trigger(t["project_id"], t["task_type"], actor, extra_prompt,
-                          cwd_override=t.get("cwd", ""), harness_override=t.get("harness", ""))
+                          cwd_override=t.get("cwd", ""), harness_override=t.get("harness", ""),
+                          task_id=t["id"], change_policy=t["change_policy"],
+                          change_probes=t["change_probes"])
+
+
+def preview_task_changes(tid: int) -> dict:
+    t = get_task(tid)
+    projects.sync_project(t["project_id"])
+    return change_detection.capture(t["project_id"], t["task_type"], t["id"], t["change_probes"])
 
 
 # ---------- cron 调度（简单轮询，每分钟） ----------
@@ -112,10 +146,16 @@ def scheduler_tick():
                           (t["project_id"], t["task_type"]))
                 if last and last["last"] and now - last["last"] < 90:
                     continue  # 刚跑过
-                runner.trigger(t["project_id"], t["task_type"], "cron",
-                               cwd_override=t.get("cwd", ""), harness_override=t.get("harness", ""))
+                try:
+                    runner.trigger(t["project_id"], t["task_type"], "cron",
+                                   cwd_override=t.get("cwd", ""), harness_override=t.get("harness", ""),
+                                   task_id=t["id"], change_policy=t.get("change_policy") or "always",
+                                   change_probes=t.get("change_probes") or "[]", allow_skip=True,
+                                   trigger_kind="cron")
+                except Exception as exc:  # noqa: BLE001 - 自动触发失败也必须落 Run
+                    runner.record_preflight_failure(t, "cron", exc)
         except Exception:
-            continue  # cron 表达式非法等，单任务失败不影响调度
+            continue  # cron 表达式非法/调度计算失败，尚未形成一次有效触发
 
 
 def start_scheduler():

@@ -1,6 +1,6 @@
 # 追溯矩阵
 
-> 版本：v1.6 · 日期：2026-09-02 · 状态：生效
+> 版本：v1.7 · 日期：2026-09-02 · 状态：生效
 > 定位：需求 ID ↔ 设计章节 ↔ 实现位置 ↔ 验证手段。Agent 做 gap 分析的输入；改代码必须同步本表。
 
 ## 功能需求（FR）
@@ -54,6 +54,8 @@
 | FR-MGR-024 | 人机 Web 终端（Human Terminal） | what/manager.md §前端页面 | chronicler/components/sshwifty/（P0，ADR-0030）+ chronicler/app/terminal（P1 规划） | 人工：浏览器打开终端进入工作区，会话含注入上下文 |
 | FR-MGR-025 | 手动会话上下文注入 | what/manager.md §前端页面（P1 Human Terminal） | chronicler/（P1 规划；ADR-0032） | 待实现（P1） |
 | FR-MGR-026 | AI 产物 Git 发布策略 | what/manager.md §Git 发布与审核契约 | chronicler/app/registry.py + projects.py + runner.py + routers/config.py（direct 基础：main 直接提交/推送 + 独立发布状态；远端基线保护、review/local 待实现，ADR-0033） | `python -m unittest chronicler.tests.test_publication`（direct 不建任务分支）；基线冲突、review/local 待实现 |
+| FR-MGR-027 | Run 有效输入快照与增量摘要 | what/manager.md §有效输入与增量契约 | chronicler/app/change_detection.py + runner.py + projects.py + 前端 Run 列表（ADR-0035） | `python -m unittest chronicler.tests.test_change_detection` |
+| FR-MGR-028 | 增量感知的自动执行策略 | what/manager.md §有效输入与增量契约 | chronicler/app/tasks.py + routers/tasks.py + routers/runs.py + 前端任务配置/触发确认（ADR-0035） | `python -m unittest chronicler.tests.test_change_detection` |
 | FR-TASK-001 | 任务前端提交 | what/task-mgmt.md §角色分工 | chronicler/components/openproject/ | 人工：建包后 API 检索 |
 | FR-TASK-002 | AI 任务领取 | what/task-mgmt.md §API 契约 | .agents/skills/openproject/（Manager M2 起自动化） | 人工：按 skill 领任务置 in progress |
 | FR-TASK-003 | AI 状态回写 | what/task-mgmt.md §状态机 | .agents/skills/openproject/ + OpenProject workflow 配置 | 人工：回写成功且置 closed 被拒 |

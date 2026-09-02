@@ -76,10 +76,24 @@ def sync_project(pid: int) -> dict:
     try:
         if dest.is_dir():
             r = _git(["-C", str(dest), "fetch", "--all", "--prune"], timeout=300)
+            if r.returncode != 0:
+                raise RuntimeError(f"git fetch 失败：{r.stderr.strip()[:500]}")
             branch = p.get("default_branch") or ""
             if branch:
-                _git(["-C", str(dest), "checkout", branch])
-                _git(["-C", str(dest), "reset", "--hard", f"origin/{branch}"])
+                switched = _git(["-C", str(dest), "checkout", branch])
+                if switched.returncode != 0:
+                    raise RuntimeError(f"git checkout {branch} 失败：{switched.stderr.strip()[:500]}")
+                reset = _git(["-C", str(dest), "reset", "--hard", f"origin/{branch}"])
+                if reset.returncode != 0:
+                    raise RuntimeError(f"git reset origin/{branch} 失败：{reset.stderr.strip()[:500]}")
+            else:
+                upstream = _git(["-C", str(dest), "rev-parse", "--abbrev-ref",
+                                 "--symbolic-full-name", "@{upstream}"])
+                if upstream.returncode == 0 and upstream.stdout.strip():
+                    reset = _git(["-C", str(dest), "reset", "--hard", upstream.stdout.strip()])
+                    if reset.returncode != 0:
+                        raise RuntimeError(f"git reset {upstream.stdout.strip()} 失败："
+                                           f"{reset.stderr.strip()[:500]}")
         else:
             dest.parent.mkdir(parents=True, exist_ok=True)
             clone_args = (["clone", "-b", p["default_branch"], p["git_url"], str(dest)]

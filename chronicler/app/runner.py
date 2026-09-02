@@ -19,7 +19,7 @@ from pathlib import Path
 import httpx
 from fastapi import HTTPException
 
-from . import projects, registry
+from . import change_detection, projects, registry
 from .config import Cfg
 from .db import audit, dumps, execute, q, q1
 
@@ -237,11 +237,12 @@ def sweep_stale_runs(now: float | None = None) -> int:
 
 
 def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
-            prompt_override: str = "", cwd_override: str = "", harness_override: str = "") -> dict:
+            prompt_override: str = "", cwd_override: str = "", harness_override: str = "",
+            task_id: int | None = None, change_policy: str = "always", change_probes=None,
+            allow_skip: bool = False, trigger_kind: str = "manual") -> dict:
     project = projects.get_project(project_id)
     task_spec = registry.get_task_type(task_type)
-    if not projects.repo_dir(project_id).is_dir():
-        projects.sync_project(project_id)  # 未 clone 则先同步
+    projects.sync_project(project_id)
 
     overrides = project.get("overrides") or {}
     # harness 解析：任务定义覆盖 > 工程级覆盖 > 全局默认（FR-MGR-020）
@@ -259,6 +260,7 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
     else:
         template, prompt_version, task_spec = registry.load_task_prompt(task_type)
 
+    change = change_detection.capture(project_id, task_type, task_id, change_probes)
     ci_context = _ci_context(project)
 
     # A 段输入快照（§2.1.1，执行前冻结）
@@ -275,17 +277,19 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
         "cwd": cwd,
         "prompt_name": task_spec["prompt"],
         "task_mode": task_spec["mode"],
+        "change_policy": change_policy,
         "publish_policy": registry.get_publish_policy(project),
         "shadow_base_commit": projects.shadow_head(project_id),
         "components": [{"name": c["name"], "skill": c["skill"],
                         "skill_hash": _file_hash(c["skill"])} for c in registry.injectable_components()],
         "ci_context": ci_context,
+        **change,
     }
     run_id = execute(
-        "INSERT INTO task_runs(project_id, task_type, status, harness, prompt_version,"
+        "INSERT INTO task_runs(task_id, project_id, task_type, status, trigger, harness, prompt_version,"
         " input_snapshot, created_by, started_at, runner_env)"
-        " VALUES (?,?,?,?,?,?,?,?,?)",
-        (project_id, task_type, "queued", harness_name, prompt_version,
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (task_id, project_id, task_type, "queued", trigger_kind, harness_name, prompt_version,
          dumps(snapshot), actor, time.time(), _runner_env()))
     # prompt 在 run_id 分配后渲染（需要 {{report_file}}/{{prompt_file}} 等运行路径变量）
     run_dir = Cfg.runs_dir() / str(run_id)
@@ -298,10 +302,35 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
         "task_mode": task_spec["mode"],
         "ci_context": json.dumps(ci_context, ensure_ascii=False, indent=2),
         "report_delivery": _report_delivery(harness, report_file),
+        "change_context": change_detection.format_context(change["change_summary"]),
     })
     # A 段：渲染后 prompt 全文落库（任务列表可查看；文件副本 runs/<id>/prompt.md 同步保留）
     execute("UPDATE task_runs SET prompt_text=? WHERE id=?", (prompt, run_id))
+    if allow_skip and change_detection.should_skip(change_policy, change["change_summary"]):
+        execute("UPDATE task_runs SET status='skipped', error=?, error_class='无增量',"
+                " finished_at=? WHERE id=?",
+                (f"自动触发按 {change_policy} 策略跳过：无相关输入变化", time.time(), run_id))
+        return get_run(run_id)
     threading.Thread(target=_run, args=(run_id, harness, prompt, cwd), daemon=True).start()
+    return get_run(run_id)
+
+
+def record_preflight_failure(task: dict, trigger_kind: str, error: Exception) -> dict:
+    """自动触发进入 runner 前失败也保留 Run，避免调度器静默漏档。"""
+    now = time.time()
+    snapshot = {"change_policy": task.get("change_policy") or "always",
+                "change_summary": {"state": "unknown", "repo_state": "unknown",
+                                   "error": f"前置检查失败：{type(error).__name__}"}}
+    run_id = execute(
+        "INSERT INTO task_runs(task_id, project_id, task_type, status, trigger, harness,"
+        " prompt_version, input_snapshot, error, error_class, created_by, started_at,"
+        " finished_at, runner_env) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (task["id"], task["project_id"], task["task_type"], "failed", trigger_kind,
+         task.get("harness") or "preflight", "", dumps(snapshot),
+         "自动触发前置检查失败，详情见 supervisor 审计日志", "前置检查",
+         trigger_kind, now, now, _runner_env()))
+    audit("supervisor", "run.preflight_failed", f"run#{run_id}",
+            f"{type(error).__name__}（原始异常文本未记录）")
     return get_run(run_id)
 
 
@@ -453,7 +482,7 @@ def get_run(run_id: int) -> dict:
 
 
 def list_runs(project_id: int | None = None, limit: int = 50) -> list[dict]:
-    cols = ("id, project_id, task_type, status, trigger, harness, prompt_version, log_path,"
+    cols = ("id, task_id, project_id, task_type, status, trigger, harness, prompt_version, input_snapshot, log_path,"
             " report_path, error, error_class, runner_env, artifacts, publication, created_by,"
             " started_at, finished_at")
     if project_id:
@@ -461,4 +490,12 @@ def list_runs(project_id: int | None = None, limit: int = 50) -> list[dict]:
                  (project_id, limit))
     else:
         rows = q(f"SELECT {cols} FROM task_runs ORDER BY id DESC LIMIT ?", (limit,))
+    for row in rows:
+        try:
+            snapshot = json.loads(row.pop("input_snapshot") or "{}")
+        except json.JSONDecodeError:
+            snapshot = {}
+        row["baseline_run_id"] = snapshot.get("baseline_run_id")
+        row["change_summary"] = snapshot.get("change_summary") or {}
+        row["repo_head"] = snapshot.get("repo_head", "")
     return rows

@@ -62,6 +62,7 @@ class PromptRegistryTest(unittest.TestCase):
             "repo_head": "abc123",
             "ci_context": "{}",
             "report_delivery": "输出完整 Markdown。",
+            "change_context": "- 状态：有增量",
         }
 
         with patch.object(runner.projects, "repo_dir", return_value=Path("C:/repos/7")), \

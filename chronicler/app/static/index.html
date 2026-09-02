@@ -195,6 +195,9 @@
                   <span style="font-family:Consolas,monospace">{{ row.schedule_cron || '（手动）' }}</span>
                 </template>
               </el-table-column>
+              <el-table-column label="增量策略" width="110">
+                <template #default="{ row }">{{ changePolicyText(row.change_policy) }}</template>
+              </el-table-column>
               <el-table-column label="工作目录" width="100">
                 <template #default="{ row }">
                   <el-tag v-if="row.cwd" size="small" type="warning" effect="plain">{{ row.cwd }}</el-tag>
@@ -244,8 +247,11 @@
               </template>
             </el-table-column>
             <el-table-column prop="harness" label="Harness" width="110" show-overflow-tooltip></el-table-column>
-            <el-table-column label="开始时间" width="160">
-              <template #default="{ row }">{{ fmtTime(row.started_at) }}</template>
+            <el-table-column label="开始时间 / 输入增量" min-width="300">
+              <template #default="{ row }">
+                <div>{{ fmtTime(row.started_at) }}</div>
+                <div class="muted" style="font-size:12px">{{ changeSummaryText(row) }}</div>
+              </template>
             </el-table-column>
             <el-table-column prop="error" label="错误" show-overflow-tooltip></el-table-column>
             <el-table-column label="操作" width="200">
@@ -489,6 +495,16 @@
           </el-select>
         </el-form-item>
         <el-form-item label="调度 cron（留空=仅手动触发）"><el-input v-model="newTaskForm.schedule_cron" placeholder="0 9 * * *"></el-input></el-form-item>
+        <el-form-item label="自动运行增量策略">
+          <el-select v-model="newTaskForm.change_policy" style="width:100%">
+            <el-option label="始终运行（always，混合依赖默认）" value="always"></el-option>
+            <el-option label="仅主仓变化（repo-changed）" value="repo-changed"></el-option>
+            <el-option label="任一有效输入变化（inputs-changed）" value="inputs-changed"></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="变更探针 JSON（可选；命令 stdout 应为稳定标识）">
+          <el-input v-model="newTaskForm.change_probes" type="textarea" :rows="4" class="mono" placeholder='[{"name":"deps","command":"scripts/resolve-inputs.ps1"}]'></el-input>
+        </el-form-item>
         <el-form-item label="启用"><el-switch v-model="newTaskForm.enabled"></el-switch></el-form-item>
       </el-form>
       <template #footer>
@@ -513,6 +529,16 @@
           </el-select>
         </el-form-item>
         <el-form-item label="调度 cron（留空=仅手动触发）"><el-input v-model="taskEditForm.schedule_cron" placeholder="0 9 * * *"></el-input></el-form-item>
+        <el-form-item label="自动运行增量策略">
+          <el-select v-model="taskEditForm.change_policy" style="width:100%">
+            <el-option label="始终运行（always，混合依赖默认）" value="always"></el-option>
+            <el-option label="仅主仓变化（repo-changed）" value="repo-changed"></el-option>
+            <el-option label="任一有效输入变化（inputs-changed）" value="inputs-changed"></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="变更探针 JSON（可选；命令 stdout 应为稳定标识）">
+          <el-input v-model="taskEditForm.change_probes" type="textarea" :rows="4" class="mono"></el-input>
+        </el-form-item>
         <el-form-item label="启用"><el-switch v-model="taskEditForm.enabled"></el-switch></el-form-item>
         <el-form-item label="Webhook（预留，暂未开放）">
           <el-input v-model="taskEditForm.webhook" disabled placeholder="预留字段"></el-input>

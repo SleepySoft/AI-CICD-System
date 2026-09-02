@@ -1,6 +1,6 @@
 """任务定义路由：CRUD + 触发 + 启停（FR-MGR-004 前置形态）"""
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .. import tasks
 from ..auth import current_user, require_admin
@@ -16,6 +16,8 @@ class TaskBody(BaseModel):
     harness: str = ""
     cwd: str = ""
     schedule_cron: str = ""
+    change_policy: str = "always"
+    change_probes: list[dict] = Field(default_factory=list)
     enabled: bool = True
 
 
@@ -24,6 +26,8 @@ class TaskPatch(BaseModel):
     harness: str | None = None
     cwd: str | None = None
     schedule_cron: str | None = None
+    change_policy: str | None = None
+    change_probes: list[dict] | None = None
     webhook: bool | None = None
     enabled: bool | None = None
     prompt_override: str | None = None
@@ -37,7 +41,8 @@ async def list_(project_id: int | None = None, user: dict = Depends(current_user
 @router.post("")
 async def create(body: TaskBody, user: dict = Depends(require_admin)):
     t = tasks.create_task(body.project_id, body.name, body.task_type,
-                          body.schedule_cron, body.enabled, body.cwd, body.harness)
+                          body.schedule_cron, body.enabled, body.cwd, body.harness,
+                          body.change_policy, body.change_probes)
     audit(user["username"], "task.create", t["name"])
     return t
 
@@ -45,6 +50,11 @@ async def create(body: TaskBody, user: dict = Depends(require_admin)):
 @router.get("/{tid}")
 async def detail(tid: int, user: dict = Depends(current_user)):
     return tasks.get_task(tid)
+
+
+@router.get("/{tid}/changes")
+async def changes(tid: int, user: dict = Depends(require_admin)):
+    return tasks.preview_task_changes(tid)
 
 
 @router.patch("/{tid}")

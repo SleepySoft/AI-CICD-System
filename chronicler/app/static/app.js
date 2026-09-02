@@ -59,10 +59,11 @@ const app = createApp({
     const loadingTasks = ref(false);
     const showNewTask = ref(false);
     const newTaskForm = ref({ project_id: null, name: "", task_type: "", harness: "", cwd: "",
-                              schedule_cron: "", enabled: true });
+                              schedule_cron: "", change_policy: "always", change_probes: "[]", enabled: true });
     const showTaskEdit = ref(false);
     const taskEditRow = ref(null);
     const taskEditForm = ref({ name: "", harness: "", cwd: "", schedule_cron: "", enabled: true,
+                               change_policy: "always", change_probes: "[]",
                                webhook: "", prompt_override: "" });
     const showPrompt = ref(false);
     const promptView = ref({ name: "", version: "", content: "", overridden: false });
@@ -125,10 +126,34 @@ const app = createApp({
     function projectName(id) { return projects.value.find(p => p.id === id)?.name || `#${id}`; }
     function tasksOfProject(id) { return tasks.value.filter(t => t.project_id === id); }
     function runStatusText(s) {
-      return { queued: "排队中", running: "运行中", success: "成功", failed: "失败" }[s] || s;
+      return { queued: "排队中", running: "运行中", success: "成功", failed: "失败", skipped: "已跳过" }[s] || s;
     }
     function runTagType(s) {
-      return { queued: "info", running: "primary", success: "success", failed: "danger" }[s] || "info";
+      return { queued: "info", running: "primary", success: "success", failed: "danger", skipped: "warning" }[s] || "info";
+    }
+    function changePolicyText(policy) {
+      return { always: "始终运行", "repo-changed": "仓库变化", "inputs-changed": "任一输入变化" }[policy] || policy;
+    }
+    function shortRevision(revision) { return revision ? revision.slice(0, 8) : "无基线"; }
+    function changeSummaryText(change) {
+      const s = change?.change_summary || change || {};
+      if (!s.state) return "历史 Run 无增量快照";
+      const baseline = change?.baseline_run_id ? `Run #${change.baseline_run_id} · ` : "";
+      const revisions = `${shortRevision(s.base_revision)} → ${shortRevision(s.head_revision)}`;
+      if (s.state === "initial") return `首次执行 · ${shortRevision(s.head_revision)}`;
+      if (s.state === "unchanged") return `${baseline}${revisions} · 无有效输入变化`;
+      if (s.state === "changed") {
+        const probes = s.changed_probes?.length ? ` · 输入:${s.changed_probes.join(",")}` : "";
+        return `${baseline}${revisions} · ${s.commits || 0} commits · ${s.files || 0} files · +${s.insertions || 0}/-${s.deletions || 0}${probes}`;
+      }
+      if (s.state === "diverged") return `${baseline}${revisions} · 历史分叉`;
+      return `${baseline}${revisions} · 增量未知${s.probe_errors?.length ? `：${s.probe_errors.join("；")}` : ""}`;
+    }
+    function changeConfirmText(change) {
+      const summary = changeSummaryText(change);
+      return change?.change_summary?.state === "unchanged"
+        ? `未检测到有效输入增量。\n${summary}\n仍要启动 Agent 吗？`
+        : `本次增量：${summary}\n确认启动 Agent？`;
     }
     function toolStatusText(t) {
       return { running: "运行中", stopped: "已停止", absent: "未部署", unknown: "未知" }[t.status] || t.status;
@@ -244,7 +269,7 @@ const app = createApp({
     function openNewTask() {
       newTaskForm.value = { project_id: projects.value[0]?.id || null, name: "",
                             task_type: taskTypes.value[0]?.name || "", harness: "", cwd: "",
-                            schedule_cron: "", enabled: true };
+                            schedule_cron: "", change_policy: "always", change_probes: "[]", enabled: true };
       showNewTask.value = true;
     }
     async function createTask() {
@@ -252,9 +277,12 @@ const app = createApp({
       if (!f.project_id || !f.name || !f.task_type) { ElementPlus.ElMessage.warning("工程、名称与任务类型必填"); return; }
       acting.value = true;
       try {
+        const probes = parseJson(f.change_probes, "变更探针");
+        if (!Array.isArray(probes)) throw new Error("变更探针必须是 JSON 数组");
         await api("/api/tasks", { method: "POST", body: JSON.stringify({
           project_id: f.project_id, name: f.name, task_type: f.task_type,
           harness: f.harness || "", cwd: f.cwd || "", schedule_cron: f.schedule_cron,
+          change_policy: f.change_policy, change_probes: probes,
           enabled: f.enabled ? 1 : 0 }) });
         toast.ok("任务已创建"); showNewTask.value = false; loadTasks();
       } catch (e) { toast.err(e); }
@@ -271,16 +299,21 @@ const app = createApp({
       taskEditRow.value = t;
       taskEditForm.value = { name: t.name || "", harness: t.harness || "", cwd: t.cwd || "",
                              schedule_cron: t.schedule_cron || "",
+                             change_policy: t.change_policy || "always",
+                             change_probes: JSON.stringify(t.change_probes || [], null, 2),
                              enabled: !!t.enabled, webhook: t.webhook || "", prompt_override: t.prompt_override || "" };
       showTaskEdit.value = true;
     }
     async function saveTaskEdit() {
       acting.value = true;
       try {
+        const probes = parseJson(taskEditForm.value.change_probes, "变更探针");
+        if (!Array.isArray(probes)) throw new Error("变更探针必须是 JSON 数组");
         await api(`/api/tasks/${taskEditRow.value.id}`, { method: "PATCH", body: JSON.stringify({
           name: taskEditForm.value.name, harness: taskEditForm.value.harness || "",
           cwd: taskEditForm.value.cwd || "",
           schedule_cron: taskEditForm.value.schedule_cron,
+          change_policy: taskEditForm.value.change_policy, change_probes: probes,
           enabled: taskEditForm.value.enabled ? 1 : 0, prompt_override: taskEditForm.value.prompt_override }) });
         toast.ok("任务已保存"); showTaskEdit.value = false; loadTasks();
       } catch (e) { toast.err(e); }
@@ -294,9 +327,12 @@ const app = createApp({
       } catch (e) { if (e !== "cancel" && e?.message) toast.err(e); }
     }
     async function triggerTask(t) {
+      let change;
+      try { change = await api(`/api/tasks/${t.id}/changes`); }
+      catch (e) { toast.err(e); return; }
       try {
         await ElementPlus.ElMessageBox.confirm(
-          `确认触发任务「${t.name}」（${t.task_type}）？将立即开始执行。`,
+          changeConfirmText(change),
           "触发任务", { type: "warning", confirmButtonText: "确认触发", cancelButtonText: "取消" });
       } catch (_) { return; }  // 取消
       acting.value = true;
@@ -363,6 +399,17 @@ const app = createApp({
     }
     async function triggerRun() {
       if (!triggerForm.value.project_id || !triggerForm.value.task_type) { ElementPlus.ElMessage.warning("请选择工程与任务类型"); return; }
+      try {
+        const query = new URLSearchParams({ project_id: triggerForm.value.project_id,
+                                            task_type: triggerForm.value.task_type });
+        const change = await api(`/api/runs/change-preview?${query}`);
+        await ElementPlus.ElMessageBox.confirm(changeConfirmText(change), "触发任务",
+          { type: change.change_summary?.state === "unchanged" ? "warning" : "info",
+            confirmButtonText: "确认触发", cancelButtonText: "取消" });
+      } catch (e) {
+        if (e === "cancel" || e === "close") return;
+        toast.err(e); return;
+      }
       acting.value = true;
       try {
         await api("/api/runs/trigger", { method: "POST", body: JSON.stringify(triggerForm.value) });
@@ -629,6 +676,7 @@ const app = createApp({
       showNewTask, newTaskForm, showTaskEdit, taskEditRow, taskEditForm,
       showPrompt, promptView, taskPromptSource,
       fmtTime, open, projectName, runStatusText, runTagType, toolStatusText,
+      changePolicyText, changeSummaryText,
       login, logout, onTabChange,
       loadProjects, createProject, syncProject, resetClone, openEdit, saveEdit, removeProject,
       loadRuns, openTrigger, triggerRun, openLog, openReport, openRunPrompt, stopLogPoll,

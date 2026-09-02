@@ -1,8 +1,8 @@
 # Chronicler（supervisor）规格（数据模型 / API / 任务框架 / 权限 / 页面）
 
-> 版本：v1.5 · 日期：2026-09-02 · 状态：生效
+> 版本：v1.6 · 日期：2026-09-02 · 状态：生效
 > 定位：Chronicler（原 Manager，宿主侧 supervisor，ADR-0020/0022）对外可见的契约与规格；内部机制（架构、执行管线、CI 集成）见 ../how/manager-architecture.md
-> 关联需求：FR-MGR-001 ~ FR-MGR-026、FR-TASK-002、FR-TASK-003、BR-008
+> 关联需求：FR-MGR-001 ~ FR-MGR-028、FR-TASK-002、FR-TASK-003、BR-008
 > v1 实现注记：存储 SQLite（ADR-0023），鉴权本地账密 admin/user（Keycloak 后端预留），agent 为宿主自装 harness（ADR-0021）；Git 发布已落 direct 基础框架（main 直接提交/推送，不建 PR），远端基线保护及 review/local 仍属规划
 
 ## 1. WHY
@@ -28,7 +28,8 @@ task_type_registry 任务类型：name, prompt_name, mode, desc；任务职责�
 task_def           任务定义：name, type(引用 task_type_registry，见 §2.3), repo_ids[], agent_id, prompt_id,
                    harness(任务级 harness 覆盖，''=回落工程/全局), cwd(repo|shadow|''，
                    工作目录覆盖，''=回落 harness 默认), schedule_cron, enabled,
-                   params(JSON), output_visibility(dev|boss)
+                   change_policy(always|repo-changed|inputs-changed),
+                   change_probes(JSON command probe 列表), params(JSON), output_visibility(dev|boss)
 task_run           一次执行：详细字段见 §2.1.1 Run 档案契约（FR-MGR-005）
 report             报告：run_id, title, type, visibility, md_path, summary, created_at,
                    reviewed(bool), reviewer
@@ -58,6 +59,10 @@ queued_at          入队时间                                    【v1】
 project            工程 id/name/git_url                        【v1】
 repo_base_commit   分析基于的提交 SHA（全量，非短 hash）        【v1】
 repo_status        工作区是否脏（有未提交改动需警示）        【v1】repo_dirty
+baseline_run_id    同一任务上次成功 Run；首次执行为空
+source_snapshot    主仓 revision + 可选 probe 名称/指纹/状态 + 总指纹
+change_summary     initial|changed|unchanged|diverged|unknown，含 base/head、
+                   commits/files/insertions/deletions、变化 probe 与探测错误
 harness            name + 解析后的完整启动命令 + CLI 版本      【v1】
 prompt             模板版本 hash + 渲染后全文（落库 task_runs.prompt_text，文件副本
                    runs/<id>/prompt.md）                       【v1】
@@ -146,7 +151,26 @@ GET    /api/health                   供 Uptime Kuma
 
 自定义任务：选 repo + agent + prompt + cron 即成新任务（`type=custom`）。
 
-### 2.3.1 Git 发布与审核契约
+### 2.3.1 有效输入与增量契约
+
+任务增量以“有效输入快照”而非单一 commit 表示（ADR-0035）：
+
+- 内置 Git 输入记录同步后的主仓完整 HEAD；可计算时记录上次成功 Run 到本次 HEAD 的提交数与 diff stat。
+- 可选 command probe 在工程仓根执行管理员配置的只读命令，stdout 规范化后计算 SHA-256；快照只保存名称、指纹和状态，不保存原始 stdout/stderr。probe 输出不得包含密钥、token 或其它机密。
+- 总指纹由规范化的 Git revision 与 probe 指纹计算。任一 probe 超时、退出非零或无输出时状态为 `unknown`，不得解释为“无变化”；代码同步本身失败则形成 `failed` Run，不使用旧克隆伪装成最新输入。
+- Chronicler 不内置 Conan 等包管理器适配；混合项目可提供输出稳定标识的 command probe。无法提供确定性 probe 时使用默认 `always`。
+
+策略仅影响 cron/webhook 等自动触发；手动触发先展示预览并始终允许继续：
+
+| 策略 | 自动执行条件 |
+|------|--------------|
+| `always` | 始终执行（默认，兼容混合/动态依赖） |
+| `repo-changed` | 主仓首次执行、发生提交、分叉或状态未知 |
+| `inputs-changed` | 主仓或任一 probe 首次出现/指纹变化；状态未知时继续执行 |
+
+无相关增量时自动触发仍创建 `status=skipped` 的 Run，保留调度审计、快照和原因。Run 列表显示基线 revision → 当前 revision 与增量统计；同一摘要通过 `{{change_context}}` 注入 Prompt。
+
+### 2.3.2 Git 发布与审核契约
 
 FR-MGR-009/013/014/026 共用同一个 Git 变更审核模型，完整决策见 ../adr/0033-chronicler-owned-git-publication.md：
 

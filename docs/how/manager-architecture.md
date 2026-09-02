@@ -1,8 +1,8 @@
 # Manager 架构与执行机制
 
-> 版本：v1.4 · 日期：2026-09-02 · 状态：生效
+> 版本：v1.5 · 日期：2026-09-02 · 状态：生效
 > 定位：Manager 的内部实现机制（架构、执行管线、CI 集成、部署形态）；规格契约见 ../what/manager.md
-> 关联需求：FR-MGR-003 ~ FR-MGR-026
+> 关联需求：FR-MGR-003 ~ FR-MGR-028
 
 ## 1. WHY / WHAT 摘要
 
@@ -41,8 +41,10 @@ FastAPI + SQLAlchemy 2 + Alembic（异步、自带 OpenAPI）；APScheduler（As
 
 ```
 触发(cron/手动/webhook)
-  → 创建 Run(queued)，冻结输入快照(commit range、prompt 版本、CI 上下文)
-  → 同步代码：git clone/pull 到缓存卷 repos/<id>/（凭证从 secret 注入，落盘前脱敏）
+  → 同步代码：每次 trigger 前 fetch/checkout/reset 到配置分支；首次 clone
+  → 执行 Git + command probes，生成有效输入快照并与上次成功 Run 比较
+  → 自动触发按 change_policy 决定 queued 或 skipped；手动触发只提示不跳过
+  → 创建 Run，冻结基线/增量、prompt 版本、CI 上下文
   → collector 采集上下文（diff/文档/需求/CI 结果），超限自动摘要分片
   → 渲染 prompt（模板变量替换 + 已配置资源能力(skill)的访问途径注入，FR-MGR-015）
   → 宿主直起 harness 进程（ADR-0021：命令 + 参数模板来自 agent_profile；
@@ -58,6 +60,8 @@ FastAPI + SQLAlchemy 2 + Alembic（异步、自带 OpenAPI）；APScheduler（As
 并发控制：全局信号量（默认 2 个并发 Run）+ 每工程代码仓串行锁 + 每 shadow 仓串行锁。shadow 锁覆盖分支准备、Agent 写入、提交与工作树恢复，避免不同 harness 并发切换同一工作树；harness 自身仍可因全局状态另设串行锁。
 
 任务解析（ADR-0034）：`registry.TASK_TYPES` 是新任务清单，记录 `name/prompt/mode/desc`；runner 在冻结 Run 快照前解析任务，将 `prompt_name`、`task_mode`、`repo_head` 与 `ci_context` 注入模板。配置 API 分别提供 task-types 和 prompts，前端因此显示 5 个可执行任务与 4 个可编辑模板。`LEGACY_TASK_TYPES` 只在执行旧 task_def 时解析，不参与新工程预置。
+
+增量探测（ADR-0035）：`change_detection` 在 Agent 之前运行。它从同一 task_id 最近一次 success Run 读取 source_snapshot，计算 Git 提交/diff，并串行执行配置的 command probes（宿主 shell、工程仓 cwd、默认超时 60 秒）。探测结果写入 input_snapshot 和 Prompt；自动无增量写入 skipped Run，不启动 harness。probe 失败令状态 unknown 并继续运行；同步/其它前置失败则写入脱敏的 failed Run，避免把环境故障误判为无变化或静默漏档。
 
 ### 2.3.1 Git 发布管线（FR-MGR-009/013/014/026）
 
