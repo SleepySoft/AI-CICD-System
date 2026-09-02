@@ -24,6 +24,7 @@ from .config import PKG_ROOT, Cfg
 from .db import audit, dumps, execute, q, q1
 
 _harness_locks: dict[str, threading.Lock] = {}
+_shadow_locks: dict[int, threading.Lock] = {}
 STALE_QUEUE_GRACE_SEC = 600    # queued 超过 10 分钟仍未开始 = 悬挂
 STALE_RUN_GRACE_SEC = 120      # running 超过 harness 超时后再宽限 2 分钟
 
@@ -33,6 +34,13 @@ def _harness_lock(name: str) -> threading.Lock:
     if name not in _harness_locks:
         _harness_locks[name] = threading.Lock()
     return _harness_locks[name]
+
+
+def _shadow_lock(project_id: int) -> threading.Lock:
+    """同一 project_shadow 串行，锁覆盖 Agent 写入、提交和发布。"""
+    if project_id not in _shadow_locks:
+        _shadow_locks[project_id] = threading.Lock()
+    return _shadow_locks[project_id]
 
 
 def _q(path: str) -> str:
@@ -251,6 +259,8 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
         "harness_version": _harness_version(harness),
         "harness_timeout": int(harness.get("timeout_sec", 1800)),
         "cwd": cwd,
+        "publish_policy": registry.get_publish_policy(project),
+        "shadow_base_commit": projects.shadow_head(project_id),
         "components": [{"name": c["name"], "skill": c["skill"],
                         "skill_hash": _file_hash(c["skill"])} for c in registry.injectable_components()],
         "ci_context": _ci_context(project),
@@ -296,8 +306,12 @@ def _run(run_id: int, harness: dict, prompt: str, cwd: str = "repo"):
 
     execute("UPDATE task_runs SET status='running', log_path=? WHERE id=?",
             (str(log_file), run_id))
-    with _harness_lock(harness["name"]):
+    with _harness_lock(harness["name"]), _shadow_lock(run["project_id"]):
         try:
+            publish_policy = run["input_snapshot"].get("publish_policy", "direct")
+            if publish_policy != "direct":
+                raise RuntimeError(f"尚未实现的发布策略：{publish_policy}")
+            projects.prepare_shadow_direct(run["project_id"])
             with open(log_file, "w", encoding="utf-8") as log:
                 log.write(f"$ {command}\n\n")
             returncode, stdout = _exec(command, cwd_path, env, stdin_data, log_file,
@@ -309,15 +323,16 @@ def _run(run_id: int, harness: dict, prompt: str, cwd: str = "repo"):
             if returncode == 0 or report_file.is_file():
                 if report_file.is_file():
                     artifacts.append(_publish(run, report_file))
-                sha, shadow_arts = _commit_shadow(run)  # ADR-0028：统一提交，报告 artifact 回填 commit
+                sha, shadow_arts, publication = _commit_shadow(run, publish_policy)
                 if sha:
                     for a in artifacts:
                         a["commit"] = a.get("commit") or sha
                 artifacts.extend(shadow_arts)
             if artifacts:
                 warn = "" if returncode == 0 else f"（harness 退出码 {returncode}，产物已在，判成功）"
-                execute("UPDATE task_runs SET status='success', artifacts=?, error=?, finished_at=? WHERE id=?",
-                        (dumps(artifacts), warn, time.time(), run_id))
+                execute("UPDATE task_runs SET status='success', artifacts=?, publication=?, error=?,"
+                    " finished_at=? WHERE id=?",
+                    (dumps(artifacts), dumps(publication), warn, time.time(), run_id))
             else:
                 err = "" if returncode == 0 else f"exit code {returncode}"
                 if not artifacts:
@@ -333,24 +348,41 @@ def _run(run_id: int, harness: dict, prompt: str, cwd: str = "repo"):
                     (err, _classify_error(err), time.time(), run_id))
 
 
-def _commit_shadow(run: dict) -> tuple[str | None, list[dict]]:
-    """shadow 库收尾（FR-MGR-013）：有变更则提交，返回 (commit_sha, 新增产物清单)"""
+def _commit_shadow(run: dict, publish_policy: str) -> tuple[str | None, list[dict], dict]:
+    """由 Chronicler 提交并发布 shadow 变更；首版实现 direct 到 main。"""
     shadow = projects.shadow_dir(run["project_id"])
+    publication = {
+        "mode": publish_policy,
+        "base_commit": run.get("input_snapshot", {}).get("shadow_base_commit", ""),
+        "branch": projects.SHADOW_MAIN_BRANCH,
+        "push_status": "pending",
+        "pr_number": None,
+        "pr_url": "",
+        "publish_error": "",
+    }
     if not shadow.is_dir():
-        return None, []
+        publication["push_status"] = "failed"
+        publication["publish_error"] = "shadow 仓不存在"
+        return None, [], publication
     status = projects._git(["-C", str(shadow), "status", "--porcelain"]).stdout.strip()
     if not status:
-        return None, []
+        publication["push_status"] = "unchanged"
+        return None, [], publication
     projects._git(["-C", str(shadow), "add", "-A"])
-    projects._git(["-C", str(shadow), "-c", "user.name=chronicler", "-c",
-                   "user.email=chronicler@localhost", "commit", "-m",
-                   f"run#{run['id']} {run['task_type']}"])
+    committed = projects._git(["-C", str(shadow), "-c", "user.name=chronicler", "-c",
+                               "user.email=chronicler@localhost", "commit", "-m",
+                               f"run#{run['id']} {run['task_type']}"])
+    if committed.returncode != 0:
+        raise RuntimeError(f"shadow 提交失败：{committed.stderr.strip()[:300]}")
     sha = projects._git(["-C", str(shadow), "rev-parse", "HEAD"]).stdout.strip()
     pushed = False
     try:
-        pushed = bool(projects.push_shadow(run["project_id"]))  # ADR-0028：推送失败不判死
+        pushed = bool(projects.push_shadow(run["project_id"], projects.SHADOW_MAIN_BRANCH))
+        publication["push_status"] = "pushed" if pushed else "local"
     except Exception as e:  # noqa: BLE001
         _audit_push_failure(run, e)
+        publication["push_status"] = "failed"
+        publication["publish_error"] = str(e)[:500]
     arts = []
     for line in status.splitlines():
         path = line[3:].strip()
@@ -359,7 +391,7 @@ def _commit_shadow(run: dict) -> tuple[str | None, list[dict]]:
                      "path": str(full), "action": "created" if line.startswith("??") else "updated",
                      "size_bytes": full.stat().st_size if full.is_file() else 0,
                      "commit": sha, "pushed": pushed})
-    return sha, arts
+    return sha, arts, publication
 
 
 def _publish(run: dict, report_file) -> dict:
@@ -392,12 +424,13 @@ def get_run(run_id: int) -> dict:
         raise HTTPException(status_code=404, detail="Run 不存在")
     r["input_snapshot"] = json.loads(r["input_snapshot"] or "{}")
     r["artifacts"] = json.loads(r.get("artifacts") or "[]")
+    r["publication"] = json.loads(r.get("publication") or "{}")
     return r
 
 
 def list_runs(project_id: int | None = None, limit: int = 50) -> list[dict]:
     cols = ("id, project_id, task_type, status, trigger, harness, prompt_version, log_path,"
-            " report_path, error, error_class, runner_env, artifacts, created_by,"
+            " report_path, error, error_class, runner_env, artifacts, publication, created_by,"
             " started_at, finished_at")
     if project_id:
         rows = q(f"SELECT {cols} FROM task_runs WHERE project_id=? ORDER BY id DESC LIMIT ?",

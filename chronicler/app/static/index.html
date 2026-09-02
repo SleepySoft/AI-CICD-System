@@ -263,7 +263,7 @@
 
         <!-- ============ 配置 ============ -->
         <el-tab-pane label="配置" name="config">
-          <div class="group-title">全局默认 Harness</div>
+          <div class="group-title">全局默认配置</div>
           <div class="card-box" style="max-width:640px">
             <div class="tool-desc">任务未设置工程级覆盖时使用的 agent（FR-MGR-020）。注意：若某工程在「工程设置 → Agent harness 覆盖」配置了值，该工程以工程覆盖为准，不受这里影响。</div>
             <div style="display:flex;gap:8px;margin-top:10px">
@@ -272,6 +272,10 @@
               </el-select>
               <el-button v-if="isAdmin" type="primary" @click="saveDefaultHarness" :loading="acting">保存默认</el-button>
             </div>
+            <div class="tool-desc" style="margin-top:14px">AI 产物发布策略（FR-MGR-026）。当前默认直接接受：由 Chronicler 提交到 shadow 仓 main 分支，不创建审核分支或 PR。</div>
+            <el-select v-model="defaultPublishPolicy" :disabled="!isAdmin" style="width:100%;margin-top:10px">
+              <el-option label="直接接受并提交 main（direct）" value="direct"></el-option>
+            </el-select>
           </div>
           <div class="group-title">Harness 列表</div>
           <div v-if="isAdmin" style="margin-bottom:10px">

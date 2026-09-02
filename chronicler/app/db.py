@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS task_runs (
     error_class TEXT DEFAULT '',                 -- B 段：网络|配额|解析|超时|其他
     runner_env TEXT DEFAULT '',                  -- B 段：执行环境（平台+supervisor 版本）
     artifacts TEXT DEFAULT '[]',                 -- C 段：产物清单 JSON[{kind,path,action,size_bytes,commit}]
+    publication TEXT DEFAULT '{}',               -- C 段：发布策略/分支/push 状态（FR-MGR-026）
     prompt_text TEXT DEFAULT '',                 -- A 段：本次实际执行的渲染后 prompt 全文（任务列表可查看）
     created_by TEXT DEFAULT '',
     started_at REAL, finished_at REAL
@@ -94,6 +95,7 @@ def _migrate():
         ("error_class", "TEXT DEFAULT ''"),
         ("runner_env", "TEXT DEFAULT ''"),
         ("artifacts", "TEXT DEFAULT '[]'"),
+        ("publication", "TEXT DEFAULT '{}'"),
     ):
         if col not in {r["name"] for r in q("PRAGMA table_info(task_runs)")}:
             db().execute(f"ALTER TABLE task_runs ADD COLUMN {col} {ddl}")

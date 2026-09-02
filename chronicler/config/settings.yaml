@@ -1,3 +1,5 @@
 # 全局设置（配置页可改，admin 保存后写入 data/private/chronicler/config/settings.yaml 覆盖文件）
 # default_harness: 任务未配置工程级覆盖时使用的 harness（页面「配置」可切换）
+# default_publish_policy: AI 产物发布策略；首版 direct=不经 review，直接提交主分支
 default_harness: dummy
+default_publish_policy: direct

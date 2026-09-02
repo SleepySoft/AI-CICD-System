@@ -20,6 +20,7 @@ const app = createApp({
     const taskFilter = ref(null);
     const harnesses = ref([]);
     const defaultHarness = ref("");
+    const defaultPublishPolicy = ref("direct");
     const showHarnessForm = ref(false);
     const editingHarnessName = ref("");
     const harnessForm = ref({ name: "", desc: "", command_template: "", prompt_mode: "file",
@@ -394,18 +395,26 @@ const app = createApp({
 
     async function loadConfig() {
       try {
-        [harnesses.value, components.value, prompts.value, defaultHarness.value] = await Promise.all([
-          api("/api/config/harnesses"), api("/api/config/components"), api("/api/config/prompts"),
-          api("/api/config/settings").then(s => s.default_harness || ""),
+        const [loadedHarnesses, loadedComponents, loadedPrompts, settings] = await Promise.all([
+          api("/api/config/harnesses"), api("/api/config/components"),
+          api("/api/config/prompts"), api("/api/config/settings"),
         ]);
+        harnesses.value = loadedHarnesses;
+        components.value = loadedComponents;
+        prompts.value = loadedPrompts;
+        defaultHarness.value = settings.default_harness || "";
+        defaultPublishPolicy.value = settings.default_publish_policy || "direct";
       } catch (e) { toast.err(e); }
     }
     async function saveDefaultHarness() {
       if (!defaultHarness.value) { toast.err(new Error("请选择默认 harness")); return; }
       acting.value = true;
       try {
-        await api("/api/config/settings", { method: "PUT", body: JSON.stringify({ default_harness: defaultHarness.value }) });
-        toast.ok(`全局默认 harness 已切换为 ${defaultHarness.value}`);
+        await api("/api/config/settings", { method: "PUT", body: JSON.stringify({
+          default_harness: defaultHarness.value,
+          default_publish_policy: defaultPublishPolicy.value,
+        }) });
+        toast.ok("全局默认配置已保存");
       } catch (e) { toast.err(e); }
       finally { acting.value = false; }
     }
@@ -605,7 +614,7 @@ const app = createApp({
       user, loading, acting, loginError, loginForm, authBackend, ssoLogin, showLocalLogin, tab, isAdmin,
       projects, loadingProjects, runs, loadingRuns, runFilter,
       harnesses, components, componentList, prompts,
-      defaultHarness, showHarnessForm, editingHarnessName, harnessForm,
+      defaultHarness, defaultPublishPolicy, showHarnessForm, editingHarnessName, harnessForm,
       tools, loadingTools, groupedTools, users, newUser,
       showToolLog, toolLogName, toolLogText, showToolDetail, toolDetail,
       showDeploy, deployName, deployState, deployLines, openDeploy, closeDeploy,

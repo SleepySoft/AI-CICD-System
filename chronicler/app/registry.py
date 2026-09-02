@@ -15,6 +15,7 @@ from .config import PKG_ROOT, Cfg
 
 _ENV_REF = re.compile(r"^\$\{(\w+)\}$")
 _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+PUBLISH_POLICIES = ("direct",)
 
 
 def _write_data_yaml(name: str, data, header: str = "") -> Path:
@@ -116,6 +117,13 @@ def get_default_harness() -> str:
                os.environ.get("CHRONICLER_DEFAULT_HARNESS", "dummy"))
     names = {h["name"] for h in load_harnesses()}
     return name if name in names else "dummy"
+
+
+def get_publish_policy(project: dict | None = None) -> str:
+    """AI 产物发布策略：工程覆盖 > 全局设置；当前首版仅实现 direct。"""
+    configured = (project or {}).get("overrides", {}).get("publish_policy")
+    policy = str(configured or load_settings().get("default_publish_policy") or "direct")
+    return policy if policy in PUBLISH_POLICIES else "direct"
 
 
 def skill_path(name: str) -> str | None:

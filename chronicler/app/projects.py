@@ -12,6 +12,7 @@ from .config import Cfg
 from .db import execute, loads, q, q1
 
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+SHADOW_MAIN_BRANCH = "main"
 
 
 def repo_dir(project_id: int):
@@ -168,6 +169,34 @@ def ensure_shadow_repo(pid: int) -> Path:
     return dest
 
 
+def prepare_shadow_direct(pid: int) -> Path:
+    """准备 direct 发布工作树：保持干净，并统一落在 main，不创建任务分支。"""
+    dest = ensure_shadow_repo(pid)
+    dirty = _git(["-C", str(dest), "status", "--porcelain"])
+    if dirty.returncode != 0:
+        raise RuntimeError(f"读取 shadow 工作树失败：{dirty.stderr.strip()[:300]}")
+    if dirty.stdout.strip():
+        raise RuntimeError("shadow 工作树存在未提交修改，拒绝混入新的 Run")
+
+    current = _git(["-C", str(dest), "branch", "--show-current"])
+    if current.stdout.strip() == SHADOW_MAIN_BRANCH:
+        return dest
+    exists = _git(["-C", str(dest), "show-ref", "--verify", "--quiet",
+                   f"refs/heads/{SHADOW_MAIN_BRANCH}"])
+    args = (["-C", str(dest), "checkout", SHADOW_MAIN_BRANCH] if exists.returncode == 0
+            else ["-C", str(dest), "branch", "-M", SHADOW_MAIN_BRANCH])
+    switched = _git(args)
+    if switched.returncode != 0:
+        raise RuntimeError(f"准备 shadow 主分支失败：{switched.stderr.strip()[:300]}")
+    return dest
+
+
+def shadow_head(pid: int) -> str:
+    dest = ensure_shadow_repo(pid)
+    r = _git(["-C", str(dest), "rev-parse", "HEAD"])
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
 def _gitea_auto_shadow_repo(project: dict) -> str | None:
     """Gitea 自动建仓 <工程名>-shadow（幂等，ADR-0028）；凭据环境注入。返回 clone URL 或 None"""
     user, pw = os.environ.get("GITEA_ADMIN_USER", ""), os.environ.get("GITEA_ADMIN_PASSWORD", "")
@@ -207,7 +236,7 @@ def load_tools_safe():
         return []
 
 
-def push_shadow(pid: int) -> str | None:
+def push_shadow(pid: int, branch: str = SHADOW_MAIN_BRANCH) -> str | None:
     """shadow 库推送到工程指定的 shadow_repo（FR-MGR-013）；凭据运行期从环境注入，不落库"""
     p = get_project(pid)
     url = (p.get("shadow_repo") or "").strip()
@@ -224,7 +253,7 @@ def push_shadow(pid: int) -> str | None:
             from urllib.parse import urlparse, urlunparse
             u = urlparse(url)
             push_url = urlunparse(u._replace(netloc=f"{user}:{pw}@{u.netloc}"))
-    r = _git(["-C", str(dest), "push", push_url, "HEAD:main"], timeout=120)
+    r = _git(["-C", str(dest), "push", push_url, f"HEAD:{branch}"], timeout=120)
     if r.returncode != 0:
         raise HTTPException(status_code=502, detail=f"shadow 推送失败：{r.stderr.strip()[:300]}")
     return url

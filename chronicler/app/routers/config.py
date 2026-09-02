@@ -29,12 +29,15 @@ async def harnesses(user: dict = Depends(current_user)):
 
 class SettingsBody(BaseModel):
     default_harness: str
+    default_publish_policy: str = "direct"
 
 
 @router.get("/settings")
 async def settings(user: dict = Depends(current_user)):
     return {"default_harness": registry.get_default_harness(),
-            "harness_names": [h["name"] for h in registry.load_harnesses()]}
+            "harness_names": [h["name"] for h in registry.load_harnesses()],
+            "default_publish_policy": registry.get_publish_policy(),
+            "publish_policies": list(registry.PUBLISH_POLICIES)}
 
 
 @router.put("/settings")
@@ -42,11 +45,16 @@ async def settings_save(body: SettingsBody, user: dict = Depends(require_admin))
     name = body.default_harness.strip()
     if name not in {h["name"] for h in registry.load_harnesses()}:
         raise HTTPException(status_code=422, detail=f"未知 harness：{name}")
+    policy = body.default_publish_policy.strip()
+    if policy not in registry.PUBLISH_POLICIES:
+        raise HTTPException(status_code=422, detail=f"尚未支持的发布策略：{policy}")
     merged = registry.load_settings()
     merged["default_harness"] = name
+    merged["default_publish_policy"] = policy
     r = registry.save_settings(merged)
-    audit(user["username"], "config.default_harness", name)
-    return {"ok": True, "default_harness": name, "path": r["path"]}
+    audit(user["username"], "config.defaults", f"harness={name}, publish={policy}")
+    return {"ok": True, "default_harness": name,
+            "default_publish_policy": policy, "path": r["path"]}
 
 
 class HarnessBody(BaseModel):
