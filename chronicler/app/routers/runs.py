@@ -9,6 +9,7 @@ from .. import runner
 from ..auth import current_user, require_admin
 from ..config import Cfg
 from ..db import audit
+from ..runtime import PROFILE
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
 
@@ -72,6 +73,12 @@ async def prompt(run_id: int, user: dict = Depends(current_user)):
     """本次执行实际使用的渲染后 prompt 全文（A 段，FR-MGR-005）；
     优先 DB 记录，老数据回落 runs/<id>/prompt.md 文件。"""
     run = runner.get_run(run_id)
+    if not PROFILE.persist_rendered_prompt:
+        snapshot = run.get("input_snapshot") or {}
+        return ("sealed 模式不披露渲染后 Prompt\n\n"
+            f"name: {snapshot.get('prompt_name', 'unknown')}\n"
+            f"version: {snapshot.get('prompt_version') or run.get('prompt_version', 'unknown')}\n"
+            f"hash: {snapshot.get('prompt_hash', 'unknown')}\n")
     if run.get("prompt_text"):
         return run["prompt_text"]
     path = Cfg.runs_dir() / str(run_id) / "prompt.md"

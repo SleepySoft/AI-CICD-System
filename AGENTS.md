@@ -113,6 +113,7 @@ chronicler\.venv-win\Scripts\python.exe -m chronicler serve   # 主入口（唯�
 
 M2 代码源管理 + harness 执行器（宿主直起，ADR-0021）→ M3 内置任务（项目分析/文档更新/日报/综合报告/项目经验沉淀，5 任务复用 4 个 Prompt 家族，ADR-0034）
 → M4 待审闭环 → M5 CI 综合报告 → M6 supervisor Nuitka 保密打包。详见 docs/what/manager.md §里程碑。
+M6 边界：核心发行包采用构建时固化的 sealed Profile（ADR-0036），内置 Prompt 为结构化加密 bundle；组件不编入 Chronicler，仍从安装根 `components/` 外置加载。
 
 ## 文档同步债（剩余）
 

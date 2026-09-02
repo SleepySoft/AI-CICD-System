@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 from .config import Cfg
+from .runtime import PROFILE
 
 _local = threading.local()
 
@@ -61,7 +62,7 @@ CREATE TABLE IF NOT EXISTS task_runs (
     runner_env TEXT DEFAULT '',                  -- B 段：执行环境（平台+supervisor 版本）
     artifacts TEXT DEFAULT '[]',                 -- C 段：产物清单 JSON[{kind,path,action,size_bytes,commit}]
     publication TEXT DEFAULT '{}',               -- C 段：发布策略/分支/push 状态（FR-MGR-026）
-    prompt_text TEXT DEFAULT '',                 -- A 段：本次实际执行的渲染后 prompt 全文（任务列表可查看）
+    prompt_text TEXT DEFAULT '',                 -- A 段：仅 source Profile 保存渲染全文；sealed 为空
     created_by TEXT DEFAULT '',
     started_at REAL, finished_at REAL
 );
@@ -90,6 +91,11 @@ def init():
     conn.executescript(SCHEMA)
     conn.commit()
     _migrate()
+    if PROFILE.sealed:
+        db().execute("UPDATE task_runs SET prompt_text='' WHERE prompt_text != ''")
+        db().commit()
+        for path in Cfg.runs_dir().glob("*/prompt.md"):
+            path.unlink(missing_ok=True)
 
 
 def _migrate():

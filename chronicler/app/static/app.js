@@ -66,7 +66,8 @@ const app = createApp({
                                change_policy: "always", change_probes: "[]",
                                webhook: "", prompt_override: "" });
     const showPrompt = ref(false);
-    const promptView = ref({ name: "", version: "", content: "", overridden: false });
+    const promptView = ref({ name: "", version: "", title: "", content: "", overridden: false,
+                 disclosure: "full", content_hash: "", variables: [] });
     const showLog = ref(false);
     const logRunId = ref(null);
     const logText = ref("");
@@ -345,18 +346,24 @@ const app = createApp({
       finally { acting.value = false; }
     }
     async function openPrompt(p) {
-      promptView.value = { name: p.name, version: p.version, content: "加载中…", overridden: p.overridden };
+      promptView.value = { ...p, content: "加载中…" };
       showPrompt.value = true;
-      try { promptView.value = await api(`/api/config/prompts/${encodeURIComponent(p.name)}/content`); }
+      try {
+        promptView.value = await api(`/api/config/prompts/${encodeURIComponent(p.name)}/content`);
+        promptView.value.content ||= "";
+      }
       catch (e) { toast.err(e); showPrompt.value = false; }
     }
     async function savePrompt() {
       acting.value = true;
       try {
         const r = await api(`/api/config/prompts/${encodeURIComponent(promptView.value.name)}`,
-                            { method: "PUT", body: JSON.stringify({ content: promptView.value.content }) });
+                            { method: "PUT", body: JSON.stringify({
+                              version: promptView.value.version, content: promptView.value.content }) });
         toast.ok(`已保存为覆盖副本${r.version ? `（${r.version}）` : ""}`);
         promptView.value.overridden = true;
+        promptView.value.disclosure = "full";
+        promptView.value.content_hash = r.content_hash || promptView.value.content_hash;
         loadConfig();
       } catch (e) { toast.err(e); }
       finally { acting.value = false; }

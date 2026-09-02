@@ -6,11 +6,13 @@ import os
 import sys
 from pathlib import Path
 
-PKG_ROOT = Path(__file__).resolve().parent.parent  # chronicler/
+from .runtime import PROFILE
+
+PKG_ROOT = Path(__file__).resolve().parent.parent  # 仅源码模块定位；发行资源走 PROFILE
 
 
 def _load_dotenv():
-    env_file = PKG_ROOT.parent / ".env"
+    env_file = PROFILE.install_root / ".env"
     if not env_file.is_file():
         return
     for line in env_file.read_text(encoding="utf-8").splitlines():
@@ -31,9 +33,9 @@ class Cfg:
 
     # 数据根（NFR-008 + ADR-0026 二分 + 工作空间层）：
     # private 存 db/runs；public 存 reports；workspace 存工程克隆（可由 git 重建，不进备份）
-    DATA = Path(os.environ.get("CHRONICLER_DATA", PKG_ROOT.parent / "data" / "private" / "chronicler"))
-    PUBLIC = Path(os.environ.get("CHRONICLER_PUBLIC", PKG_ROOT.parent / "data" / "public"))
-    WORKSPACE = Path(os.environ.get("CHRONICLER_WORKSPACE", PKG_ROOT.parent / "data" / "workspace"))
+    DATA = Path(os.environ.get("CHRONICLER_DATA", PROFILE.install_root / "data" / "private" / "chronicler"))
+    PUBLIC = Path(os.environ.get("CHRONICLER_PUBLIC", PROFILE.install_root / "data" / "public"))
+    WORKSPACE = Path(os.environ.get("CHRONICLER_WORKSPACE", PROFILE.install_root / "data" / "workspace"))
 
     # 会话
     SESSION_SECRET = os.environ.get("CHRONICLER_SECRET", "chronicler-secret-change-me")
@@ -53,8 +55,11 @@ class Cfg:
     OIDC_CLIENT_SECRET = os.environ.get("CHRONICLER_OIDC_SECRET", "")
 
     # 注册表（热更新：随包携带的只读配置，用户可在 DATA 下覆盖）
-    CONFIG_DIR = Path(os.environ.get("CHRONICLER_CONFIG", PKG_ROOT / "config"))
-    PROMPTS_DIR = Path(os.environ.get("CHRONICLER_PROMPTS", PKG_ROOT / "prompts"))
+    RESOURCE_DIR = PROFILE.resource_root
+    COMPONENTS_DIR = PROFILE.components_root
+    STATIC_DIR = PROFILE.static_root
+    CONFIG_DIR = Path(os.environ.get("CHRONICLER_CONFIG", RESOURCE_DIR / "config"))
+    PROMPTS_DIR = RESOURCE_DIR / "prompts"
 
     @classmethod
     def db_path(cls) -> Path:
@@ -81,7 +86,7 @@ class Cfg:
         """主入口前置校验（首要依赖）：仓库根 .env 必须存在，否则提示并退出。
         组件 compose 一律使用 `--env-file <仓库根>/.env`（ADR-0027），缺失会导致
         autostart 静默全败——与其运行后失败，不如启动即报错。"""
-        env_file = PKG_ROOT.parent / ".env"
+        env_file = PROFILE.install_root / ".env"
         if not env_file.is_file():
             print(f"[ERROR] {command} 缺少首要依赖：{env_file} 不存在", file=sys.stderr)
             print("请先创建并配置（编辑其中所有 *_change_me，保持非空即可）：", file=sys.stderr)

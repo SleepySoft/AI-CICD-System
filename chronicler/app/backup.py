@@ -7,15 +7,15 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import tarfile
 import time
 from pathlib import Path
 
-from .config import PKG_ROOT, Cfg
+from .config import Cfg
+from .runtime import PROFILE, component_python
 from .tools import load_tools
 
-REPO_ROOT = PKG_ROOT.parent
+REPO_ROOT = PROFILE.install_root
 BACKUPS_DIR = REPO_ROOT / "data" / "backups"
 DATA_ROOT = REPO_ROOT / "data"
 
@@ -30,13 +30,13 @@ def _hook_path(tool: dict) -> Path | None:
 
 def _run_hook(hook: Path, cmd: str, path: Path) -> dict:
     """调用组件钩子，返回其 stdout 末行的 JSON（契约见 ADR-0027）"""
-    args = [sys.executable, str(hook), cmd]
+    args = [component_python(), str(hook), cmd]
     if cmd == "backup":
         args += ["--dest", str(path)]
     elif cmd == "restore":
         args += ["--src", str(path)]
     r = subprocess.run(args, capture_output=True, encoding="utf-8", errors="replace",
-                       timeout=1800, cwd=str(PKG_ROOT.parent))
+                       timeout=1800, cwd=str(PROFILE.install_root))
     last_line = (r.stdout.strip().splitlines() or ["{}"])[-1]
     try:
         result = json.loads(last_line)

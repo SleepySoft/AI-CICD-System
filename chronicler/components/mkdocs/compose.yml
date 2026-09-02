@@ -13,7 +13,7 @@ services:
     command:
     - pip install -q --disable-pip-version-check mkdocs-awesome-pages-plugin >/dev/null 2>&1; exec mkdocs serve --dev-addr=0.0.0.0:8000
     volumes:
-    - ${REPO_ROOT}/chronicler/components/mkdocs:/docs
+    - ${COMPONENTS_ROOT:-..}/mkdocs:/docs
     - ${DATA_ROOT:-./data}/public/shadow:/docs/docs/shadow
 networks:
   aisystem:

@@ -19,7 +19,7 @@ services:
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: 'true'
       KC_HEALTH_ENABLED: 'true'
     volumes:
-    - ${REPO_ROOT}/chronicler/components/keycloak/realm:/opt/keycloak/data/import:ro
+    - ${COMPONENTS_ROOT:-..}/keycloak/realm:/opt/keycloak/data/import:ro
     healthcheck:
       test:
       - CMD-SHELL

@@ -9,8 +9,9 @@ from pydantic import BaseModel
 
 from .. import registry
 from ..auth import current_user, require_admin
-from ..config import Cfg
 from ..db import audit
+from ..prompt_catalog import catalog
+from ..runtime import PROFILE
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -111,29 +112,23 @@ async def task_types(user: dict = Depends(current_user)):
 
 @router.get("/prompts")
 async def prompts(user: dict = Depends(current_user)):
-    out = []
-    for path in sorted(Cfg.PROMPTS_DIR.glob("*.md")):
-        content, version = registry.load_prompt(path.stem)
-        out.append({"name": path.stem, "version": version,
-                    "overridden": (Cfg.prompts_override_dir() / path.name).is_file(),
-                    "size": len(content)})
-    return out
+    return [item.metadata() for item in catalog.list()]
 
 
 @router.get("/prompts/{name}/content")
 async def prompt_content(name: str, user: dict = Depends(current_user)):
-    content, version = registry.load_prompt(name)
-    return {"name": name, "version": version, "content": content,
-            "overridden": (Cfg.prompts_override_dir() / f"{name}.md").is_file()}
+    item = catalog.resolve(name)
+    return {**item.metadata(), "content": catalog.content_for_display(name)}
 
 
 class PromptBody(BaseModel):
+    version: str
     content: str
 
 
 @router.put("/prompts/{name}")
 async def prompt_save(name: str, body: PromptBody, user: dict = Depends(require_admin)):
-    r = registry.save_prompt_override(name, body.content)
+    r = registry.save_prompt_override(name, body.version, body.content)
     audit(user["username"], "prompt.save", name, r["version"])
     return r
 
@@ -141,3 +136,9 @@ async def prompt_save(name: str, body: PromptBody, user: dict = Depends(require_
 @router.delete("/prompts/{name}/override")
 async def prompt_reset(name: str, user: dict = Depends(require_admin)):
     return registry.delete_prompt_override(name)
+
+
+@router.get("/runtime")
+async def runtime(user: dict = Depends(current_user)):
+    return {"profile": PROFILE.name, "prompt_disclosure": PROFILE.prompt_disclosure,
+            "persist_rendered_prompt": PROFILE.persist_rendered_prompt}

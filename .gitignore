@@ -30,3 +30,8 @@ chronicler/.venv-win/
 # Chronicler 运行时日志（启动脚本重定向产物）
 chronicler-server.log
 chronicler-server.err.log
+
+# Chronicler sealed build outputs / generated profile
+/build/chronicler/
+/dist/chronicler-*/
+chronicler/app/_sealed_profile.py

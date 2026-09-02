@@ -9,6 +9,7 @@ harness 命令形式可配置（FR-MGR-019）：prompt 经 {prompt_file} 文件�
 stdout 捕获（report_mode=stdout，如 kimi --print）产出；cwd 可选工程仓库/shadow 库。
 """
 import json
+import hashlib
 import os
 import shlex
 import subprocess
@@ -22,6 +23,8 @@ from fastapi import HTTPException
 from . import change_detection, projects, registry
 from .config import Cfg
 from .db import audit, dumps, execute, q, q1
+from .prompt_catalog import catalog
+from .runtime import PROFILE
 
 _harness_locks: dict[str, threading.Lock] = {}
 _shadow_locks: dict[int, threading.Lock] = {}
@@ -255,10 +258,15 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
 
     if prompt_override:
         # 工程级 prompt 覆盖（任务自带模板）；版本=内容 hash（FR-MGR-011）
-        import hashlib
-        template, prompt_version = prompt_override, hashlib.sha1(prompt_override.encode()).hexdigest()[:8]
+        digest = hashlib.sha256(prompt_override.encode()).hexdigest()
+        template, prompt_version = prompt_override, f"0.0.0+{digest[:8]}"
+        prompt_hash = f"sha256:{digest}"
+        prompt_name = f"{task_spec['prompt'] or 'custom'}-task-override"
     else:
-        template, prompt_version, task_spec = registry.load_task_prompt(task_type)
+        definition = catalog.resolve(task_spec["prompt"])
+        template, prompt_version = definition.content, definition.version
+        prompt_hash = definition.content_hash
+        prompt_name = definition.name
 
     change = change_detection.capture(project_id, task_type, task_id, change_probes)
     ci_context = _ci_context(project)
@@ -275,7 +283,9 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
         "harness_version": _harness_version(harness),
         "harness_timeout": int(harness.get("timeout_sec", 1800)),
         "cwd": cwd,
-        "prompt_name": task_spec["prompt"],
+        "prompt_name": prompt_name,
+        "prompt_version": prompt_version,
+        "prompt_hash": prompt_hash,
         "task_mode": task_spec["mode"],
         "change_policy": change_policy,
         "publish_policy": registry.get_publish_policy(project),
@@ -305,7 +315,8 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
         "change_context": change_detection.format_context(change["change_summary"]),
     })
     # A 段：渲染后 prompt 全文落库（任务列表可查看；文件副本 runs/<id>/prompt.md 同步保留）
-    execute("UPDATE task_runs SET prompt_text=? WHERE id=?", (prompt, run_id))
+    if PROFILE.persist_rendered_prompt:
+        execute("UPDATE task_runs SET prompt_text=? WHERE id=?", (prompt, run_id))
     if allow_skip and change_detection.should_skip(change_policy, change["change_summary"]):
         execute("UPDATE task_runs SET status='skipped', error=?, error_class='无增量',"
                 " finished_at=? WHERE id=?",
@@ -342,7 +353,12 @@ def _run(run_id: int, harness: dict, prompt: str, cwd: str = "repo"):
     prompt_file = run_dir / "prompt.md"
     report_file = run_dir / "report.md"
     log_file = run_dir / "run.log"
-    prompt_file.write_text(prompt, encoding="utf-8")
+    if PROFILE.persist_rendered_prompt or not harness.get("stdin_prompt"):
+        prompt_file.write_text(prompt, encoding="utf-8")
+        try:
+            prompt_file.chmod(0o600)
+        except OSError:
+            pass
 
     command = harness["command_template"].format(
         prompt_file=_q(str(prompt_file)),
@@ -396,6 +412,9 @@ def _run(run_id: int, harness: dict, prompt: str, cwd: str = "repo"):
             err = f"{type(e).__name__}: {e}"[:500]
             execute("UPDATE task_runs SET status='failed', error=?, error_class=?, finished_at=? WHERE id=?",
                     (err, _classify_error(err), time.time(), run_id))
+        finally:
+            if not PROFILE.persist_rendered_prompt and prompt_file.is_file():
+                prompt_file.unlink(missing_ok=True)
 
 
 def _commit_shadow(run: dict, publish_policy: str) -> tuple[str | None, list[dict], dict]:

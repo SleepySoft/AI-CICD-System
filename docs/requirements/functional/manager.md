@@ -1,6 +1,6 @@
 # 功能需求：Manager 管理服务（MGR）
 
-> 版本：v1.7 · 日期：2026-09-02 · 状态：生效
+> 版本：v1.8 · 日期：2026-09-02 · 状态：生效
 > 定位：Manager（supervisor/Chronicler，ADR-0020/0022）的功能需求；规格（数据模型/API/权限）见 `../../what/manager.md`，机制见 `../../how/manager-architecture.md`
 
 ### FR-MGR-001 工具总览面板
@@ -25,8 +25,8 @@
 
 ### FR-MGR-005 一切皆 Run
 - 状态: 生效 | 上层: BR-002 | 优先级: P0
-- 描述: 每次执行（无论触发方式、无论成败）产生完整 Run 档案：输入快照（分析基于的提交、prompt 版本与渲染全文、harness 命令与版本、注入资源清单、触发人）+ 执行过程（状态机、日志、错误归类）+ 产物清单（生成/更新了哪些产物、产物落入的 git 提交）。字段明细与规约见 `../../what/manager.md` §2.1.1。
-- 验收: 任一历史 Run（含失败的）可查看输入快照、本次实际使用的 prompt 全文、日志与产物清单；产物为 git 内容时可定位到具体提交；进程中断/supervisor 重启导致的悬挂状态（queued/running 超时未落库）由调度器自动检测并标记失败（error_class=悬挂）。
+- 描述: 每次执行（无论触发方式、无论成败）产生完整 Run 档案：输入快照（分析基于的提交、Prompt name/version/hash；source 模式另存渲染全文，sealed 模式不落明文；harness 命令与版本、注入资源清单、触发人）+ 执行过程（状态机、日志、错误归类）+ 产物清单（生成/更新了哪些产物、产物落入的 git 提交）。字段明细与规约见 `../../what/manager.md` §2.1.1。
+- 验收: 任一历史 Run（含失败的）可查看输入快照、Prompt name/version/hash、日志与产物清单；source 模式可查看本次渲染全文，sealed 模式只显示安全元数据且磁盘无遗留 prompt.md；产物为 git 内容时可定位到具体提交；悬挂状态由调度器自动标记失败（error_class=悬挂）。
 
 ### FR-MGR-006 实时日志
 - 状态: 生效 | 上层: UR-004 | 优先级: P1
@@ -142,3 +142,13 @@
 - 状态: 生效 | 上层: UR-011 | 优先级: P1
 - 描述: 任务可配置 `always`、`repo-changed`、`inputs-changed`；手动触发始终允许但在开始前展示增量，自动触发无相关变化时创建 `skipped` Run，探测失败时不得按无变化跳过。
 - 验收: 三种策略可保存并生效；无增量的 cron 在 `always` 下执行、在相应 changed 策略下产生含跳过原因的 `skipped` Run；手动触发无增量时确认后仍执行；未知状态继续执行并在 Run 中可见。
+
+### FR-MGR-029 结构化 Prompt Catalog 与运行 Profile
+- 状态: 生效 | 上层: BR-009, UR-009 | 优先级: P1
+- 描述: Prompt 以含稳定 name、SemVer version、schema_version、变量契约、输出种类、content 和 content_hash 的结构化定义管理；运行 Profile 在构建时固化为 source 或 sealed，统一 Catalog 负责列表、解析、显示和用户覆盖。
+- 验收: source Catalog 校验四个内置 Prompt 的结构和变量后提供完整正文；sealed Catalog 从认证加密 bundle 解析相同 name/version/hash，内置正文 API 不返回内容；用户覆盖在两种 Profile 下均为结构化定义且可查看。
+
+### FR-MGR-030 sealed 原生发行与 Prompt 留痕保护
+- 状态: 生效 | 上层: BR-009 | 优先级: P2
+- 描述: 每个目标 OS/架构原生构建 Nuitka standalone sealed 发行包，包含编译后的 Chronicler、公开 static/config 和加密 Prompt bundle；组件目录不进入核心发行包，安装后从外置 `<install-root>/components/` 加载。
+- 验收: Windows/Linux/macOS 构建入口同源；发行 manifest 记录版本、平台、source commit 与 Prompt name/version/hash；产物扫描无 `.py`、Prompt YAML 和特征明文；sealed Run 不持久化渲染 Prompt，临时文件执行后删除；安装器拒绝 bundle-only 验证目录并创建外置 components 目录。

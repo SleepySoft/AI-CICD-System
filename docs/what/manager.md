@@ -1,8 +1,8 @@
 # Chronicler（supervisor）规格（数据模型 / API / 任务框架 / 权限 / 页面）
 
-> 版本：v1.6 · 日期：2026-09-02 · 状态：生效
+> 版本：v1.7 · 日期：2026-09-02 · 状态：生效
 > 定位：Chronicler（原 Manager，宿主侧 supervisor，ADR-0020/0022）对外可见的契约与规格；内部机制（架构、执行管线、CI 集成）见 ../how/manager-architecture.md
-> 关联需求：FR-MGR-001 ~ FR-MGR-028、FR-TASK-002、FR-TASK-003、BR-008
+> 关联需求：FR-MGR-001 ~ FR-MGR-030、FR-TASK-002、FR-TASK-003、BR-008
 > v1 实现注记：存储 SQLite（ADR-0023），鉴权本地账密 admin/user（Keycloak 后端预留），agent 为宿主自装 harness（ADR-0021）；Git 发布已落 direct 基础框架（main 直接提交/推送，不建 PR），远端基线保护及 review/local 仍属规划
 
 ## 1. WHY
@@ -22,8 +22,8 @@ agent_profile      Agent harness 配置：name, command(可执行命令 + 参数
                    prompt_form(file|stdin), report_form(file|stdout), cwd(repo|shadow),
                    session_cap(persistent|oneshot|resume，会话能力声明), model, base_url,
                    api_key_ref(密钥存加密列或挂载 secret), max_runtime_sec
-prompt_template    Prompt 库：name, scope(system|task), content(支持 {{变量}}), version,
-                   builtin(bool), updated_by, updated_at
+prompt_definition  Prompt Catalog 实体：name, SemVer version, schema_version,
+                   title, variables[], output.kind, content, content_hash, builtin/overridden
 task_type_registry 任务类型：name, prompt_name, mode, desc；任务职责与模板文件解耦
 task_def           任务定义：name, type(引用 task_type_registry，见 §2.3), repo_ids[], agent_id, prompt_id,
                    harness(任务级 harness 覆盖，''=回落工程/全局), cwd(repo|shadow|''，
@@ -64,8 +64,9 @@ source_snapshot    主仓 revision + 可选 probe 名称/指纹/状态 + 总指�
 change_summary     initial|changed|unchanged|diverged|unknown，含 base/head、
                    commits/files/insertions/deletions、变化 probe 与探测错误
 harness            name + 解析后的完整启动命令 + CLI 版本      【v1】
-prompt             模板版本 hash + 渲染后全文（落库 task_runs.prompt_text，文件副本
-                   runs/<id>/prompt.md）                       【v1】
+prompt             name + SemVer version + content_hash       【v1】
+rendered_prompt    source：task_runs.prompt_text + runs/<id>/prompt.md；
+                   sealed：不持久化，历史接口只返回上述安全元数据【v1】
 overrides          覆盖来源与工程级覆盖项（harness/prompt/策略；来源：任务>工程>全局）【v1】
 components         注入的资源能力清单（SKILL 名 + 版本/hash）   【v1】
 extra_prompt       触发时附加指令                              【v1】
@@ -184,6 +185,22 @@ FR-MGR-009/013/014/026 共用同一个 Git 变更审核模型，完整决策见 
 - Run 的分析状态与发布状态相互独立；内容生成成功后，push 或建 PR 失败只令发布进入可重试的失败状态，不重新调用 Agent。
 - Gitea 是首个 PR provider；其它 Git 远端在没有 provider 适配器时可使用 `direct/local`，或仅推送审核分支并给出外部建 PR 提示。
 
+### 2.3.3 Prompt Catalog 与运行 Profile
+
+运行 Profile 是构建时固化的安全边界（ADR-0036），不能通过环境变量将 sealed 降级为 source：
+
+| 行为 | source | sealed |
+|------|--------|--------|
+| 内置 Prompt 来源 | `prompts/*.yaml` 结构化源文件 | `resources/prompts.bundle` AES-256-GCM 加密包 |
+| 内置 Prompt 显示 | name/version/hash/变量/正文 | name/version/hash/变量，仅元数据 |
+| 用户覆盖 | DATA/prompts 下结构化 YAML，可查看编辑 | 同左；不泄露被覆盖的内置正文 |
+| Run 留痕 | name/version/hash + 渲染正文 | 只记录 name/version/hash，不保存渲染正文 |
+| 执行传递 | stdin 或 prompt 临时文件 | 优先 stdin；必要临时文件权限收紧并在执行后删除 |
+
+`content_hash` 用于完整性校验，不替代人工维护的 SemVer。Catalog 在加载时验证 name、version、schema_version、变量声明与正文占位符完全一致。sealed 加密密钥随编译模块进入二进制，其目标是阻止直接读取与普通复制，不承诺抵抗本机管理员的专业动态逆向。
+
+核心发行包不包含 `components/`。组件的 `plugin.yaml`、compose、SKILL 和 hook 属于外置可部署资产，从 `<install-root>/components/` 加载；用户覆盖仍从 DATA/components 加载。sealed 下 Python hook 由 `CHRONICLER_COMPONENT_PYTHON` 指定的外部解释器运行，避免 `sys.executable` 重新启动 Nuitka 主程序。
+
 ### 2.4 权限规格（FR-MGR-008、FR-MGR-017）
 
 - 鉴权后端可插拔（ADR-0023）：`local` 本地账密（零依赖默认）/ `oidc` Keycloak（`CHRONICLER_AUTH_BACKEND` 切换，接线见 ../runbooks/deploy.md 与 scripts/wire-chronicler.sh）。
@@ -206,7 +223,7 @@ v1 已落地：`/login`（SSO 主入口 + 本地应急） · 首页（组件卡�
 | M3 内置任务 | 5 类内置任务 + 4 个 Prompt 家族 + 报告中心 | 项目分析/文档更新/日报/综合报告/经验沉淀职责清晰，产出可追溯 |
 | M4 待审闭环 | Git review 区 + 文档/卡片 PR + shadow/全局资产库 + 文档站更新 | 页面可查看 Run 产物 diff；项目经验经两级审核上升全局库；可配置 direct/local |
 | M5 CI 综合 | Jenkins 结果接入 + 综合报告 + webhook 触发 | 综合报告含构建结果；push 触发任务 |
-| M6 加固 | supervisor Nuitka 打包 + prompt 加密 + 审计 + 限流 | 二进制内无源码与明文 prompt |
+| M6 加固 | source/sealed Profile + 结构化 Prompt Catalog + Nuitka standalone + prompt 加密 + 审计 | sealed 发行无源码与明文 Prompt，Run 只留 name/version/hash |
 
 ## 3. HOW
 

@@ -1,6 +1,6 @@
 # 文档索引
 
-> 版本：v1.3 · 日期：2026-09-02 · 状态：生效
+> 版本：v1.4 · 日期：2026-09-02 · 状态：生效
 > 定位：docs/ 全部文档的目录与状态总表；写作规范见 `.agents/skills/docs-management/`
 
 ## 文档总表
@@ -68,12 +68,14 @@
 | ADR-0033 AI 产物由 Chronicler 统一 Git 发布与 PR 审核 | adr/0033-chronicler-owned-git-publication.md | adr | 已接受 |
 | ADR-0034 任务类型与 Prompt 家族通过 registry 解耦 | adr/0034-task-prompt-family-registry.md | adr | 已接受 |
 | ADR-0035 以有效输入快照驱动增量提示与自动任务 | adr/0035-effective-input-change-detection.md | adr | 已接受 |
+| ADR-0036 构建时固化 sealed Profile 与结构化 Prompt Catalog | adr/0036-sealed-runtime-prompt-catalog.md | adr | 已接受 |
 | 部署与初始化 | runbooks/deploy.md | runbooks | 生效 |
 | 备份与恢复 | runbooks/backup-restore.md | runbooks | 生效 |
 | 接入新 Agent | runbooks/agent-onboarding.md | runbooks | 生效 |
 | 手动启动与调试 Chronicler | runbooks/dev-debug.md | runbooks | 生效 |
 | Keycloak 用户与权限管理 | runbooks/keycloak-users.md | runbooks | 生效 |
 | Web 终端（SSHwifty）接入与使用 | runbooks/web-terminal.md | runbooks | 生效 |
+| 构建与安装 sealed Chronicler | runbooks/build-sealed-chronicler.md | runbooks | 生效 |
 | Clash Verge 代理排查 | runbooks/proxy-clash.md | runbooks | 生效 |
 | 旧-需求分析与选型 | 01-需求分析与选型.md | 历史 | 过时（已拆分至本结构） |
 | 旧-Manager 设计 | 02-管理服务设计.md | 历史 | 过时（已拆分至本结构） |

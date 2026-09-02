@@ -6,7 +6,7 @@ services:
     - sandbox
     build:
       context: .
-      dockerfile: ${REPO_ROOT}/chronicler/components/terminal-runtime/image/Dockerfile
+      dockerfile: ${COMPONENTS_ROOT:-..}/terminal-runtime/image/Dockerfile
     image: aisystem/terminal-runtime:latest
     restart: unless-stopped
     environment:

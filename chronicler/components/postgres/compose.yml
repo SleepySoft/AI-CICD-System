@@ -11,7 +11,7 @@ services:
     volumes:
     - ${DATA_ROOT:-./data}/private/postgres:/var/lib/postgresql/data
     - ${DATA_ROOT:-./data}/public:/public
-    - ${REPO_ROOT}/chronicler/components/postgres/init:/docker-entrypoint-initdb.d:ro
+    - ${COMPONENTS_ROOT:-..}/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test:
       - CMD-SHELL

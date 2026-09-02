@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import db
+from .config import Cfg
 from .routers import auth, config, oidc, projects, runs, tasks, tools, users
 
 app = FastAPI(title="Chronicler", docs_url=None, redoc_url=None)
@@ -39,7 +40,7 @@ for r in (auth.router, oidc.router, users.router, projects.router, runs.router,
           tasks.router, config.router, tools.router):
     app.include_router(r)
 
-STATIC = Path(__file__).parent / "static"
+STATIC = Cfg.STATIC_DIR
 
 
 @app.get("/api/health")

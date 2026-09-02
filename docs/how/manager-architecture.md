@@ -1,8 +1,8 @@
 # Manager 架构与执行机制
 
-> 版本：v1.5 · 日期：2026-09-02 · 状态：生效
+> 版本：v1.6 · 日期：2026-09-02 · 状态：生效
 > 定位：Manager 的内部实现机制（架构、执行管线、CI 集成、部署形态）；规格契约见 ../what/manager.md
-> 关联需求：FR-MGR-003 ~ FR-MGR-028
+> 关联需求：FR-MGR-003 ~ FR-MGR-030
 
 ## 1. WHY / WHAT 摘要
 
@@ -96,7 +96,7 @@ Gitea 凭据仅由 Chronicler 的 Git publisher/API client 读取。PR 首版由
 
 平台选择原则："在哪个环境跑，就用哪个环境的 docker"。Docker Desktop 仅作用户自带许可的可选运行时（NFR-001 注记），免费默认路径为 WSL/原生 dockerd（docker 须 systemd 常驻，`vmIdleTimeout=-1` 作双保险）。
 
-保密加固（BR-009，M6）：supervisor 流程代码 Nuitka 编译为独立二进制（即交付形态）；内置 prompt 构建期加密为资产文件、运行期用 FERNET_KEY 解密（密钥只在 .env/secret，不进二进制）。
+保密加固（FR-MGR-029/030，ADR-0036）：`RuntimeProfile` 统一解析安装根和资源路径；source 使用结构化 YAML Catalog，sealed 使用编译模块中的 AES-GCM key 解密 bundle。Runner 在 sealed 下只冻结 Prompt name/version/hash，stdin harness 不落临时文件，文件 harness 执行后删除 `prompt.md`。static/config 作为公开资源外置；组件不进入核心发行包，仍按 ADR-0027 从安装根 components/ 与 DATA/components 扫描。
 
 ## 3. 决策与备选
 
@@ -111,3 +111,4 @@ Gitea 凭据仅由 Chronicler 的 Git publisher/API client 读取。PR 首版由
 | v1 形态 | SQLite + 本地账密 + 一次性会话（闭环 ADR-0022 悬置的单机瘦身项） | ../adr/0023-supervisor-v1-form.md |
 | AI 产物 Git 发布 | Agent 只生成内容；Chronicler 统一分支、提交、push、建 PR；全局提升强制二次审核 | ../adr/0033-chronicler-owned-git-publication.md |
 | 任务与 Prompt 分类 | 5 个任务通过 registry 复用 4 个职责明确的 Prompt 家族，旧类型仅兼容 | ../adr/0034-task-prompt-family-registry.md |
+| sealed 运行与发行 | 构建时固化 Profile；结构化 Catalog；AES-GCM bundle；Nuitka standalone；组件外置 | ../adr/0036-sealed-runtime-prompt-catalog.md |

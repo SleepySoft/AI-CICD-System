@@ -5,17 +5,17 @@
 """
 import json
 import subprocess
-import sys
 import tempfile
 import time
 from pathlib import Path
 
 import yaml
 
-from .config import PKG_ROOT
+from .config import Cfg
+from .runtime import PROFILE, component_python
 from .tools import load_tools
 
-REPO = PKG_ROOT.parent
+REPO = PROFILE.install_root
 TEST_PROJECT = "chronicle-test"
 REQUIRED_FIELDS = {"name": str, "group": str, "desc": str, "driver": str}
 DRIVERS = {"docker", "external"}
@@ -40,7 +40,7 @@ def check_contract(tool: dict) -> list[str]:
             problems.append("SKILL.md 缺 frontmatter（name/description）")
     hook = d / "hooks" / "backup.py"
     if hook.is_file():
-        r = subprocess.run([sys.executable, str(hook), "manifest"],
+        r = subprocess.run([component_python(), str(hook), "manifest"],
                            capture_output=True, encoding="utf-8", errors="replace", timeout=30)
         try:
             m = json.loads(r.stdout.strip().splitlines()[-1])
@@ -61,7 +61,7 @@ def deploy_test(tool: dict, timeout: int = 300) -> dict:
     if not compose_file.is_file():
         return {"ok": False, "stage": "up", "log": "组件缺 compose.yml"}
     env = {**__import__("os").environ, "DATA_ROOT": str(data_root), "HTTP_PORT": "18080",
-           "REPO_ROOT": str(REPO)}
+            "REPO_ROOT": str(REPO), "COMPONENTS_ROOT": str(Cfg.COMPONENTS_DIR)}
     base = ["docker", "compose", "-p", TEST_PROJECT, "--env-file", str(REPO / ".env"),
             "-f", str(compose_file)]
     log = []
@@ -103,7 +103,7 @@ def test_component(name: str, deploy: bool = False, timeout: int = 300) -> dict:
 
     hook = Path(tool.get("_dir", "")) / "hooks" / "test.py"
     if hook.is_file():
-        r = subprocess.run([sys.executable, str(hook)], capture_output=True,
+        r = subprocess.run([component_python(), str(hook)], capture_output=True,
                            encoding="utf-8", errors="replace", timeout=timeout)
         result["selftest"] = {"exit": r.returncode, "output": r.stdout[-500:]}
         result["ok"] = result["ok"] and r.returncode == 0

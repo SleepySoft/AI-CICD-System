@@ -318,20 +318,23 @@
           <div class="group-title">提示词</div>
           <el-table :data="prompts" size="small" style="width:100%">
             <el-table-column prop="name" label="Prompt 家族" width="220"></el-table-column>
+            <el-table-column prop="title" label="名称" min-width="180"></el-table-column>
             <el-table-column prop="version" label="版本" width="120"></el-table-column>
             <el-table-column label="已被覆盖" width="100">
               <template #default="{ row }">
                 <el-tag :type="row.overridden ? 'warning' : 'info'" size="small">{{ row.overridden ? '是' : '否' }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="size" label="大小(字节)" width="120"></el-table-column>
+            <el-table-column label="披露" width="100">
+              <template #default="{ row }">{{ row.disclosure === 'full' ? '正文' : '仅元数据' }}</template>
+            </el-table-column>
             <el-table-column label="操作" width="110">
               <template #default="{ row }">
                 <el-button size="small" text type="primary" @click="openPrompt(row)">{{ isAdmin ? '查看/编辑' : '查看' }}</el-button>
               </template>
             </el-table-column>
           </el-table>
-          <p class="muted" style="margin-top:16px">配置为 YAML 文件，改文件即热生效。</p>
+          <p class="muted" style="margin-top:16px">Prompt 由统一 Catalog 管理；名称与版本是稳定身份，hash 用于完整性校验。</p>
         </el-tab-pane>
 
         <!-- ============ 用户（admin） ============ -->
@@ -558,12 +561,23 @@
     <!-- 提示词查看/编辑 -->
     <el-drawer v-model="showPrompt" :title="'提示词 - ' + promptView.name" size="60%">
       <div style="margin-bottom:10px">
-        <el-tag size="small" effect="plain">版本 {{ promptView.version }}</el-tag>
+        <el-tag size="small" effect="plain">{{ promptView.title }}</el-tag>
         <el-tag :type="promptView.overridden ? 'warning' : 'info'" size="small" style="margin-left:8px">
           {{ promptView.overridden ? '已覆盖内置' : '内置模板' }}
         </el-tag>
+        <el-tag v-if="promptView.disclosure !== 'full'" type="warning" size="small" style="margin-left:8px">sealed：仅元数据</el-tag>
       </div>
-      <el-input v-model="promptView.content" type="textarea" :rows="22" :readonly="!isAdmin" class="mono"></el-input>
+      <el-form label-position="top" size="small">
+        <el-form-item label="版本（SemVer）">
+          <el-input v-model="promptView.version" :readonly="!isAdmin" placeholder="1.0.0"></el-input>
+        </el-form-item>
+        <el-form-item label="内容 hash"><el-input :model-value="promptView.content_hash" readonly class="mono"></el-input></el-form-item>
+        <el-form-item label="模板变量"><div class="muted">{{ (promptView.variables || []).join(', ') }}</div></el-form-item>
+        <el-form-item :label="promptView.disclosure === 'full' ? '正文' : '用户覆盖正文（内置正文不披露）'">
+          <el-input v-model="promptView.content" type="textarea" :rows="20" :readonly="!isAdmin" class="mono"
+                    :placeholder="promptView.disclosure === 'full' ? '' : '可在此创建新的用户覆盖；必须保留上方声明的全部模板变量'"></el-input>
+        </el-form-item>
+      </el-form>
       <div v-if="isAdmin" style="margin-top:12px">
         <el-button type="primary" @click="savePrompt" :loading="acting">保存为覆盖副本</el-button>
         <el-button v-if="promptView.overridden" type="warning" plain @click="resetPrompt">恢复内置</el-button>

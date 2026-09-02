@@ -2,7 +2,7 @@
 # 由 Chronicler 拉起：docker compose -p aisystem --env-file <repo>/.env -f <本文件> up -d；REPO_ROOT/DATA_ROOT 由 Chronicler 注入绝对路径
 services:
   jenkins:
-    build: ${REPO_ROOT}/chronicler/components/jenkins
+    build: ${COMPONENTS_ROOT:-..}/jenkins
     image: aisystem/jenkins:lts
     restart: unless-stopped
     user: root

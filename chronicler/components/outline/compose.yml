@@ -34,7 +34,7 @@ services:
     volumes:
     - ${DATA_ROOT:-./data}/private/outline:/var/lib/outline/data
     - ${DATA_ROOT:-./data}/public:/public
-    - ${REPO_ROOT}/chronicler/components/outline/patch-start.sh:/opt/outline/patch-start.sh:ro
+    - ${COMPONENTS_ROOT:-..}/outline/patch-start.sh:/opt/outline/patch-start.sh:ro
 networks:
   aisystem:
     name: aisystem

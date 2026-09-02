@@ -1,0 +1,5 @@
+# Build contract: CPython 3.11 only; scripts/build-chronicler.py enforces it.
+-r requirements.txt
+Nuitka>=2.7
+ordered-set
+zstandard

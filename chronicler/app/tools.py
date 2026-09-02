@@ -16,7 +16,8 @@ import docker
 import yaml
 from fastapi import HTTPException
 
-from .config import PKG_ROOT, Cfg
+from .config import Cfg
+from .runtime import PROFILE, component_python
 
 _docker = None
 
@@ -45,7 +46,7 @@ def _load_plugins_dir(d) -> dict:
 
 def load_tools() -> list[dict]:
     """合并 内置 components/ + 用户 components/ + autostart 覆盖层，字段归一化"""
-    merged = _load_plugins_dir(PKG_ROOT / "components")
+    merged = _load_plugins_dir(Cfg.COMPONENTS_DIR)
     merged.update(_load_plugins_dir(Cfg.DATA / "components"))
     overlay = _autostart_overlay()
     tools = []
@@ -98,10 +99,11 @@ def _compose_up_cmd(tool: dict) -> tuple[list, dict]:
     if not compose_file.is_file():
         raise HTTPException(status_code=400, detail=f"组件无部署定义（缺 compose.yml）")
     env = {**os.environ,
-           "REPO_ROOT": str(PKG_ROOT.parent),
-           "DATA_ROOT": str(PKG_ROOT.parent / "data")}
+           "REPO_ROOT": str(PROFILE.install_root),
+            "COMPONENTS_ROOT": str(Cfg.COMPONENTS_DIR),
+           "DATA_ROOT": str(PROFILE.install_root / "data")}
     service = tool.get("compose_service") or tool["name"]
-    return (["docker", "compose", "-p", "aisystem", "--env-file", str(PKG_ROOT.parent / ".env"),
+    return (["docker", "compose", "-p", "aisystem", "--env-file", str(PROFILE.install_root / ".env"),
              "-f", str(compose_file), "up", "-d", service], env)
 
 
@@ -139,8 +141,8 @@ def ensure_running(tool: dict) -> str:
         # 组件自带部署钩子则优先（ADR-0027）；否则回落 docker compose
         hook = Path(tool["_dir"]) / "hooks" / "deploy.py" if tool.get("_dir") else None
         if hook and hook.is_file():
-            r = subprocess.run([sys.executable, str(hook), "up"],
-                               cwd=str(PKG_ROOT.parent), capture_output=True,
+            r = subprocess.run([component_python(), str(hook), "up"],
+                               cwd=str(PROFILE.install_root), capture_output=True,
                                encoding="utf-8", errors="replace", timeout=600)
             if r.returncode == 0:
                 audit("supervisor", "tool.deploy_hook", name)
@@ -166,7 +168,7 @@ def autostart_boot(max_wait_sec: int = 600, interval: int = 20):
     """supervisor 启动钩子（后台线程）：拉起所有标记自启的组件（FR-MGR-022）
     dockerd 未就绪（如 Docker Desktop 未启动/启动慢）时每 20s 重试至多 10 分钟，
     而不是一次性放弃——supervisor 通常比 dockerd 先活。"""
-    env_file = PKG_ROOT.parent / ".env"
+    env_file = PROFILE.install_root / ".env"
     if not env_file.is_file():
         print(f"[ERROR] autostart 跳过：缺少首要依赖 {env_file}（请先 cp .env.example .env 并编辑 *_change_me）",
               file=sys.stderr)
