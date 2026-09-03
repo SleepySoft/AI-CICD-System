@@ -1,6 +1,6 @@
 # 文档索引
 
-> 版本：v1.4 · 日期：2026-09-02 · 状态：生效
+> 版本：v1.5 · 日期：2026-09-03 · 状态：生效
 > 定位：docs/ 全部文档的目录与状态总表；写作规范见 `.agents/skills/docs-management/`
 
 ## 文档总表
@@ -19,6 +19,7 @@
 | 功能需求-需求管理 | requirements/functional/req.md | requirements | 生效 |
 | 功能需求-任务管理 | requirements/functional/task.md | requirements | 生效 |
 | 功能需求-Manager | requirements/functional/manager.md | requirements | 生效 |
+| 功能需求-Web 初始化 | requirements/functional/initialization.md | requirements | 生效 |
 | 追溯矩阵 | requirements/traceability.md | requirements | 生效 |
 | 项目愿景与边界 | why/vision.md | why | 生效 |
 | 设计原则 | why/principles.md | why | 生效 |
@@ -29,7 +30,9 @@
 | 知识库规格 | what/knowledge.md | what | 生效 |
 | 需求管理工具链规格 | what/req-mgmt.md | what | 生效 |
 | 任务管理规格 | what/task-mgmt.md | what | 生效 |
+| Web 初始化与环境设置规格 | what/initialization.md | what | 生效 |
 | Manager 架构与执行机制 | how/manager-architecture.md | how | 生效 |
+| Web 初始化模块架构 | how/initialization-architecture.md | how | 生效 |
 | 部署与交付机制 | how/deployment.md | how | 生效 |
 | 工具链镜像机制 | how/images-toolchain.md | how | 生效 |
 | SSO 接线机制 | how/sso-wiring.md | how | 生效 |
@@ -70,6 +73,7 @@
 | ADR-0035 以有效输入快照驱动增量提示与自动任务 | adr/0035-effective-input-change-detection.md | adr | 已接受 |
 | ADR-0036 构建时固化 sealed Profile 与结构化 Prompt Catalog | adr/0036-sealed-runtime-prompt-catalog.md | adr | 已接受 |
 | ADR-0037 初始化收归单一入口（Web 初始化界面，启动脚本回收） | adr/0037-single-entry-web-init.md | adr | 已接受 |
+| ADR-0038 受限引导模式与声明式组件初始化 | adr/0038-bootstrap-mode-and-declarative-initialization.md | adr | 已接受 |
 | 部署与初始化 | runbooks/deploy.md | runbooks | 生效 |
 | 备份与恢复 | runbooks/backup-restore.md | runbooks | 生效 |
 | 接入新 Agent | runbooks/agent-onboarding.md | runbooks | 生效 |
@@ -99,3 +103,4 @@
 | 需求管理 | why/vision.md | what/req-mgmt.md | how/deployment.md | requirements/functional/req.md |
 | 任务管理 | why/vision.md | what/task-mgmt.md | .agents/skills/openproject/ | requirements/functional/task.md |
 | Manager | why/vision.md | what/manager.md | how/manager-architecture.md | requirements/functional/manager.md |
+| Web 初始化与环境设置 | why/principles.md | what/initialization.md | how/initialization-architecture.md | requirements/functional/initialization.md |

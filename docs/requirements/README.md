@@ -19,6 +19,7 @@
 | `ENV` | 环境编排（compose/Caddy/门户/监控） | `functional/env.md` | `../what/environment.md`、`../how/deployment.md` |
 | `CI` | CI/CD 流水线（Jenkins） | `functional/ci.md` | `../how/images-toolchain.md` |
 | `IMG` | 工具链与运行时镜像 | `functional/images.md` | `../how/images-toolchain.md` |
+| `INIT` | Web 初始化与环境设置 | `functional/initialization.md` | `../what/initialization.md`、`../how/initialization-architecture.md` |
 | `KB` | 知识库（vault/Qdrant/Outline） | `functional/kb.md` | `../what/knowledge.md` |
 | `REQ` | 需求管理工具链 | `functional/req.md` | `../what/req-mgmt.md` |
 | `TASK` | 任务管理（OpenProject 工作包 + AI 回写） | `functional/task.md` | `../what/task-mgmt.md` |

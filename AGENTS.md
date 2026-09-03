@@ -120,4 +120,6 @@ M6 边界：核心发行包采用构建时固化的 sealed Profile（ADR-0036）
 - 仓库名 `AI-CICD-System` 与 Chronicler 新定位不符，更名再议（ADR-0022 记录在案）。
 - 文档文件命名仍沿用 manager.md（what/how/functional），随模块更名统一改。
 - 初始化将收归 Web 初始化界面、启动脚本（up.sh/wire-sso.sh/wire-chronicler.sh/verify*.sh 等）
-  待回收至 recycled/（ADR-0037）；实施时须同步更新本文「部署/验证」章节与 docs/runbooks/deploy.md。
+  待回收至 recycled/（ADR-0037/0038）；实现采用独立 `chronicler.app.initialization` 模块、受限引导
+  模式与组件自有 `setup.yaml`，设计见 docs/what/initialization.md 和
+  docs/how/initialization-architecture.md；实施时须同步更新本文「部署/验证」章节与 docs/runbooks/deploy.md。
