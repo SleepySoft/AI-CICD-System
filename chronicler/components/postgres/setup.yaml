@@ -1,0 +1,23 @@
+schema_version: 1
+profiles: [recommended, full]
+depends_on: []
+conflicts_with: []
+platforms: [windows, linux, darwin]
+resources:
+  memory_mb: 256
+  disk_mb: 2048
+fields:
+  - key: POSTGRES_USER
+    label: 数据库用户名
+    kind: text
+    required: true
+    default: aisys
+  - key: POSTGRES_PASSWORD
+    label: 数据库密码
+    kind: secret
+    required: true
+    generate: password
+    help: PostgreSQL 及依赖组件共用，初始化后不可随意修改。
+readiness:
+  kind: container-health
+  timeout_sec: 180

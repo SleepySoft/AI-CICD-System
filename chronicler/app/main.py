@@ -1,58 +1,80 @@
-"""Chronicler supervisor 入口（ADR-0020：宿主侧进程）"""
+"""Chronicler supervisor 应用工厂（normal/bootstrap/repair）。"""
+import threading
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import db
 from .config import Cfg
-from .routers import auth, config, oidc, projects, runs, tasks, tools, users
-
-app = FastAPI(title="Chronicler", docs_url=None, redoc_url=None)
 
 
-@app.middleware("http")
-async def no_cache_static(request, call_next):
-    """静态资源禁用缓存（前端无构建步骤，文件名不带指纹，靠 no-store 防陈旧）"""
-    resp = await call_next(request)
-    if not request.url.path.startswith("/api/"):
-        resp.headers["Cache-Control"] = "no-store"
-    return resp
+def create_app(mode: str = "normal") -> FastAPI:
+    app = FastAPI(title="Chronicler", docs_url=None, redoc_url=None)
 
-db.init()
+    @app.middleware("http")
+    async def mode_guard(request, call_next):
+        if mode == "bootstrap":
+            path = request.url.path
+            allowed = (path == "/api/health" or path == "/setup" or
+                       path.startswith("/api/setup/") or path.startswith("/setup-assets/"))
+            if not allowed:
+                if path.startswith("/api/"):
+                    return JSONResponse({"detail": "系统尚未初始化"}, status_code=503)
+                return FileResponse(Path(__file__).parent / "initialization" / "static" / "index.html")
+        response = await call_next(request)
+        if not request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
 
-# 存量工程补齐预置任务（幂等）+ 任务调度器（cron 触发，FR-MGR-004 前置形态）
-from .tasks import backfill_preset_tasks, start_scheduler
-backfill_preset_tasks()
-start_scheduler()
+    @app.get("/api/health")
+    async def health():
+        return {"ok": mode != "repair", "service": "chronicler", "version": "1.0.0", "mode": mode}
 
+    from .initialization.router import page_router, router as setup_router
+    setup_static = Path(__file__).parent / "initialization" / "static"
+    app.include_router(page_router)
+    app.include_router(setup_router)
+    app.mount("/setup-assets", StaticFiles(directory=setup_static), name="setup-assets")
 
-@app.on_event("startup")
-def _autostart_boot():
-    """启动钩子（后台线程，不阻塞服务就绪）：拉起标记自启的组件（FR-MGR-022）"""
-    import threading
-    from .tools import autostart_boot
-    threading.Thread(target=autostart_boot, daemon=True).start()
+    if mode == "bootstrap":
+        @app.on_event("startup")
+        def _resume_setup():
+            from .initialization.orchestrator import resume_active
+            resume_active()
+        return app
 
+    if mode == "repair":
+        @app.get("/", include_in_schema=False)
+        async def repair_page():
+            return JSONResponse({"detail": "已初始化实例缺少 .env；为安全起见未开放引导写权限",
+                                 "remediation": "请在宿主恢复 .env 后重启 Chronicler"}, status_code=503)
+        return app
 
-for r in (auth.router, oidc.router, users.router, projects.router, runs.router,
-          tasks.router, config.router, tools.router):
-    app.include_router(r)
+    from . import db
+    db.init()
 
-STATIC = Cfg.STATIC_DIR
+    from .tasks import backfill_preset_tasks, start_scheduler
+    backfill_preset_tasks()
+    start_scheduler()
 
+    from .routers import auth, config, oidc, projects, runs, tasks, tools, users
+    for item in (auth.router, oidc.router, users.router, projects.router, runs.router,
+                 tasks.router, config.router, tools.router):
+        app.include_router(item)
 
-@app.get("/api/health")
-async def health():
-    return {"ok": True, "service": "chronicler", "version": "1.0.0"}
+    @app.on_event("startup")
+    def _autostart_boot():
+        from .tools import autostart_boot
+        threading.Thread(target=autostart_boot, daemon=True).start()
 
+    static = Cfg.STATIC_DIR
 
-@app.exception_handler(404)
-async def not_found(request, exc):
-    if not request.url.path.startswith("/api/"):
-        return FileResponse(STATIC / "index.html")
-    return JSONResponse({"detail": "not found"}, status_code=404)
+    @app.exception_handler(404)
+    async def not_found(request, exc):
+        if not request.url.path.startswith("/api/"):
+            return FileResponse(static / "index.html")
+        return JSONResponse({"detail": "not found"}, status_code=404)
 
-
-app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
+    app.mount("/", StaticFiles(directory=static, html=True), name="static")
+    return app

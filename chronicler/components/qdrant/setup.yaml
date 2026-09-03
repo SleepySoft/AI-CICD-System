@@ -1,0 +1,8 @@
+schema_version: 1
+profiles: [full]
+depends_on: []
+conflicts_with: []
+platforms: [windows, linux, darwin]
+resources: {memory_mb: 512, disk_mb: 2048}
+fields: []
+readiness: {kind: container-health, timeout_sec: 180}

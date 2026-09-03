@@ -1,0 +1,10 @@
+schema_version: 1
+profiles: [full]
+depends_on: [caddy]
+conflicts_with: []
+platforms: [windows, linux, darwin]
+resources: {memory_mb: 128, disk_mb: 256}
+fields:
+  - {key: SSHWIFTY_HOSTNAME, label: Web 终端域名, kind: text, required: true, default: ssh.localhost}
+  - {key: SSHWIFTY_SHAREDKEY, label: Web 终端共享密钥, kind: secret, required: true, generate: token}
+readiness: {kind: container-health, timeout_sec: 180}

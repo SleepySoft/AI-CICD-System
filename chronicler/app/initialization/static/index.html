@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>初始化 Chronicler</title>
+  <link rel="stylesheet" href="/setup-assets/setup.css">
+</head>
+<body>
+  <div class="shell">
+    <aside>
+      <div class="brand"><span>◈</span><div><b>Chronicler</b><small>环境初始化</small></div></div>
+      <ol id="steps"></ol>
+      <div class="aside-note">配置会自动保存。部署开始后可关闭页面，稍后继续查看进度。</div>
+    </aside>
+    <main>
+      <header><div><span class="eyebrow" id="eyebrow">首次设置</span><h1 id="title">欢迎使用 Chronicler</h1></div><span class="status" id="mode">检查中</span></header>
+      <section id="content" class="panel"></section>
+      <footer><button id="back" class="secondary">上一步</button><div class="spacer"></div><button id="next" class="primary">开始</button></footer>
+    </main>
+  </div>
+  <div id="toast"></div>
+  <script src="/setup-assets/setup.js"></script>
+</body>
+</html>

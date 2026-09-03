@@ -1,0 +1,28 @@
+schema_version: 1
+profiles: [recommended, full]
+depends_on: [postgres, keycloak]
+conflicts_with: []
+platforms: [windows, linux, darwin]
+resources:
+  memory_mb: 512
+  disk_mb: 2048
+fields:
+  - key: GITEA_ADMIN_USER
+    label: Gitea 管理员
+    kind: text
+    required: true
+    default: gitea_admin
+  - key: GITEA_ADMIN_PASSWORD
+    label: Gitea 管理员密码
+    kind: secret
+    required: true
+    generate: password
+  - key: GITEA_SSH_PORT
+    label: Gitea SSH 端口
+    kind: port
+    required: true
+    default: 2222
+readiness:
+  kind: container-health
+  timeout_sec: 240
+initialize_hook: hooks/initialize.py

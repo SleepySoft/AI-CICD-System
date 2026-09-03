@@ -147,6 +147,14 @@ def execute(sql: str, args: tuple = ()) -> int:
     return cur.lastrowid
 
 
+def close():
+    """关闭当前线程连接；短生命周期 worker 退出前必须调用。"""
+    conn = getattr(_local, "conn", None)
+    if conn is not None:
+        conn.close()
+        _local.conn = None
+
+
 def audit(actor: str, action: str, target: str = "", detail: str = ""):
     execute("INSERT INTO audit_log(actor, action, target, detail, at) VALUES (?,?,?,?,?)",
             (actor, action, target, detail, time.time()))

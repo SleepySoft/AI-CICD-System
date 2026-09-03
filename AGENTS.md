@@ -42,7 +42,8 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
 - 组件全部免费（含商用）：Python 环境用 **Miniforge**（禁用 Anaconda/defaults 通道）。
 - 新增环境服务/组件：`chronicler/components/<name>/` 一个目录装一切（ADR-0027）——
   `plugin.yaml`（注册：group/desc/url/container/autostart/critical/driver/data）+
-  可选 `SKILL.md`（能力注入，ADR-0025）+ 可选 `hooks/backup.py` / `hooks/deploy.py`；
+  `setup.yaml`（初始化方案/依赖/字段/就绪检查）+ 可选 `SKILL.md`（能力注入，ADR-0025）+
+  可选 `hooks/backup.py` / `hooks/deploy.py` / `hooks/initialize.py`；
   docker 组件另需 `compose.yml` 服务 + `caddy/Caddyfile` 子域名。
 - 新增 agent：用户在宿主自装 harness 后，在 `chronicler/config/harness.yaml` 登记一条命令模板
   （ADR-0021；操作流程见 `docs/runbooks/agent-onboarding.md`）。
@@ -50,26 +51,25 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
 
 ## 部署/验证
 
-底座（WSL 或 Windows Docker Desktop 均可，ADR-0020“跟随 dockerd 同环境”；本机当前部署在 **Windows Docker Desktop**）：
+首次安装（WSL 或 Windows Docker Desktop 均可，ADR-0020“跟随 dockerd 同环境”；本机当前使用 **Windows Docker Desktop**）：
 
 ```bash
-bash scripts/up.sh                # 底座接线（需 supervisor 已由主入口启动）：校验 .env → 共享网络 → 等核心组件 → SSO 接线 → 验证
+python -m chronicler serve        # 无 .env 时进入受限 /setup 向导，批量生成配置并部署组件
 ```
 
-底座编排：无根 docker-compose.yml（已废除，ADR-0027）；组件部署定义在各组件目录
-`chronicler/components/<name>/compose.yml`，由 supervisor 按需拉起。日常不需手动 compose。
+底座编排：无根 docker-compose.yml（已废除，ADR-0027）；组件部署定义和初始化声明在各组件目录，
+由 Web 初始化或 supervisor 按需拉起。`scripts/up.sh` 暂作存量环境过渡路径。
 
 supervisor（产品本体，跟随 dockerd 同环境）：
 
 ```bash
 # WSL/Linux:
 python3 -m venv chronicler/.venv && chronicler/.venv/bin/pip install -r chronicler/requirements.txt
-chronicler/.venv/bin/python -m chronicler create-admin   # 首次：建管理员
-chronicler/.venv/bin/python -m chronicler serve          # 或 bash chronicler/scripts/install-service.sh（systemd）
+chronicler/.venv/bin/python -m chronicler serve          # 首次打印一次性 /setup 链接
 
 # Windows（本机当前）：
 py -m venv chronicler\.venv-win; chronicler\.venv-win\Scripts\pip install -r chronicler\requirements.txt
-chronicler\.venv-win\Scripts\python.exe -m chronicler serve   # 主入口（唯一启动方式；缺 .env 提示退出，监听 8600）
+chronicler\.venv-win\Scripts\python.exe -m chronicler serve   # 主入口；首次进入 /setup，监听 8600
 ```
 
 详见 docs/runbooks/deploy.md。

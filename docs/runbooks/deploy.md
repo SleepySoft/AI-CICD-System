@@ -1,7 +1,7 @@
 # Runbook: 环境部署与初始化
 
-> 版本：v1.2 · 日期：2026-09-01 · 状态：生效
-> 适用：WSL2 / Linux，已装 Docker（底座）与 Python 3（supervisor）；Windows 下在 WSL 中执行（项目路径 `/mnt/c/D/code/AI-CICD-System`）
+> 版本：v1.3 · 日期：2026-09-03 · 状态：生效
+> 适用：Windows / WSL2 / Linux，已装 Docker（可选底座）与 Python 3（supervisor）
 > 克隆仓库需 `git clone --recurse-submodules`（ATR 子模块，ADR-0016）
 > 关联：scripts/（up.sh / wire-sso.sh / verify*.sh / build-images.sh）、chronicler/scripts/install-service.sh；机制原理见 ../how/deployment.md；架构依据 ADR-0020/0021/0022/0023
 
@@ -12,49 +12,41 @@
 1. **compose 底座（可选）**：为没有基础设施的团队提供 Gitea / Jenkins / Keycloak 等一体化环境；已有这些设施的团队可整段跳过。
 2. **supervisor（Chronicler，产品本体）**：宿主侧进程，ADR-0020 起移出 Docker；v1 零外部服务依赖即可运行（SQLite + 本地账密，ADR-0023）。
 
-## 一、可选底座（组件化，ADR-0027）
+## 一、首次 Web 初始化（推荐）
 
-1. 配置环境变量 — `.env` 存在且无 `*_change_me` 残留
-   ```bash
-   cp .env.example .env   # 然后编辑，修改所有 *_change_me
-   ```
-2. 底座接线 — 校验 .env 与 supervisor 前置 → 等核心组件 → SSO 接线 → 冒烟验证（幂等，可反复执行）
-   ```bash
-   bash scripts/up.sh
-   ```
-   up.sh 只管底座接线 + wire-sso + 验证，**不拉起 supervisor**（supervisor 须已由主入口启动；
-   缺 .env 时 up.sh 与 serve 都会提示并退出）。非自启组件在 Chronicler 首页工具面板「部署」；
-   autostart 组件随 supervisor 自动拉起（ADR-0027）。
-3. 构建工具链镜像（可选，耗时） — 镜像全部就绪
-   ```bash
-   bash scripts/build-images.sh    # Windows: scripts\build-images.ps1
-   ```
+在仓库根目录执行；首次启动**不需要预先创建 `.env` 或管理员**：
 
-## 二、supervisor（Chronicler，产品本体）
-
-在仓库根目录执行（WSL）：
-
-0. 前置 — 仓库根 `.env` 存在（`cp .env.example .env` 并编辑所有 `*_change_me`）；serve 主入口会校验，缺失即提示退出
-1. 建虚拟环境并安装依赖
+1. 建虚拟环境并安装依赖（WSL/Linux）
    ```bash
    python3 -m venv chronicler/.venv
    chronicler/.venv/bin/pip install -r chronicler/requirements.txt
    ```
-2. 创建管理员 — 本地账密（admin/user 两角色；鉴权后端可插拔，ADR-0023）
+2. 启动唯一主入口
    ```bash
-   chronicler/.venv/bin/python -m chronicler create-admin
+   chronicler/.venv/bin/python -m chronicler serve
    ```
-3. （可选）切换统一认证 — 底座含 Keycloak 时，用 OIDC 后端实现一次登录全站通：
+   Windows 使用 `chronicler\.venv-win\Scripts\python.exe -m chronicler serve`。控制台会打印仅本机可见、
+   带一次性引导码的 `/setup` 地址；不要转发该地址。
+3. 在浏览器按八阶段向导完成预检、方案选择、配置、计划确认和部署。端口冲突是阻塞项；Windows 若
+   `GITEA_SSH_PORT=2222` 落入系统排除区间，请按“常见问题”修改后重新检测。
+4. 完成页出现后重启 Chronicler，使进程级配置生效；此后 `/setup` 仅管理员可访问。
+
+中途关闭页面不会停止部署；重新打开控制台给出的地址可续接。失败后可重试失败步骤，若服务重启导致
+尚未落盘的秘密丢失，则返回配置步骤重新输入并生成新计划。只有宿主本地管理员可显式重开引导：
+
+```bash
+chronicler/.venv/bin/python -m chronicler setup-recover
+```
+
+## 二、旧脚本过渡路径（暂保留）
+
+已有 `.env` 的存量环境仍可使用以下路径；脚本将在 Web 初始化完成全部发布验收后回收：
+
+1. `bash scripts/up.sh`：底座接线、SSO 接线和冒烟验证，不拉起 supervisor。
+2. `bash scripts/build-images.sh`（Windows：`scripts\build-images.ps1`）：构建可选工具链镜像。
+3. 需要单独切换 OIDC 时可执行：
    ```bash
-   # .env 中设 CHRONICLER_AUTH_BACKEND=oidc 与 CHRONICLER_OIDC_SECRET，然后：
-   bash scripts/wire-chronicler.sh   # 在 Keycloak 创建 chronicler 客户端（幂等）
-   ```
-   重启 supervisor 后登录页出现「经 Keycloak 统一登录」；groups 映射 boss→admin、其余→user，
-   首次登录自动建档。Gitea/Outline 与 Chronicler 共享 Keycloak 会话，无需重复登录。
-4. 启动（唯一入口） — 监听 8600；`python -m chronicler serve` 是唯一启动方式（不再经启动壳脚本拉起）
-   ```bash
-   chronicler/.venv/bin/python -m chronicler serve   # 前台运行（缺 .env 会提示并退出）
-   bash chronicler/scripts/install-service.sh         # 或注册 systemd 用户服务常驻（仍调用主入口）
+   bash scripts/wire-chronicler.sh
    ```
 
 访问入口：无底座时直连 http://127.0.0.1:8600 ；两段并存时经 Caddy 访问
@@ -81,7 +73,7 @@ app.localhost 经 Caddy 可达、`DOCKER-SOCK-OK`；各入口可达（域名清�
 | gitea 容器停在 Created、autostart 报 `ports are not available ... forbidden by its access permissions`（2026-09-01 实测） | Windows 排除端口区间覆盖 `GITEA_SSH_PORT`（本机 2180-2279 含 2222） | `netsh interface ipv4 show excludedportrange protocol=tcp` 查区间；`.env` 改 `GITEA_SSH_PORT` 到区间外，再在首页工具面板「部署」gitea（手动 compose 须显式 `DATA_ROOT=<仓库根>/data`，见 AGENTS.md 已知环境坑） |
 | 空闲约 60s 后容器全停（2026-08 实测） | WSL2 回收 VM | `.wslconfig` 设 `vmIdleTimeout=-1` |
 | app.localhost 经 Caddy 访问 502 | supervisor 未启动或 Caddy 无 host-gateway | 先确认 `curl --noproxy '*' http://127.0.0.1:8600/api/health` 通；检查 compose 中 caddy 的 `extra_hosts` |
-| 组件全部没起来、容器列表为空（2026-09-01 实测） | 仓库根缺 `.env`：autostart 的 `docker compose --env-file .env` 全败且只写 audit_log，界面无提示 | 创建 `.env`（`cp .env.example .env` 并编辑 `*_change_me`）后重启 supervisor；serve 缺 .env 现在会直接提示并退出 |
+| 已初始化实例启动后进入 repair（2026-09-03） | 初始化关闭记录存在，但仓库根 `.env` 丢失 | 从备份恢复 `.env` 后重启；系统不会自动重开未认证引导入口 |
 
 ## 回滚
 

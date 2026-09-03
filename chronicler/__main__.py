@@ -3,6 +3,7 @@
   python -m chronicler create-admin       交互创建 admin 账号
   python -m chronicler backup [目录]       组件化一键备份（ADR-0027）
   python -m chronicler restore <备份目录>  恢复
+    python -m chronicler setup-recover       本机显式重开初始化引导（危险操作）
   python -m chronicler test [--component X] [--deploy] [--timeout N]   组件自检（FR-MGR-023）
 """
 import sys
@@ -20,9 +21,21 @@ def main():
     if cmd == "serve":
         import uvicorn
         from .app.config import Cfg
-        Cfg.require_env()  # 首要依赖 .env 缺失即提示并退出（唯一启动入口）
+        from .app.initialization.lifecycle import detect_mode
+        mode = detect_mode()
+        if mode == "normal":
+            Cfg.require_env()
         Cfg.ensure_dirs()
-        from .app.main import app
+        if mode == "bootstrap":
+            from .app.initialization.security import issue_code
+            code = issue_code()
+            print("[SETUP] Chronicler 尚未初始化。请在本机浏览器打开：")
+            print(f"        http://127.0.0.1:{Cfg.PORT}/setup#code={code}")
+        elif mode == "repair":
+            print("[ERROR] 已初始化实例缺少 .env，已进入安全修复模式；恢复 .env 后重启。",
+                  file=sys.stderr)
+        from .app.main import create_app
+        app = create_app(mode)
         uvicorn.run(app, host=Cfg.HOST, port=Cfg.PORT)
     elif cmd == "test":
         from .app.testing import test_all, test_component
@@ -76,6 +89,26 @@ def main():
         db.execute("INSERT INTO users(username, password_hash, role, created_at)"
                    " VALUES (?,?,'admin',strftime('%s','now'))", (username, hash_password(password)))
         print(f"admin {username} 已创建")
+    elif cmd == "setup-recover":
+        from .app.config import Cfg
+        from .app.initialization import store
+        inst = store.installation()
+        if not inst or not inst["bootstrap_closed_at"]:
+            sys.exit("初始化引导当前已经开放，无需恢复")
+        answer = input("这会重新开放未认证初始化入口。输入 RECOVER 确认: ").strip()
+        if answer != "RECOVER":
+            sys.exit("已取消")
+        import time
+        store.execute("""UPDATE installation SET lifecycle='bootstrap',bootstrap_closed_at=NULL,
+                      bootstrap_token_hash='',active_run_id=NULL,updated_at=? WHERE id=1""", (time.time(),))
+        # 旧引导 cookie 在显式恢复后不得重新获得初始化权限。
+        (Cfg.DATA / "initialization" / "session.key").unlink(missing_ok=True)
+        try:
+            from .app.db import audit
+            audit("local-console", "setup.recover")
+        except Exception:
+            pass
+        print("初始化引导已重开；请立即执行 python -m chronicler serve 并使用新引导链接。")
     else:
         sys.exit(__doc__)
 

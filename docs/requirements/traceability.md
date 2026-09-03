@@ -1,6 +1,6 @@
 # 追溯矩阵
 
-> 版本：v1.9 · 日期：2026-09-03 · 状态：生效
+> 版本：v1.10 · 日期：2026-09-03 · 状态：生效
 > 定位：需求 ID ↔ 设计章节 ↔ 实现位置 ↔ 验证手段。Agent 做 gap 分析的输入；改代码必须同步本表。
 
 ## 功能需求（FR）
@@ -21,17 +21,17 @@
 | FR-IMG-003 | Node 工具链镜像 | how/images-toolchain.md | images/toolchain-node/ | scripts/build-images.sh |
 | FR-IMG-004 | Python 测试镜像(Miniforge) | how/images-toolchain.md | images/test-python/ | scripts/build-images.sh |
 | FR-IMG-005 | 浏览器自动化镜像 | how/images-toolchain.md | images/browsers/ | scripts/build-images.sh |
-| FR-INIT-001 | 首次启动进入受限引导 | what/initialization.md §生命周期与可见性 | chronicler/app/initialization/（规划，ADR-0038） | 待实现：干净安装启动黑盒测试 |
-| FR-INIT-002 | 分步向导与状态恢复 | what/initialization.md §八阶段用户流程 | chronicler/app/initialization/（规划） | 待实现：刷新/重启续接测试 |
-| FR-INIT-003 | 环境预检 | what/initialization.md §八阶段用户流程 | chronicler/app/initialization/preflight.py（规划） | 待实现：Docker/端口/目录故障注入 |
-| FR-INIT-004 | 部署方案与依赖解析 | what/initialization.md §部署方案契约 | chronicler/app/initialization/planner.py（规划） | 待实现：依赖闭包/冲突/环单测 |
-| FR-INIT-005 | 配置收集与秘密保护 | what/initialization.md §安全与错误呈现 | chronicler/app/initialization/config_store.py（规划） | 待实现：API/DB/日志秘密扫描 |
-| FR-INIT-006 | 可审阅执行计划 | what/initialization.md §计划与运行模型 | chronicler/app/initialization/planner.py（规划） | 待实现：稳定 plan hash 与确认测试 |
-| FR-INIT-007 | 批量执行与实时进度 | what/initialization.md §执行语义 | chronicler/app/initialization/orchestrator.py + events.py（规划） | 待实现：DAG 并行与 SSE 集成测试 |
-| FR-INIT-008 | 幂等重试与中断续接 | what/initialization.md §执行语义 | chronicler/app/initialization/store.py + orchestrator.py（规划） | 待实现：进程中断/租约接管测试 |
-| FR-INIT-009 | 组件自描述初始化契约 | what/initialization.md §组件 setup.yaml 契约 | chronicler/components/*/setup.yaml + hooks/initialize.py（规划） | 待实现：组件契约测试 |
-| FR-INIT-010 | 初始化完成与环境设置中心 | what/initialization.md §生命周期与可见性 | chronicler/app/initialization/lifecycle.py + router.py（规划） | 待实现：完成关闭与 admin 权限测试 |
-| FR-INIT-011 | 初始化记录与诊断 | what/initialization.md §计划与运行模型 | chronicler/app/initialization/diagnostics.py（规划） | 待实现：历史与脱敏诊断导出测试 |
+| FR-INIT-001 | 首次启动进入受限引导 | what/initialization.md §生命周期与可见性 | chronicler/app/main.py + initialization/lifecycle.py + security.py | chronicler/tests/test_initialization.py（受限 API、引导码） |
+| FR-INIT-002 | 分步向导与状态恢复 | what/initialization.md §八阶段用户流程 | chronicler/app/initialization/static/ + store.py | chronicler/tests/test_initialization.py（草稿持久化）；人工刷新续接 |
+| FR-INIT-003 | 环境预检 | what/initialization.md §八阶段用户流程 | chronicler/app/initialization/preflight.py | 人工：Docker/Compose/目录/排除端口故障注入 |
+| FR-INIT-004 | 部署方案与依赖解析 | what/initialization.md §部署方案契约 | chronicler/app/initialization/planner.py | chronicler/tests/test_initialization.py（依赖闭包/环/稳定摘要） |
+| FR-INIT-005 | 配置收集与秘密保护 | what/initialization.md §安全与错误呈现 | chronicler/app/initialization/config_store.py + router.py | chronicler/tests/test_initialization.py（不回显、换行注入、DB 扫描） |
+| FR-INIT-006 | 可审阅执行计划 | what/initialization.md §计划与运行模型 | chronicler/app/initialization/planner.py + orchestrator.py | chronicler/tests/test_initialization.py（输入摘要、陈旧计划拒绝） |
+| FR-INIT-007 | 批量执行与实时进度 | what/initialization.md §执行语义 | chronicler/app/initialization/orchestrator.py + router.py（SSE） | 单测全量通过；真实组件批量部署按部署 runbook 验收 |
+| FR-INIT-008 | 幂等重试与中断续接 | what/initialization.md §执行语义 | chronicler/app/initialization/store.py + orchestrator.py | 单测全量通过；进程强停续接为发布前黑盒项 |
+| FR-INIT-009 | 组件自描述初始化契约 | what/initialization.md §组件 setup.yaml 契约 | chronicler/components/*/setup.yaml + hooks/initialize.py | 15 个 catalog/Compose 声明校验；容器 hook 由部署验收 |
+| FR-INIT-010 | 初始化完成与环境设置中心 | what/initialization.md §生命周期与可见性 | chronicler/app/initialization/lifecycle.py + security.py + router.py | chronicler/tests/test_initialization.py（关闭与凭据重放） |
+| FR-INIT-011 | 初始化记录与诊断 | what/initialization.md §计划与运行模型 | chronicler/app/initialization/store.py + router.py | 人工：history、SSE 与脱敏 diagnostics API |
 | FR-KB-001 | Markdown vault 事实源 | what/knowledge.md §分区规范 | 已废弃（知识改由 shadow 仓/全局资产库承载，ADR-0028/FR-MGR-013/014） | - |
 | FR-KB-002 | 来源分区与标注 | what/knowledge.md §frontmatter 契约 | 已废弃（同上，分区约定将迁入 shadow 仓结构） | - |
 | FR-KB-003 | 语义检索（Qdrant） | what/knowledge.md §索引契约 | chronicler/components/qdrant/ | 人工：MCP 语义查询 |
@@ -82,10 +82,10 @@
 | NFR-001 | 全免费含商用 | why/licensing.md；镜像选型；Docker Desktop 可选路径注记（ADR-0020） | 人工：license 清单核查 |
 | NFR-002 | 密钥不落明文 | .env.example / .gitignore；chronicler harness env ${VAR} 引用（ADR-0021/0023） | 仓库检索 + 人工核查 |
 | NFR-003 | 资源可控/按需启停 | chronicler/components/*/plugin.yaml（autostart 标记）+ 首页工具面板 | docker ps + 首页组件状态 |
-| NFR-004 | 一键部署可验证 | what/initialization.md §八阶段用户流程、§执行语义 | chronicler/app/initialization/（规划；当前过渡为 scripts/up.sh） | 待实现：推荐方案中断恢复黑盒测试 |
+| NFR-004 | 一键部署可验证 | what/initialization.md §八阶段用户流程、§执行语义 | chronicler/app/initialization/ + chronicler/components/*/setup.yaml | Web 推荐方案部署；中断恢复黑盒测试为发布前验收项 |
 | NFR-005 | 构建可复现 | images/*/Dockerfile 版本锁定 | 重建比对 digest |
 | NFR-006 | 三形态同源 | scripts/build-images.sh + 封装脚本；supervisor 独立交付（ADR-0020，待实现） | 人工：封装脚本复用 compose |
 | NFR-007 | Agent 成本可控 | chronicler harness 注册表 + chronicler/components/ollama/ | 人工：切换本地模型跑任务 |
 | NFR-008 | 数据显式持久化 | 各组件 compose.yml bind mounts（${DATA_ROOT:-./data}，public/private/workspace 三分 ADR-0026）；组件化备份编排 chronicler/app/backup.py + 组件 hooks（ADR-0027），scripts/backup.sh 为薄壳 | `python -m chronicler backup` 产出含 manifest 的备份包 |
 | NFR-009 | 系统数据 Git 化 | docs/、shadow 仓（data/public/shadow/，ADR-0028）、chronicler/components/jenkins/casc.yaml（已落实）；scripts/export-openproject.sh（手工导出，ADR-0014） | 抽查数据可定位 Git 事实源 |
-| NFR-010 | 初始化安全关闭 | what/initialization.md §生命周期与可见性、§安全与错误呈现 | chronicler/app/initialization/security.py + lifecycle.py（规划） | 待实现：完成后重放/故障不重开安全测试 |
+| NFR-010 | 初始化安全关闭 | what/initialization.md §生命周期与可见性、§安全与错误呈现 | chronicler/app/initialization/security.py + lifecycle.py | chronicler/tests/test_initialization.py（一次性码重放）；缺 `.env` 进入 repair 模式 |

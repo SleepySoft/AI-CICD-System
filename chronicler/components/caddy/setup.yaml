@@ -1,0 +1,12 @@
+schema_version: 1
+profiles: [recommended, full]
+depends_on: []
+conflicts_with: []
+platforms: [windows, linux, darwin]
+resources:
+  memory_mb: 64
+  disk_mb: 128
+fields: []
+readiness:
+  kind: process
+  timeout_sec: 60

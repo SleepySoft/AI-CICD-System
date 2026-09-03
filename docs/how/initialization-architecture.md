@@ -1,6 +1,6 @@
 # Web 初始化模块架构与执行机制
 
-> 版本：v1.0 · 日期：2026-09-03 · 状态：生效
+> 版本：v1.1 · 日期：2026-09-03 · 状态：生效
 > 定位：`chronicler.app.initialization` 的内部模块边界、状态机、执行器和安全机制；用户操作步骤不在本文定义。
 > 关联需求：FR-INIT-001 ~ FR-INIT-011、NFR-002、NFR-010
 
@@ -21,18 +21,14 @@ chronicler/app/initialization/
 ├── __init__.py          对外只暴露 lifecycle 与 router
 ├── lifecycle.py         bootstrap/configuring/ready/repair 判定与模式闸门
 ├── security.py          一次性引导码、引导 cookie、admin 权限适配
-├── models.py            草稿、计划、运行、步骤的纯数据模型与错误码
-├── store.py             模块自有 SQLite 表、事务和租约；复用 db 连接但不改业务表
+├── store.py             模块自有 SQLite 表与事务；使用独立短连接且不改业务表
 ├── catalog.py           扫描/校验组件 setup.yaml，生成只读 catalog
 ├── preflight.py         Docker、Compose、目录、端口、资源和存量资源检查
 ├── config_store.py      `.env` 解析、字段白名单、秘密暂存、原子写入与脱敏
 ├── planner.py           profile 展开、依赖闭包、冲突检查、环境指纹和固定计划
 ├── orchestrator.py      DAG 调度、并发上限、取消、续接和重试
-├── executors.py         通用 deploy/readiness/hook/finalize 执行器
-├── events.py            持久事件写入 + SSE 扇出；慢客户端不阻塞执行
-├── diagnostics.py       错误归类、日志脱敏、诊断导出
-├── router.py            `/setup` 页面与 `/api/setup/*`；不承载业务逻辑
-└── static/              独立 index.html、setup.js、setup.css 与本地 vendor 引用
+├── router.py            `/setup`、`/api/setup/*`、SSE 与脱敏诊断响应
+└── static/              独立 index.html、setup.js 与 setup.css
 ```
 
 组件特定内容位于：
@@ -45,9 +41,8 @@ chronicler/components/<name>/
 └── hooks/initialize.py   # 可选，check/apply/verify
 ```
 
-`initialization` 可以调用现有 Docker/compose 原语，但不得导入现有 FastAPI tools router。部署共用能力应
-从 `tools.py` 下沉到无 HTTP 依赖的通用 lifecycle service，`tools.py` 与 initialization 都只做调用者，
-避免初始化反向依赖页面逻辑。
+`initialization` 复用 `tools.py` 中不依赖 HTTP 请求的 Docker/compose 生命周期函数；组件特定逻辑只在
+组件目录声明与 hook 中出现。后续若执行器继续增长，再从 orchestrator 拆分，不提前制造空模块。
 
 ### 2.2 应用接线与模式闸门
 
@@ -73,7 +68,7 @@ FastAPI 工厂按模式装配：
 完成历史。
 
 兼容迁移遵循失败关闭：若 installation 表不存在，但默认或进程显式指定的数据目录中已有 Chronicler
-数据库及用户，则创建 `legacy-adopted` 的关闭记录，而不是生成引导码。恢复入口规划为主入口下的
+数据库及用户，则创建 `legacy-adopted` 的关闭记录，而不是生成引导码。恢复入口为主入口下的
 `setup-recover` 管理子命令，仅允许在宿主交互终端执行并要求二次确认；Web API 不提供等价操作。
 
 ### 2.3 状态存储
@@ -86,10 +81,9 @@ installation       singleton, schema_version, lifecycle, bootstrap_token_hash,
 setup_drafts       id, revision, stage, profile, selections_json, values_json, secret_refs_json
 setup_plans        id, draft_revision, environment_fingerprint, plan_hash,
                    plan_json, confirmed_at, created_at
-setup_runs         id, plan_id, status, lease_owner, lease_expires_at,
-                   cancel_requested, started_at, finished_at, summary_json
+setup_runs         id, plan_id, status, cancel_requested, started_at, finished_at, summary_json
 setup_steps        id, run_id, component, phase, ordinal, status, input_hash,
-                   attempt, error_class, error_summary, log_ref, timestamps
+                   attempt, error_class, error_summary, timestamps
 setup_events       id, run_id, step_id, level, event_type, message, data_json, at
 ```
 
@@ -98,10 +92,9 @@ setup_events       id, run_id, step_id, level, event_type, message, data_json, a
 - 数据库中不存秘密值；`secret_refs_json` 只记录字段已设置和暂存引用。
 - 计划 JSON 是执行时唯一输入；执行开始后不再读可变草稿。
 - `plan_hash` 对规范化计划计算 SHA-256；确认动作记录该 hash。
-- 一个实例只允许一个 active run。数据库租约避免重启后永远占锁；新 worker 只接管租约过期且状态为
-  running 的运行。
-- 事件表保存结构化摘要；完整日志写入
-  `data/private/chronicler/initialization/runs/<run-id>/`，数据库仅保存引用。
+- 一个实例只允许一个 active run。v1 以单 supervisor 进程为部署约束，重启时根据 `active_run_id` 接管
+  running 运行；多 worker/多进程部署需在引入租约后才可开放。
+- 事件表保存供状态页、SSE 与诊断响应使用的脱敏结构化摘要，不保存子进程原始环境或命令行。
 
 状态表与引导能力文件归 Chronicler 私有数据，固定落在 `Cfg.DATA/initialization/` 及同一 SQLite 中，
 不建立跨组件共享私有目录。v1 向导中的“数据根”仅配置组件 `DATA_ROOT`；若操作者通过进程环境显式
@@ -113,7 +106,7 @@ setup_events       id, run_id, step_id, level, event_type, message, data_json, a
 浏览器输入
   → 字段级校验
   → secret 值只进入进程内短期暂存区 / 非 secret 进入 draft
-  → 生成计划时仅引用 secret-present + 值的单向摘要
+  → 生成计划时仅引用 secret-present 字段集合与非秘密配置摘要
   → persist-config 步骤在锁内合并现有 .env
   → fsync 临时文件 → 同目录原子 replace → 收紧文件权限
   → 清除暂存秘密与请求体引用
@@ -130,9 +123,8 @@ token/key/password 赋值形式。
 `secret|password|token|api_key|credential` 却未声明 `kind: secret` 时，catalog 直接拒绝该组件；
 诊断包生成后再次以已知秘密值和常见凭据模式扫描，命中则中止导出。
 
-跨平台写入使用目标同目录临时文件，写入后 flush + fsync，再以 `os.replace` 替换；遇 Windows 杀毒或
-文件占用导致的共享冲突时有限退避重试，不先删除有效旧文件。POSIX 收紧为 `0600`；Windows 检查
-继承 ACL，无法确认仅当前用户可读时显示阻塞修复说明。所有子进程显式使用
+跨平台写入使用目标同目录临时文件，写入后 flush + fsync，再以 `os.replace` 替换且不先删除有效旧文件；
+POSIX 尝试收紧为 `0600`。所有子进程显式使用
 `encoding="utf-8", errors="replace"`，不依赖 Windows 系统编码。
 
 首次生成引导码与未落盘的秘密不依赖默认 `CHRONICLER_SECRET`。引导 cookie 使用独立随机密钥签名，
@@ -153,8 +145,9 @@ token/key/password 赋值形式。
 5. 生成规范化 actions 与 warnings；计算 environment fingerprint 和 plan hash。
 6. 保存不可变计划。执行前重新计算环境指纹；关键漂移令计划过期，非关键漂移转警告。
 
-环境指纹包含 Docker daemon identity/version、catalog 内容 hash、目标容器存在/运行摘要、目标端口占用、
-`.env` 非秘密字段摘要和秘密 presence/hash；不包含秘密明文、动态日志或无关容器。
+v1 环境指纹包含 catalog 内容 hash 与当前平台；plan hash 另包含固定组件图、非秘密配置摘要和秘密字段
+presence。执行前强制复核 draft revision、catalog revision、Docker/Compose、目录与目标端口；不包含
+秘密明文、动态日志或无关容器。
 
 指纹输入采用键排序、无无关空白的规范 JSON 后计算 SHA-256；容器启动时间、日志和检查时间不参与。
 容器存在/运行变化属于关键漂移，因为它会改变计划动作；执行中的正常状态变化由既有 run 和逐步 check
@@ -174,9 +167,9 @@ persist → admin ─┤                                                     ├
 
 - 全局并发以 semaphore 限制，默认 2；Docker pull/compose 可另设并发 1，防止磁盘和网络争抢。
 - 状态变更与事件先提交数据库，再推送 SSE；浏览器断开不影响 worker。
-- 进程终止遗留的 `running` 步骤在租约接管后标为 `interrupted`，重新执行 `check` 决定跳过或 apply。
+- 进程终止遗留的 `running` 步骤由启动钩子接管；success/skipped 步骤直接跳过，其余步骤幂等重试。
 - hook、compose 和健康检查有独立超时。超时分类为可重试，不直接推断目标未创建。
-- retry 创建新的 step attempt，保留旧错误；输入变化必须生成新 plan/run，不能在旧 run 上重试。
+- retry 增加 step attempt，旧错误保留在事件历史；输入变化必须生成新 plan/run，不能在旧 run 上重试。
 - cancel 设置数据库标志；worker 在当前原子步骤结束后停止调度新步骤，将未开始项标为 canceled。
 - 步骤是否完成以其 `check` 观察到的目标状态为准，不以 `apply` 返回成功为准；`apply` 部分完成或超时后
   重试仍先 check，已存在的客户端、账号、认证源和容器必须被识别并复用。
@@ -195,9 +188,9 @@ persist → admin ─┤                                                     ├
 | verify | 运行声明检查或 hook `verify` | 无隐式修复；失败交由 retry |
 | finalize | 检查 admin、必需步骤和 restart | 关闭引导能力并记录完成 hash |
 
-hook 通过外部进程执行，沿用 sealed Profile 的 `CHRONICLER_COMPONENT_PYTHON` 约定。调用参数只含 action、
-组件目录、非秘密上下文和秘密引用；需要秘密时由受控 runner 以最小环境变量集合注入。stdout 必须是
-JSON Lines 协议，stderr 进入脱敏日志。退出码非零、协议错误、超时分别归类，不把原始异常直接回显。
+hook 通过外部进程执行，沿用 sealed Profile 的 `CHRONICLER_COMPONENT_PYTHON` 约定。调用参数只含 action；
+受控 runner 仅注入宿主执行必需变量和该组件依赖闭包声明的配置字段。stdout/stderr 只在失败时截断、
+脱敏后形成事件摘要，退出码非零与超时分别归类。
 
 source 模式默认使用当前 Python；sealed 模式在 preflight 中强制验证 `CHRONICLER_COMPONENT_PYTHON`
 存在且满足组件 hook 声明的 Python 依赖。秘密只在执行对应 hook 的最小环境中短时注入，不出现在命令行、
@@ -209,7 +202,7 @@ source 模式默认使用当前 Python；sealed 模式在 preflight 中强制验
 
 ### 2.8 前端组织
 
-初始化 UI 独立于现有大 SPA，使用同一套本地 Vue3/Element Plus 资源但拥有自己的入口和状态：
+初始化 UI 独立于现有大 SPA，以无构建依赖的原生 JavaScript/CSS 提供自己的入口和状态：
 
 - `setup.js` 按 API 返回的 stage 渲染有限状态机，不从 URL 参数推断进度。
 - 步骤导航只允许跳到服务端判定可访问的阶段；所有校验以后端为准，前端即时校验仅改善体验。
