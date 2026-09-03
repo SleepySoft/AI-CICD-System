@@ -69,6 +69,7 @@
 | ADR-0034 任务类型与 Prompt 家族通过 registry 解耦 | adr/0034-task-prompt-family-registry.md | adr | 已接受 |
 | ADR-0035 以有效输入快照驱动增量提示与自动任务 | adr/0035-effective-input-change-detection.md | adr | 已接受 |
 | ADR-0036 构建时固化 sealed Profile 与结构化 Prompt Catalog | adr/0036-sealed-runtime-prompt-catalog.md | adr | 已接受 |
+| ADR-0037 初始化收归单一入口（Web 初始化界面，启动脚本回收） | adr/0037-single-entry-web-init.md | adr | 已接受 |
 | 部署与初始化 | runbooks/deploy.md | runbooks | 生效 |
 | 备份与恢复 | runbooks/backup-restore.md | runbooks | 生效 |
 | 接入新 Agent | runbooks/agent-onboarding.md | runbooks | 生效 |
