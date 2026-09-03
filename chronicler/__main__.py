@@ -1,5 +1,5 @@
 """Chronicler CLI：
-  python -m chronicler serve              启动 supervisor（默认 0.0.0.0:8600）
+  python -m chronicler serve              启动 supervisor（默认 0.0.0.0 + [::]:8600 双栈）
   python -m chronicler create-admin       交互创建 admin 账号
   python -m chronicler backup [目录]       组件化一键备份（ADR-0027）
   python -m chronicler restore <备份目录>  恢复
@@ -19,7 +19,6 @@ if not __package__:
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "serve"
     if cmd == "serve":
-        import uvicorn
         from .app.config import Cfg
         from .app.initialization.lifecycle import detect_mode
         mode = detect_mode()
@@ -35,8 +34,9 @@ def main():
             print("[ERROR] 已初始化实例缺少 .env，已进入安全修复模式；恢复 .env 后重启。",
                   file=sys.stderr)
         from .app.main import create_app
+        from .app.serving import serve
         app = create_app(mode)
-        uvicorn.run(app, host=Cfg.HOST, port=Cfg.PORT)
+        serve(app, Cfg.HOST, Cfg.PORT)
     elif cmd == "test":
         from .app.testing import test_all, test_component
         deploy = "--deploy" in sys.argv

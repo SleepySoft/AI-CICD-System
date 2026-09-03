@@ -74,6 +74,7 @@ app.localhost 经 Caddy 可达、`DOCKER-SOCK-OK`；各入口可达（域名清�
 | 空闲约 60s 后容器全停（2026-08 实测） | WSL2 回收 VM | `.wslconfig` 设 `vmIdleTimeout=-1` |
 | app.localhost 经 Caddy 访问 502 | supervisor 未启动或 Caddy 无 host-gateway | 先确认 `curl --noproxy '*' http://127.0.0.1:8600/api/health` 通；检查 compose 中 caddy 的 `extra_hosts` |
 | 已初始化实例启动后进入 repair（2026-09-03） | 初始化关闭记录存在，但仓库根 `.env` 丢失 | 从备份恢复 `.env` 后重启；系统不会自动重开未认证引导入口 |
+| 直接 `python -m chronicler serve` 后 `http://localhost:8600` 打不开，只有控制台打印的 `0.0.0.0:8600` 可访问（2026-09-03 实测） | 旧实现只监听 IPv4 `0.0.0.0`；部分客户端把 `localhost` 解析到 `::1` 后不回落，而 uvicorn 单独绑 `::` 在 Windows 又默认纯 IPv6 | 用当前代码重启（默认已双栈监听 `0.0.0.0` + `[::]`，见 chronicler/app/serving.py）；重启后 `localhost`/`127.0.0.1`/`[::1]` 均可达，健康检查 `curl --noproxy '*' http://127.0.0.1:8600/api/health` |
 
 ## 回滚
 

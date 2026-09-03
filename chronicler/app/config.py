@@ -27,7 +27,8 @@ _load_dotenv()
 
 
 class Cfg:
-    # 站点与监听
+    # 站点与监听：默认 0.0.0.0 = IPv4+IPv6 全接口（双监听实现见 serving.py）；
+    # 只想本机访问可设 CHRONICLER_HOST=127.0.0.1
     HOST = os.environ.get("CHRONICLER_HOST", "0.0.0.0")
     PORT = int(os.environ.get("CHRONICLER_PORT", "8600"))
 

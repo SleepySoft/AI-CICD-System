@@ -98,8 +98,11 @@ chronicler\.venv-win\Scripts\python.exe -m chronicler serve   # 主入口；首�
   手动操作须显式 `DATA_ROOT=<仓库根>/data`（或走首页工具面板「部署」，supervisor 注入绝对路径）（本机实测，2026-09-01）。
 - Windows 侧 Python subprocess 捕获输出必须显式 `encoding="utf-8", errors="replace"`
   （`text=True` 用 GBK 解码，遇 UTF-8 提交信息 stdout 变 None，2026-08-27 实测）。
-- Windows 部署时 Docker Desktop 需随登录自启（Settings → General → Start when you sign in），
-  否则栈和 SSO 全不可用；supervisor 自启钩子已带 dockerd 就绪重试（10 分钟窗口）兜底启动慢的场景。
+- Windows 部署时建议 Docker Desktop 随登录自启（Settings → General → Start when you sign in），
+  否则栈和 SSO 全不可用。supervisor 自启钩子会先按平台拉起缺失的引擎（Windows 启动 Docker
+  Desktop；Linux/WSL 用 systemd/service；macOS `open -a Docker`），再带 dockerd 就绪重试
+  （10 分钟窗口）兜底启动慢的场景（2026-09-03 实测：引擎未起时 80 端口 Caddy 入口全灭，
+  仅宿主 8600 直连可用；处置见 docs/runbooks/dev-debug.md）。
 - Clash Verge（本机实测，2026-09-01）：TUN 开关开着但 Wintun 网卡可能 Disconnected（核心以 sidecar
   模式启动、非管理员 → TUN 未接管 L3）；出站模式实际可能仍是 rule；PowerShell 会话默认无
   HTTP_PROXY/HTTPS_PROXY → curl/pip/git/codex 等直连被墙（developers.openai.com 403）。

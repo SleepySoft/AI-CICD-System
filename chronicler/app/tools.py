@@ -165,15 +165,16 @@ def ensure_running(tool: dict) -> str:
 
 
 def autostart_boot(max_wait_sec: int = 600, interval: int = 20):
-    """supervisor 启动钩子（后台线程）：拉起所有标记自启的组件（FR-MGR-022）
-    dockerd 未就绪（如 Docker Desktop 未启动/启动慢）时每 20s 重试至多 10 分钟，
-    而不是一次性放弃——supervisor 通常比 dockerd 先活。"""
+    """supervisor 启动钩子（后台线程）：拉起所有标记自启的组件（FR-MGR-022）。
+    dockerd 未就绪（如 Docker Desktop 未启动/启动慢）时先按平台尝试拉起引擎，
+    随后每 20s 重试至多 10 分钟，而不是一次性放弃——supervisor 通常比 dockerd 先活。"""
     env_file = PROFILE.install_root / ".env"
     if not env_file.is_file():
         print(f"[ERROR] autostart 跳过：缺少首要依赖 {env_file}（请先 cp .env.example .env 并编辑 *_change_me）",
               file=sys.stderr)
         return
     deadline = time.time() + max_wait_sec
+    engine_launch_tried = False
     while True:
         try:
             _client().ping()
@@ -181,11 +182,68 @@ def autostart_boot(max_wait_sec: int = 600, interval: int = 20):
         except docker.errors.DockerException:
             if time.time() > deadline:
                 return
+            if not engine_launch_tried:
+                _try_start_docker_engine()
+                engine_launch_tried = True
             time.sleep(interval)
     for t in load_tools():
         if t["autostart"]:
             ensure_running(t)
 
+
+def _try_start_docker_engine() -> bool:
+    """引擎缺失时按平台主动拉起一次，避免 supervisor 干等 10 分钟。
+
+    平台差异：
+    - Windows：启动 Docker Desktop（可用 ``DOCKER_DESKTOP_EXE`` 覆盖默认安装路径）；
+      引擎由应用自行拉起（com.docker.service）。
+    - macOS：``open -a Docker``。
+    - Linux/WSL：root 直启 systemd/service；普通用户尝试 ``sudo -n``（不交互，失败即放弃）。
+    - 显式指向远程 ``DOCKER_HOST``（tcp/ssh）时不猜本机引擎。
+    """
+    host = (os.environ.get("DOCKER_HOST") or "").strip().lower()
+    if host.startswith(("tcp://", "ssh://")):
+        return False
+    if sys.platform == "win32":
+        candidates = []
+        override = os.environ.get("DOCKER_DESKTOP_EXE")
+        if override:
+            candidates.append(Path(override))
+        candidates.append(Path(r"C:\Program Files\Docker\Docker\Docker Desktop.exe"))
+        local = os.environ.get("LOCALAPPDATA")
+        if local:
+            candidates.append(Path(local) / "Docker" / "Docker Desktop.exe")
+        for exe in candidates:
+            try:
+                if exe.is_file():
+                    print(f"[AUTOSTART] 启动 Docker Desktop：{exe}")
+                    subprocess.Popen([str(exe)])
+                    return True
+            except OSError:
+                continue
+        print("[AUTOSTART] 找不到 Docker Desktop，请手动启动", file=sys.stderr)
+        return False
+    if sys.platform == "darwin":
+        try:
+            print("[AUTOSTART] 启动 Docker Desktop（open -a Docker）")
+            subprocess.Popen(["open", "-a", "Docker"])
+            return True
+        except OSError:
+            return False
+    if sys.platform.startswith("linux"):
+        euid = getattr(os, "geteuid", lambda: -1)()
+        prefixes = [] if euid == 0 else ["sudo", "-n"]
+        for args in (["systemctl", "start", "docker"], ["service", "docker", "start"]):
+            try:
+                r = subprocess.run(prefixes + args, capture_output=True, timeout=20)
+            except (OSError, subprocess.TimeoutExpired):
+                continue
+            if r.returncode == 0:
+                print(f"[AUTOSTART] 已启动 docker 服务：{' '.join(args)}")
+                return True
+        print("[AUTOSTART] 自动启动 docker 服务失败，请手动启动 dockerd", file=sys.stderr)
+        return False
+    return False
 
 # ---------- 状态 / 启停 / 日志 / 详情 ----------
 

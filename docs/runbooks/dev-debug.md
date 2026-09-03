@@ -63,7 +63,7 @@ bash scripts/verify-chronicler.sh    # WSL；Windows 用浏览器访问 http://1
 | app.localhost 502 | supervisor 没起或 Caddy 未重载 | 先验 127.0.0.1:8600 直连；再在首页工具面板重启 caddy（或 `docker start aisystem-caddy-1`） |
 | 改了代码不生效 | 后台旧进程还在 | 停掉 8600 端口的旧进程再启动（Windows：`Get-NetTCPConnection -LocalPort 8600` 找 PID） |
 | PyCharm 调试报端口占用 | 后台服务实例占着 8600 | 调试配置加环境变量 `CHRONICLER_PORT=8601` 错开（经 8601 直连调试，不影响正式入口）；或先停服务实例 |
-| 容器全部消失 | Docker Desktop 未启动 | 启动 Docker Desktop 后重启 supervisor（autostart 钩子按标记拉起）；先确认仓库根 `.env` 存在 |
+| 容器全部消失 / `http://localhost` 与各 `*.localhost` 全灭（仅 8600 直连可用） | Docker Desktop/引擎未启动 | supervisor autostart 钩子会自动按平台拉起引擎（Windows 启动 Docker Desktop、Linux/WSL systemd/service、macOS `open -a Docker`）并按标记拉起组件；仍失败则手动启动 Docker Desktop 后重启 supervisor；先确认仓库根 `.env` 存在 |
 
 ## 回滚（如适用）
 
