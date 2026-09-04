@@ -25,7 +25,7 @@
 | FR-INIT-002 | 分步向导与状态恢复 | what/initialization.md §八阶段用户流程 | chronicler/app/initialization/static/ + store.py | chronicler/tests/test_initialization.py（草稿持久化）；人工刷新续接 |
 | FR-INIT-003 | 环境预检 | what/initialization.md §八阶段用户流程 | chronicler/app/initialization/preflight.py | 人工：Docker/Compose/目录/排除端口故障注入 |
 | FR-INIT-004 | 部署方案与依赖解析 | what/initialization.md §部署方案契约 | chronicler/app/initialization/planner.py + static/setup.js | chronicler/tests/test_initialization.py（依赖闭包/仅依赖组件/环/稳定摘要） |
-| FR-INIT-005 | 配置收集与秘密保护 | what/initialization.md §组件 setup.yaml 契约、§安全与错误呈现 | chronicler/app/initialization/catalog.py + config_store.py + static/setup.js | chronicler/tests/test_initialization.py（秘密元数据、不回显、换行注入、DB 扫描） |
+| FR-INIT-005 | 配置收集与秘密保护 | what/initialization.md §组件 setup.yaml 契约、§计划与运行模型、§安全与错误呈现 | chronicler/app/initialization/catalog.py + config_store.py + router.py + static/setup.js | chronicler/tests/test_initialization.py（秘密元数据、一次性导出/固定密码掩码、不回显、换行注入、DB 扫描） |
 | FR-INIT-006 | 可审阅执行计划 | what/initialization.md §计划与运行模型 | chronicler/app/initialization/planner.py + orchestrator.py | chronicler/tests/test_initialization.py（输入摘要、陈旧计划拒绝） |
 | FR-INIT-007 | 批量执行与实时进度 | what/initialization.md §执行语义 | chronicler/app/initialization/orchestrator.py + router.py（SSE） | 单测全量通过；真实组件批量部署按部署 runbook 验收 |
 | FR-INIT-008 | 幂等重试与中断续接 | what/initialization.md §执行语义 | chronicler/app/initialization/store.py + orchestrator.py | 单测全量通过；进程强停续接为发布前黑盒项 |

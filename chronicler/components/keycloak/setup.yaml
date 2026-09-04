@@ -10,6 +10,7 @@ fields:
   - key: KEYCLOAK_ADMIN
     label: Keycloak 管理员
     kind: text
+    summary: account
     required: true
     default: admin
   - key: KEYCLOAK_ADMIN_PASSWORD

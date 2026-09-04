@@ -5,7 +5,7 @@ conflicts_with: []
 platforms: [windows, linux, darwin]
 resources: {memory_mb: 1024, disk_mb: 4096}
 fields:
-  - {key: JENKINS_ADMIN_ID, label: Jenkins 管理员, kind: text, required: true, default: admin}
+  - {key: JENKINS_ADMIN_ID, label: Jenkins 管理员, kind: text, summary: account, required: true, default: admin}
   - key: JENKINS_ADMIN_PASSWORD
     label: Jenkins 管理员密码
     kind: secret

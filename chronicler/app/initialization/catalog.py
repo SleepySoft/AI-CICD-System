@@ -32,6 +32,11 @@ def validate(name: str, raw: dict, component_dir: Path) -> dict:
             raise CatalogError(f"非法或重复配置键：{key}")
         if kind not in KINDS:
             raise CatalogError(f"不支持的字段类型：{kind}")
+        summary = field.get("summary")
+        if summary not in (None, "account"):
+            raise CatalogError(f"不支持的字段 summary：{key}")
+        if summary == "account" and kind == "secret":
+            raise CatalogError(f"账号摘要字段不得声明为 secret：{key}")
         if SENSITIVE.search(key) and kind != "secret":
             raise CatalogError(f"敏感字段必须声明 kind=secret：{key}")
         if kind == "secret" and field.get("default"):

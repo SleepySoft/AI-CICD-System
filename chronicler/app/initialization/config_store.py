@@ -2,11 +2,14 @@
 import os
 import re
 import tempfile
+import threading
 from pathlib import Path
 
 from ..runtime import PROFILE
 
 _secrets: dict[str, str] = {}
+_reveal_consumed = False
+_reveal_lock = threading.Lock()
 KEY = re.compile(r"^[A-Z][A-Z0-9_]*$")
 GLOBAL_KEYS = {"TZ", "BASE_DOMAIN", "DATA_ROOT", "CHRONICLER_SECRET",
                "CHRONICLER_AUTH_BACKEND", "CHRONICLER_OIDC_SECRET"}
@@ -47,6 +50,19 @@ def configured_presence(components: dict) -> dict[str, bool]:
 
 def get_secret(key: str) -> str:
     return _secrets.get(key, "")
+
+
+def reveal_once(keys: set[str]) -> dict[str, str]:
+    """一次性返回本进程中新输入的指定秘密；持久化秘密永不反向读取。"""
+    global _reveal_consumed
+    with _reveal_lock:
+        if _reveal_consumed:
+            raise ValueError("本次初始化的凭据导出机会已使用，不能再次显示或导出")
+        result = {key: _secrets[key] for key in keys if _secrets.get(key)}
+        if not result:
+            raise ValueError("没有可导出的新凭据；已有 .env 中的秘密不会被反向读取")
+        _reveal_consumed = True
+        return result
 
 
 def redact(value: object) -> str:
@@ -132,4 +148,7 @@ def persist(values: dict, components: dict) -> Path:
 
 
 def clear():
-    _secrets.clear()
+    global _reveal_consumed
+    with _reveal_lock:
+        _secrets.clear()
+        _reveal_consumed = False

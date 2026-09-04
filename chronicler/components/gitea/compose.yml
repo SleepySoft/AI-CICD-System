@@ -16,7 +16,7 @@ services:
       GITEA__database__PASSWD: ${POSTGRES_PASSWORD:?}
       GITEA__server__DOMAIN: git.${BASE_DOMAIN:-localhost}
       GITEA__server__ROOT_URL: http://git.${BASE_DOMAIN:-localhost}/
-      GITEA__server__SSH_PORT: ${GITEA_SSH_PORT:-2222}
+      GITEA__server__SSH_PORT: ${GITEA_SSH_PORT:-22222}
       GITEA__service__DISABLE_REGISTRATION: 'true'
       GITEA__security__INSTALL_LOCK: 'true'
       GITEA__packages__ENABLED: 'true'
@@ -24,7 +24,7 @@ services:
     - ${DATA_ROOT:-./data}/private/gitea:/data
     - ${DATA_ROOT:-./data}/public:/public
     ports:
-    - ${GITEA_SSH_PORT:-2222}:22
+    - ${GITEA_SSH_PORT:-22222}:22
     healthcheck:
       test:
       - CMD-SHELL

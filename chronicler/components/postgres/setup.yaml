@@ -11,6 +11,7 @@ fields:
   - key: POSTGRES_USER
     label: 数据库用户名
     kind: text
+    summary: account
     required: true
     default: aisys
   - key: POSTGRES_PASSWORD

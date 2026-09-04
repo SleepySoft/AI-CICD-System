@@ -10,6 +10,7 @@ fields:
   - key: GITEA_ADMIN_USER
     label: Gitea 管理员
     kind: text
+    summary: account
     required: true
     default: gitea_admin
   - key: GITEA_ADMIN_PASSWORD
@@ -34,7 +35,7 @@ fields:
     label: Gitea SSH 端口
     kind: port
     required: true
-    default: 2222
+    default: 22222
     help: Git SSH 克隆映射到宿主的端口。Windows 上若端口处于 Hyper-V 排除区间会启动失败，请选择其它空闲端口。
 readiness:
   kind: container-health

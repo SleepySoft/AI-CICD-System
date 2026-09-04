@@ -1,6 +1,7 @@
 """Web 初始化 API；所有写操作均受一次性引导会话或 admin 保护。"""
 import asyncio
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -128,6 +129,61 @@ async def get_plan(plan_id: int, user=Depends(security.require_setup_session)):
     if not result:
         raise HTTPException(status_code=404, detail="计划不存在")
     return result
+
+
+def _masked_password(value: str) -> str:
+    if not value:
+        return "（不可用）"
+    return f"{value[0]}********{value[-1]}"
+
+
+@router.post("/secrets/export")
+async def export_secrets(response: Response, user=Depends(security.require_setup_session)):
+    """一次性显示并导出本次会话新输入的凭据；不反向读取 .env。"""
+    draft = store.get_draft()
+    if not store.one("SELECT id FROM setup_plans WHERE draft_revision=? ORDER BY id DESC LIMIT 1",
+                     (draft["revision"],)):
+        raise HTTPException(status_code=409, detail="请先成功生成当前配置的执行计划，再导出凭据")
+    entries = catalog.load()
+    try:
+        selected, _ = planner._selected(draft["profile"], draft["selections"], entries)
+        descriptors = [
+            {"component": "Chronicler", "label": "本地恢复管理员用户名",
+             "key": "INIT_ADMIN_USERNAME", "kind": "account"},
+            {"component": "Chronicler", "label": "本地恢复管理员密码",
+             "key": "INIT_ADMIN_PASSWORD", "kind": "password"},
+            {"component": "Chronicler", "label": "会话签名密钥",
+             "key": "CHRONICLER_SECRET", "kind": "secret", "secret_type": "session-key"},
+        ]
+        secret_keys = {"INIT_ADMIN_USERNAME", "INIT_ADMIN_PASSWORD", "CHRONICLER_SECRET"}
+        for name in sorted(selected):
+            for field in entries[name]["component"].get("fields", []):
+                if field.get("kind") == "secret":
+                    kind = "password" if field.get("secret_type") == "password" else "secret"
+                    descriptors.append({"component": name, "label": field.get("label") or field["key"],
+                                        "key": field["key"], "kind": kind,
+                                        "secret_type": field.get("secret_type", "secret")})
+                    secret_keys.add(field["key"])
+                elif field.get("summary") == "account":
+                    descriptors.append({"component": name, "label": field.get("label") or field["key"],
+                                        "key": field["key"], "kind": "account"})
+        revealed = config_store.reveal_once(secret_keys)
+    except (planner.PlanError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+    exported = []
+    for item in descriptors:
+        value = revealed.get(item["key"], draft["values"].get(item["key"]))
+        if value in (None, ""):
+            continue
+        exported.append({**item, "display_value": _masked_password(str(value))
+                         if item["kind"] == "password" else str(value),
+                         "value": str(value)})
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    return {"generated_at": datetime.now(timezone.utc).isoformat(),
+            "warning": "仅此一次显示与导出机会；文件含明文凭据，请立即移入密码管理器并安全删除下载文件。",
+            "entries": exported}
 
 
 @router.post("/plans/{plan_id}/execute")

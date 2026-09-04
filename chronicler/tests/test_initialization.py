@@ -173,6 +173,38 @@ class InitializationTest(unittest.TestCase):
             self.assertEqual(200, planned.status_code, planned.text)
             self.assertEqual("core", planned.json()["components"][0]["name"])
 
+    def test_credentials_can_only_be_exported_once_after_plan(self):
+        from fastapi.testclient import TestClient
+        from chronicler.app.main import create_app
+        self.component("service", profiles=["custom"], fields=[{
+            "key": "SERVICE_ADMIN", "label": "服务管理员", "kind": "text",
+            "summary": "account", "required": True, "default": "operator",
+        }])
+        store.ensure_installation()
+        code = security.issue_code()
+        with TestClient(create_app("bootstrap")) as client:
+            client.post("/api/setup/unlock", json={"code": code})
+            saved = client.put("/api/setup/draft", json={
+                "stage": "plan", "profile": "custom", "selections": ["service"],
+                "values": {"SERVICE_ADMIN": "operator"},
+                "secrets": {"INIT_ADMIN_USERNAME": "admin", "INIT_ADMIN_PASSWORD": "safe-pass-123",
+                            "CHRONICLER_SECRET": "session-secret-123456789"},
+            })
+            self.assertEqual(200, saved.status_code)
+            planned = client.post("/api/setup/plan")
+            self.assertEqual(200, planned.status_code, planned.text)
+            exported = client.post("/api/setup/secrets/export")
+            self.assertEqual(200, exported.status_code, exported.text)
+            self.assertIn("no-store", exported.headers["cache-control"])
+            by_key = {item["key"]: item for item in exported.json()["entries"]}
+            self.assertEqual("safe-pass-123", by_key["INIT_ADMIN_PASSWORD"]["value"])
+            self.assertEqual("s********3", by_key["INIT_ADMIN_PASSWORD"]["display_value"])
+            self.assertEqual("admin", by_key["INIT_ADMIN_USERNAME"]["display_value"])
+            self.assertEqual("operator", by_key["SERVICE_ADMIN"]["display_value"])
+            again = client.post("/api/setup/secrets/export")
+            self.assertEqual(409, again.status_code)
+            self.assertNotIn("safe-pass-123", again.text)
+
     def test_configuration_changes_plan_hash(self):
         first = planner.build("chronicler-only", [], {"HTTP_PORT": 80}, 1, {"TOKEN": "secret-value"})
         second = planner.build("chronicler-only", [], {"HTTP_PORT": 8080}, 1, {"TOKEN": "secret-value"})
@@ -205,6 +237,20 @@ class InitializationTest(unittest.TestCase):
             planned = preflight.run(draft, check_ports=True)
             mocked.assert_called_once()
             self.assertFalse(planned["ok"])
+
+    def test_windows_excluded_port_identifies_component_field(self):
+        self.component("service", fields=[{
+            "key": "SERVICE_PORT", "label": "服务端口", "kind": "port", "default": 2222,
+        }])
+        draft = {"profile": "custom", "selections": ["service"], "values": {}}
+        with patch.object(preflight, "_windows_excluded_tcp_ranges", return_value=[(2180, 2279)]), \
+             patch.object(preflight, "_available_port_suggestion", return_value=22222):
+            result = preflight.port_checks(draft)
+        self.assertEqual("block", result[0]["status"])
+        self.assertEqual("SERVICE_PORT", result[0]["field_key"])
+        self.assertIn("service · 服务端口", result[0]["name"])
+        self.assertIn("2180-2279", result[0]["message"])
+        self.assertIn("22222", result[0]["message"])
 
 
 if __name__ == "__main__":

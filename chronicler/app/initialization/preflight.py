@@ -3,6 +3,8 @@ import shutil
 import socket
 import subprocess
 import tempfile
+import platform
+import re
 from pathlib import Path
 
 import docker
@@ -41,37 +43,99 @@ def _port_owner(port: int) -> str:
     return ""
 
 
+def _windows_excluded_tcp_ranges() -> list[tuple[int, int]]:
+    if platform.system() != "Windows":
+        return []
+    try:
+        result = subprocess.run(
+            ["netsh", "interface", "ipv4", "show", "excludedportrange", "protocol=tcp"],
+            capture_output=True, encoding="utf-8", errors="replace", timeout=10,
+        )
+        if result.returncode:
+            return []
+        return [(int(start), int(end)) for start, end in
+                re.findall(r"^\s*(\d+)\s+(\d+)(?:\s+\*)?\s*$", result.stdout, re.MULTILINE)]
+    except (OSError, subprocess.SubprocessError):
+        return []
+
+
+def _available_port_suggestion(port: int, excluded: list[tuple[int, int]],
+                               preferred: object = None) -> int | None:
+    preferred_port = int(preferred) if str(preferred).isdigit() else None
+    candidates = ([preferred_port] if preferred_port else []) + list(
+        range(max(1024, port + 1), min(65536, max(1024, port + 1) + 512)))
+    checked = set()
+    for candidate in candidates:
+        if candidate in checked or any(start <= candidate <= end for start, end in excluded):
+            continue
+        checked.add(candidate)
+        sock = socket.socket()
+        try:
+            sock.bind(("0.0.0.0", candidate))
+            return candidate
+        except OSError:
+            continue
+        finally:
+            sock.close()
+    return None
+
+
 def port_checks(draft: dict, entries: dict | None = None) -> list[dict]:
     entries = entries or catalog.load()
     selected = _selected(draft, entries)
-    targets: dict[int, str] = {}
+    targets: dict[int, list[tuple[str, dict]]] = {}
     for name in selected:
         for field in entries[name]["component"].get("fields", []):
             if field.get("kind") != "port":
                 continue
             value = draft["values"].get(field["key"], field.get("default"))
             if value not in (None, ""):
-                targets[int(value)] = name
+                targets.setdefault(int(value), []).append((name, field))
 
     checks = []
-    for port, component in sorted(targets.items()):
+    excluded = _windows_excluded_tcp_ranges()
+    for port, owners in sorted(targets.items()):
+        component, field = owners[0]
+        label = field.get("label") or field["key"]
+        title = f"{component} · {label}（{field['key']}）· 端口 {port}"
+        if len(owners) > 1:
+            descriptions = "、".join(f"{name}/{item.get('label') or item['key']}" for name, item in owners)
+            checks.append({"name": title, "status": "block", "field_key": field["key"],
+                           "component": component,
+                           "message": f"多个组件配置了同一宿主端口：{descriptions}；请修改其中一个端口"})
+            continue
         if not 1 <= port <= 65535:
-            checks.append({"name": f"端口 {port}", "status": "block", "message": "端口必须在 1-65535 范围内"})
+            checks.append({"name": title, "status": "block", "field_key": field["key"],
+                           "component": component, "message": "端口必须在 1-65535 范围内"})
+            continue
+        reserved = next(((start, end) for start, end in excluded if start <= port <= end), None)
+        if reserved:
+            suggestion = _available_port_suggestion(port, excluded, field.get("default"))
+            remediation = f"建议把 {field['key']} 改为 {suggestion}" if suggestion else f"请修改 {field['key']}"
+            checks.append({"name": title, "status": "block", "field_key": field["key"],
+                           "component": component,
+                           "message": f"Windows 已保留 TCP 端口范围 {reserved[0]}-{reserved[1]}，"
+                                      f"即使没有进程监听也会拒绝绑定；{remediation}"})
             continue
         owner = _port_owner(port)
         expected = get_tool(component).get("container", "")
         if owner and owner == expected:
-            checks.append({"name": f"端口 {port}", "status": "pass", "message": f"已由目标组件 {component} 使用，将复用"})
+            checks.append({"name": title, "status": "pass", "field_key": field["key"],
+                           "component": component, "message": "已由目标组件使用，将复用"})
             continue
         sock = socket.socket()
         try:
             sock.settimeout(0.2)
             sock.bind(("0.0.0.0", port))
-            checks.append({"name": f"端口 {port}", "status": "pass", "message": f"可供 {component} 使用"})
+            checks.append({"name": title, "status": "pass", "field_key": field["key"],
+                           "component": component, "message": "端口可用"})
         except OSError as exc:
             detail = f"，当前 Docker 容器：{owner}" if owner else ""
-            checks.append({"name": f"端口 {port}", "status": "block",
-                           "message": f"无法绑定，请释放或修改端口{detail}（{exc}）"})
+            suggestion = _available_port_suggestion(port, excluded, field.get("default"))
+            remediation = f"建议把 {field['key']} 改为 {suggestion}" if suggestion else f"请释放端口或修改 {field['key']}"
+            checks.append({"name": title, "status": "block", "field_key": field["key"],
+                           "component": component,
+                           "message": f"无法绑定{detail}；{remediation}（{exc}）"})
         finally:
             sock.close()
     return checks

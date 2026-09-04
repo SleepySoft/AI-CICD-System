@@ -1,6 +1,6 @@
 # Web 初始化与环境设置规格
 
-> 版本：v1.2 · 日期：2026-09-04 · 状态：生效
+> 版本：v1.3 · 日期：2026-09-04 · 状态：生效
 > 定位：独立 initialization 模块对用户、组件和 API 暴露的契约；不规定内部线程、数据库实现或具体组件接线命令。
 > 关联需求：FR-INIT-001 ~ FR-INIT-011、NFR-002、NFR-004、NFR-010
 
@@ -43,7 +43,8 @@
 5. **管理员与组件配置**：先创建本地恢复管理员，再按所选组件分组显示字段；秘密可一键生成，
    离开输入框后只显示“已设置”。高级字段默认折叠。
 6. **计划确认**：以组件时间线展示 `skip/create/start/wait/configure/verify/restart`；警告和破坏性
-   动作置顶，用户确认的是带摘要的固定计划，而不是随执行变化的选择。
+  动作置顶。此阶段可主动使用唯一一次凭据显示与 JSON 下载机会：账号完整显示，密码摘要固定显示
+  首字符、8 个星号和尾字符，密钥/令牌完整显示；下载文件包含完整值并明确要求转存密码管理器。
 7. **执行**：顶部显示总体阶段和预计剩余项；每个组件独立显示排队、执行、成功、失败、被依赖阻塞，
    可展开脱敏日志。关闭页面不停止执行；支持仅重试失败项。
 8. **完成**：展示可访问入口、已启用能力、后续可选项和重启状态；不再次展示密码或 token。
@@ -101,6 +102,7 @@ initialize_hook: hooks/initialize.py
 - `fields[].key` 必须在初始化模块允许写入的环境变量命名空间内；`kind` 支持
   `text|secret|integer|boolean|choice|path|port`。
 - 字段可声明 `default`、`placeholder`、`pattern`、`choices`、`min/max`、`help`；秘密不得声明真实默认值。
+- 需要进入一次性凭据摘要的非秘密账号字段声明 `summary: account`；核心不按字段名猜测账号含义。
 - `kind: secret` 必须由组件提供非空 `help`，并声明 `secret_type`（`password|client-secret|encryption-key|
   api-token|access-key`）、16～128 的 `generate_length` 和 `rotation_risk`（`low|coordinated|critical`）。
   核心只解释和渲染这些通用枚举，不按字段名或组件名猜测用途；具体用途、保存位置与轮换影响均由
@@ -146,6 +148,10 @@ SetupStep
 `SetupDraft`、`SetupPlan`、步骤日志或 API 响应。计划绑定草稿版本与环境指纹；任一变化令旧计划
 失效并要求重新确认。
 
+唯一例外是用户在计划确认后主动调用的一次性凭据导出：只返回当前进程中新输入且属于当前选择的秘密，
+不反向读取 `.env`；响应设置 `no-store`，服务端原子消耗机会，第二次调用必须拒绝。前端立即触发本地
+JSON 下载，只在当前页面内保留显示摘要，不写入草稿、计划、日志、localStorage 或诊断数据。
+
 ### 2.6 执行语义
 
 全局阶段顺序固定为：
@@ -174,6 +180,7 @@ GET    /api/setup/draft                  当前草稿（秘密仅返回 configur
 PUT    /api/setup/draft                  保存当前阶段输入
 POST   /api/setup/plan                   生成固定计划
 GET    /api/setup/plans/{id}             查看计划
+POST   /api/setup/secrets/export          一次性显示并下载本次新输入的凭据
 POST   /api/setup/plans/{id}/execute     确认并启动
 GET    /api/setup/runs/{id}              总体与组件进度
 GET    /api/setup/runs/{id}/events       SSE 进度与脱敏日志
