@@ -149,7 +149,7 @@ def _run_action(run_id: int, plan: dict, component: str, phase: str):
     elif phase == "admin":
         _ensure_admin()
     elif phase == "deploy":
-        action = ensure_running(get_tool(component))
+        action = ensure_running(get_tool(component), raise_on_error=True)
         if action == "error":
             raise RuntimeError("组件部署失败，请查看 Docker 日志")
     elif phase == "ready":

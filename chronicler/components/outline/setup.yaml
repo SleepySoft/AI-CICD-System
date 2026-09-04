@@ -10,8 +10,10 @@ fields:
     kind: secret
     secret_type: encryption-key
     required: true
-    generate: token
+    generate: hex
     generate_length: 64
+    pattern: "^[0-9a-fA-F]{64}$"
+    validation_message: Outline 主加密密钥必须是 64 位十六进制字符，请使用自动生成。
     rotation_risk: critical
     help: Outline 用于会话签名和内部数据保护的长期密钥，不是用户密码；初始化后不得直接更换。
   - key: OUTLINE_UTILS_SECRET
@@ -19,8 +21,10 @@ fields:
     kind: secret
     secret_type: encryption-key
     required: true
-    generate: token
+    generate: hex
     generate_length: 64
+    pattern: "^[0-9a-fA-F]{64}$"
+    validation_message: Outline 工具功能密钥必须是 64 位十六进制字符，请使用自动生成。
     rotation_risk: critical
     help: Outline 工具与协作功能使用的长期加密密钥；必须独立于主密钥，初始化后不得直接更换。
   - key: OIDC_OUTLINE_SECRET

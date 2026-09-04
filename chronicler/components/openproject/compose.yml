@@ -12,10 +12,17 @@ services:
       OPENPROJECT_SECRET_KEY_BASE: ${OPENPROJECT_SECRET_KEY_BASE:?}
       OPENPROJECT_HOST__NAME: req.${BASE_DOMAIN:-localhost}
       OPENPROJECT_HTTPS: 'false'
-      OPENPROJECT_DEFAULT__LANGUAGE: zh
+      OPENPROJECT_DEFAULT__LANGUAGE: zh-CN
     volumes:
     - ${DATA_ROOT:-./data}/private/openproject:/var/openproject/assets
     - ${DATA_ROOT:-./data}/public:/public
+    healthcheck:
+      test: [CMD-SHELL, "curl -fsS http://localhost/health_checks/default || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 60s
 networks:
-  aisystem:
+  default:
     name: aisystem
+    external: true

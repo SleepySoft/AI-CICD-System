@@ -16,5 +16,6 @@ services:
     - ${COMPONENTS_ROOT:-..}/mkdocs:/docs
     - ${DATA_ROOT:-./data}/public/shadow:/docs/docs/shadow
 networks:
-  aisystem:
+  default:
     name: aisystem
+    external: true

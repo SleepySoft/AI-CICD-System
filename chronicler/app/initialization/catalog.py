@@ -13,6 +13,7 @@ KINDS = {"text", "secret", "integer", "boolean", "choice", "path", "port"}
 READINESS = {"container-health", "http", "tcp", "process"}
 SECRET_TYPES = {"password", "client-secret", "encryption-key", "api-token", "access-key"}
 ROTATION_RISKS = {"low", "coordinated", "critical"}
+GENERATORS = {"token", "password", "hex"}
 SENSITIVE = re.compile(r"(?i)(secret|password|token|api_?key|credential)")
 ENV_KEY = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
@@ -49,6 +50,8 @@ def validate(name: str, raw: dict, component_dir: Path) -> dict:
             length = field.get("generate_length")
             if not isinstance(length, int) or not 16 <= length <= 128:
                 raise CatalogError(f"秘密字段 generate_length 必须在 16-128：{key}")
+            if field.get("generate") not in GENERATORS:
+                raise CatalogError(f"秘密字段必须声明有效 generate：{key}")
             if not str(field.get("help", "")).strip():
                 raise CatalogError(f"秘密字段必须提供用途和轮换说明：{key}")
         seen.add(key)

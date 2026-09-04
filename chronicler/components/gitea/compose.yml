@@ -33,5 +33,6 @@ services:
       timeout: 5s
       retries: 10
 networks:
-  aisystem:
+  default:
     name: aisystem
+    external: true

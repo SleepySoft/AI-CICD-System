@@ -2,6 +2,7 @@
 import hashlib
 import heapq
 import json
+import re
 
 from . import catalog
 
@@ -70,8 +71,13 @@ def build(profile: str, explicit: list[str], values: dict, draft_revision: int,
         if conflicts:
             raise PlanError(f"组件 {name} 与 {', '.join(sorted(conflicts))} 冲突")
         for field in comp["fields"]:
-            if field.get("required") and field["kind"] != "secret" and not values.get(field["key"]):
+            value = values.get(field["key"], field.get("default"))
+            if field.get("required") and field["kind"] != "secret" and value in (None, ""):
                 raise PlanError(f"缺少必填配置：{field.get('label') or field['key']}")
+            if value not in (None, "") and field.get("pattern") and not re.fullmatch(
+                    str(field["pattern"]), str(value)):
+                raise PlanError(field.get("validation_message") or
+                                f"配置格式无效：{field.get('label') or field['key']}")
     order = _toposort(selected, entries)
     actions = [{"component": "", "phase": "persist", "label": "保存基础配置"},
                {"component": "", "phase": "admin", "label": "创建本地恢复管理员"}]

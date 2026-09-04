@@ -5,8 +5,11 @@ services:
     profiles:
     - sandbox
     build:
-      context: .
+      context: ${REPO_ROOT:-../../..}
       dockerfile: ${COMPONENTS_ROOT:-..}/terminal-runtime/image/Dockerfile
+      args:
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
     image: aisystem/terminal-runtime:latest
     restart: unless-stopped
     environment:
@@ -15,7 +18,7 @@ services:
     volumes:
     - ${DATA_ROOT:-./data}/private/terminal-runtime:/opt/agents
     - ${DATA_ROOT:-./data}/public:/public
-    - ./scripts/agents:/opt/agent-install:ro
+    - ${REPO_ROOT:-../../..}/scripts/agents:/opt/agent-install:ro
     healthcheck:
       test:
       - CMD-SHELL
@@ -24,5 +27,6 @@ services:
       timeout: 5s
       retries: 10
 networks:
-  aisystem:
+  default:
     name: aisystem
+    external: true

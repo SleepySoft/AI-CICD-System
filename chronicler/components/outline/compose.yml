@@ -36,5 +36,6 @@ services:
     - ${DATA_ROOT:-./data}/public:/public
     - ${COMPONENTS_ROOT:-..}/outline/patch-start.sh:/opt/outline/patch-start.sh:ro
 networks:
-  aisystem:
+  default:
     name: aisystem
+    external: true

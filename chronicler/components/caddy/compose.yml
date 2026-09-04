@@ -13,5 +13,6 @@ services:
     environment:
       TZ: ${TZ:-Asia/Shanghai}
 networks:
-  aisystem:
+  default:
     name: aisystem
+    external: true

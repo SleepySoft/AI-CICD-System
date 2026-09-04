@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.request
 from pathlib import Path
 
 import docker
@@ -20,6 +21,7 @@ from .config import Cfg
 from .runtime import PROFILE, component_python
 
 _docker = None
+_compose_lock = threading.Lock()
 
 
 def _client() -> docker.DockerClient:
@@ -94,7 +96,7 @@ def set_autostart(name: str, enabled: bool) -> dict:
 
 
 def _compose_up_cmd(tool: dict) -> tuple[list, dict]:
-    """构造组件 compose 拉起命令（args, env）；调用方负责网络先备（_ensure_network）"""
+    """构造组件 compose 拉起命令（args, env）。"""
     compose_file = Path(tool["_dir"]) / "compose.yml"
     if not compose_file.is_file():
         raise HTTPException(status_code=400, detail=f"组件无部署定义（缺 compose.yml）")
@@ -102,9 +104,31 @@ def _compose_up_cmd(tool: dict) -> tuple[list, dict]:
            "REPO_ROOT": str(PROFILE.install_root),
             "COMPONENTS_ROOT": str(Cfg.COMPONENTS_DIR),
            "DATA_ROOT": str(PROFILE.install_root / "data")}
+    try:
+        system_proxies = urllib.request.getproxies()
+        info = _client().info()
+        for key, protocol, info_key in (("HTTP_PROXY", "http", "HttpProxy"),
+                                        ("HTTPS_PROXY", "https", "HttpsProxy")):
+            proxy = str(system_proxies.get(protocol) or info.get(info_key) or "").strip()
+            if proxy and key not in env:
+                proxy = proxy if "://" in proxy else f"http://{proxy}"
+                proxy = proxy.replace("://127.0.0.1", "://host.docker.internal", 1)
+                proxy = proxy.replace("://localhost", "://host.docker.internal", 1)
+                env[key] = proxy
+    except docker.errors.DockerException:
+        pass
     service = tool.get("compose_service") or tool["name"]
     return (["docker", "compose", "-p", "aisystem", "--env-file", str(PROFILE.install_root / ".env"),
              "-f", str(compose_file), "up", "-d", service], env)
+
+
+def _compose_up(tool: dict) -> subprocess.CompletedProcess:
+    """串行执行组件 Compose，避免同项目的网络创建与状态写入竞态。"""
+    args, env = _compose_up_cmd(tool)
+    with _compose_lock:
+        _ensure_network()
+        return subprocess.run(args, env=env, capture_output=True,
+                              encoding="utf-8", errors="replace", timeout=900)
 
 
 def _ensure_network():
@@ -114,15 +138,7 @@ def _ensure_network():
         _client().networks.create("aisystem", driver="bridge")
 
 
-def _compose_up(tool: dict) -> subprocess.CompletedProcess:
-    """按组件 compose 文件拉起（ADR-0027：部署定义在组件目录）"""
-    _ensure_network()
-    args, env = _compose_up_cmd(tool)
-    return subprocess.run(args, env=env, capture_output=True,
-                          encoding="utf-8", errors="replace", timeout=900)
-
-
-def ensure_running(tool: dict) -> str:
+def ensure_running(tool: dict, raise_on_error: bool = False) -> str:
     """确保组件运行：running→跳过；stopped→docker start；absent→compose up -d 现场创建
     返回动作：skip/start/compose-up/error"""
     import subprocess
@@ -147,7 +163,10 @@ def ensure_running(tool: dict) -> str:
             if r.returncode == 0:
                 audit("supervisor", "tool.deploy_hook", name)
                 return "deploy-hook"
-            audit("supervisor", "tool.autostart_failed", name, r.stderr.strip()[:200])
+            detail = (r.stderr or r.stdout or "组件部署 hook 失败").strip()
+            audit("supervisor", "tool.autostart_failed", name, detail[:200])
+            if raise_on_error:
+                raise RuntimeError(detail[-2000:])
             return "error"
         service = tool.get("compose_service") or name
         try:
@@ -155,12 +174,19 @@ def ensure_running(tool: dict) -> str:
             if r.returncode == 0:
                 audit("supervisor", "tool.autostart_compose", name)
                 return "compose-up"
-            audit("supervisor", "tool.autostart_failed", name, r.stderr.strip()[:200])
+            detail = (r.stderr or r.stdout or f"Compose 退出码 {r.returncode}").strip()
+            audit("supervisor", "tool.autostart_failed", name, detail[:200])
+            if raise_on_error:
+                raise RuntimeError(detail[-2000:])
         except (subprocess.TimeoutExpired, FileNotFoundError) as e:
             audit("supervisor", "tool.autostart_failed", name, str(e)[:200])
+            if raise_on_error:
+                raise RuntimeError(str(e)) from e
         return "error"
     except docker.errors.DockerException as e:
         audit("supervisor", "tool.autostart_failed", name, str(e)[:200])
+        if raise_on_error:
+            raise RuntimeError(str(e)) from e
         return "error"
 
 
@@ -324,13 +350,14 @@ def _deploy_worker(tool: dict):
 
     emit(f"$ compose up（组件定义 {Path(tool['_dir']).name}/compose.yml）")
     try:
-        _ensure_network()
         args, env = _compose_up_cmd(tool)
-        proc = sp.Popen(args, env=env, stdout=sp.PIPE, stderr=sp.STDOUT,
-                        encoding="utf-8", errors="replace")
-        for line in proc.stdout:
-            emit(line.rstrip())
-        proc.wait(timeout=900)
+        with _compose_lock:
+            _ensure_network()
+            proc = sp.Popen(args, env=env, stdout=sp.PIPE, stderr=sp.STDOUT,
+                            encoding="utf-8", errors="replace")
+            for line in proc.stdout:
+                emit(line.rstrip())
+            proc.wait(timeout=900)
         if proc.returncode == 0:
             emit("✔ 部署完成")
             task["state"] = "done"

@@ -11,5 +11,6 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
     shm_size: 2gb
 networks:
-  aisystem:
+  default:
     name: aisystem
+    external: true

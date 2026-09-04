@@ -1,6 +1,7 @@
 """Web 初始化 API；所有写操作均受一次性引导会话或 admin 保护。"""
 import asyncio
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -87,6 +88,15 @@ async def save_draft(body: DraftBody, user=Depends(security.require_setup_sessio
         unknown = set(body.secrets) - allowed
         if unknown:
             raise ValueError("未知秘密配置键：" + "、".join(sorted(unknown)))
+        secret_fields = {field["key"]: field for entry in entries.values()
+                         for field in entry.get("component", {}).get("fields", [])
+                         if field.get("kind") == "secret"}
+        for key, value in body.secrets.items():
+            field = secret_fields.get(key)
+            if value and field and field.get("pattern") and not re.fullmatch(
+                    str(field["pattern"]), str(value)):
+                raise ValueError(field.get("validation_message") or
+                                 f"秘密格式无效：{field.get('label') or key}")
         config_store.set_secrets(body.secrets)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))

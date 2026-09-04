@@ -211,6 +211,14 @@ class InitializationTest(unittest.TestCase):
         self.assertNotEqual(first["plan_hash"], second["plan_hash"])
         self.assertNotIn("secret-value", json.dumps(first))
 
+    def test_component_field_pattern_is_checked_before_plan(self):
+        self.component("service", fields=[{
+            "key": "SERVICE_USER", "label": "服务账号", "kind": "text", "required": True,
+            "pattern": "^(?!admin$)[a-z_]+$", "validation_message": "不能使用保留账号 admin",
+        }])
+        with self.assertRaisesRegex(planner.PlanError, "不能使用保留账号 admin"):
+            planner.build("custom", ["service"], {"SERVICE_USER": "admin"}, 1)
+
     def test_config_rejects_newline_injection(self):
         with self.assertRaisesRegex(ValueError, "换行"):
             config_store.set_secrets({"SAFE_SECRET": "value\nINJECTED=yes"})

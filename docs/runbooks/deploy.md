@@ -1,6 +1,6 @@
 # Runbook: 环境部署与初始化
 
-> 版本：v1.3 · 日期：2026-09-03 · 状态：生效
+> 版本：v1.4 · 日期：2026-09-04 · 状态：生效
 > 适用：Windows / WSL2 / Linux，已装 Docker（可选底座）与 Python 3（supervisor）
 > 克隆仓库需 `git clone --recurse-submodules`（ATR 子模块，ADR-0016）
 > 关联：scripts/（up.sh / wire-sso.sh / verify*.sh / build-images.sh）、chronicler/scripts/install-service.sh；机制原理见 ../how/deployment.md；架构依据 ADR-0020/0021/0022/0023
@@ -75,6 +75,28 @@ app.localhost 经 Caddy 可达、`DOCKER-SOCK-OK`；各入口可达（域名清�
 | app.localhost 经 Caddy 访问 502 | supervisor 未启动或 Caddy 无 host-gateway | 先确认 `curl --noproxy '*' http://127.0.0.1:8600/api/health` 通；检查 compose 中 caddy 的 `extra_hosts` |
 | 已初始化实例启动后进入 repair（2026-09-03） | 初始化关闭记录存在，但仓库根 `.env` 丢失 | 从备份恢复 `.env` 后重启；系统不会自动重开未认证引导入口 |
 | 直接 `python -m chronicler serve` 后 `http://localhost:8600` 打不开，只有控制台打印的 `0.0.0.0:8600` 可访问（2026-09-03 实测） | 旧实现只监听 IPv4 `0.0.0.0`；部分客户端把 `localhost` 解析到 `::1` 后不回落，而 uvicorn 单独绑 `::` 在 Windows 又默认纯 IPv6 | 用当前代码重启（默认已双栈监听 `0.0.0.0` + `[::]`，见 chronicler/app/serving.py）；重启后 `localhost`/`127.0.0.1`/`[::1]` 均可达，健康检查 `curl --noproxy '*' http://127.0.0.1:8600/api/health` |
+
+## 2026-09-04 初始化故障中断记录
+
+本次 Windows Docker Desktop 初始化运行 `run_id=1` 已失败结束，无活动运行需要取消；不要清理
+`data/`，后续应从同一失败运行重试。中断时 Postgres、Redis、Caddy、terminal-runtime、Keycloak、
+MkDocs、Sshwifty、Uptime Kuma 和 Gitea 已运行，Outline 因配置错误退出，OpenProject 尚在启动检查中。
+
+已定位并写入代码、但仍需完整回归的修复：
+
+1. 并行组件首次部署会同时创建 `aisystem` 网络并产生 409；Compose 调用现已串行化，所有组件改为
+   显式使用同一个外部默认网络，避免各自落入 `aisystem_default`。
+2. terminal-runtime 原构建上下文指向组件目录，无法复制仓库根的 `third_party/terminal-runtime-skill`；
+   现改用仓库根上下文，并向 BuildKit 传递 Docker/系统代理。镜像已成功构建并健康运行。
+3. 部署失败原先只记录“请查看 Docker 日志”；初始化执行器现保留经过秘密脱敏的 Compose 尾部错误。
+4. Gitea hook 明确报错 `name is reserved [name: admin]`；组件字段现禁止保留名 `admin`，恢复时须将
+   `GITEA_ADMIN_USER` 改回 `gitea_admin` 或其它合法名称后重新生成计划。
+5. Outline 日志明确报错 `SECRET_KEY must be a hexadecimal number`；两个长期加密字段现改为生成并校验
+   64 位十六进制值。由于旧秘密已写入 `.env`，恢复时必须在配置页重新生成这两个字段并生成新计划。
+
+恢复验证顺序：先重启 Chronicler 载入当前代码；修正 Gitea 用户名和两个 Outline 密钥；重新生成计划；
+确认 `docker network inspect aisystem` 中各目标容器均已连接；再点击失败页“重试失败步骤”。若 OpenProject
+仍未健康，先执行 `docker logs --tail 200 aisystem-openproject-1`，不要在未知状态下反复创建新运行。
 
 ## 回滚
 

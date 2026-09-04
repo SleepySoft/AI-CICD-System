@@ -13,5 +13,6 @@ services:
     - ${DATA_ROOT:-./data}/public:/public
     - /var/run/docker.sock:/var/run/docker.sock:ro
 networks:
-  aisystem:
+  default:
     name: aisystem
+    external: true

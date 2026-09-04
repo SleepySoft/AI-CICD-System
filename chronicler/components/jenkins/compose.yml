@@ -32,5 +32,6 @@ services:
       retries: 20
       start_period: 90s
 networks:
-  aisystem:
+  default:
     name: aisystem
+    external: true

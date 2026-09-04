@@ -12,5 +12,6 @@ services:
     - ${DATA_ROOT:-./data}/private/qdrant:/qdrant/storage
     - ${DATA_ROOT:-./data}/public:/public
 networks:
-  aisystem:
+  default:
     name: aisystem
+    external: true

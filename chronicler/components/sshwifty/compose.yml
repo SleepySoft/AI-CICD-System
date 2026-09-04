@@ -17,5 +17,6 @@ services:
       SSHWIFTY_ONLYALLOWPRESETREMOTES: ${SSHWIFTY_ONLYALLOWPRESETREMOTES:-false}
       SSHWIFTY_PRESETS: ${SSHWIFTY_PRESETS:-}
 networks:
-  aisystem:
+  default:
     name: aisystem
+    external: true

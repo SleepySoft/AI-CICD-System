@@ -13,6 +13,9 @@ fields:
     summary: account
     required: true
     default: gitea_admin
+    pattern: "^(?!admin$)[A-Za-z0-9_.-]{1,40}$"
+    validation_message: Gitea 用户名不能使用保留名称 admin，只能包含字母、数字、点、下划线和连字符。
+    help: Gitea 保留了 admin 名称；建议保留默认值 gitea_admin。
   - key: GITEA_ADMIN_PASSWORD
     label: Gitea 管理员密码
     kind: secret
