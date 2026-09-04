@@ -79,7 +79,7 @@ def port_checks(draft: dict, entries: dict | None = None) -> list[dict]:
     return checks
 
 
-def run(draft: dict, require_docker: bool = False) -> dict:
+def run(draft: dict, require_docker: bool = False, check_ports: bool = False) -> dict:
     checks = []
     try:
         client = docker.from_env()
@@ -110,8 +110,9 @@ def run(draft: dict, require_docker: bool = False) -> dict:
     invalid = [name for name, entry in entries.items() if entry["error"]]
     checks.append({"name": "组件声明", "status": "block" if invalid else "pass",
                    "message": "无效组件：" + "、".join(invalid) if invalid else f"{len(entries)} 个组件声明有效"})
-    try:
-        checks.extend(port_checks(draft, entries))
-    except (TypeError, ValueError) as exc:
-        checks.append({"name": "端口配置", "status": "block", "message": f"端口值无效：{exc}"})
+    if check_ports:
+        try:
+            checks.extend(port_checks(draft, entries))
+        except (TypeError, ValueError) as exc:
+            checks.append({"name": "端口配置", "status": "block", "message": f"端口值无效：{exc}"})
     return {"ok": not any(item["status"] == "block" for item in checks), "checks": checks}

@@ -111,7 +111,7 @@ async def make_plan(user=Depends(security.require_setup_session)):
             missing.append("Chronicler 会话密钥")
         if missing:
             raise ValueError("缺少必填秘密配置：" + "、".join(missing))
-        readiness = preflight_checks.run(draft, require_docker=bool(selected))
+        readiness = preflight_checks.run(draft, require_docker=bool(selected), check_ports=True)
         blocked = [item for item in readiness["checks"] if item["status"] == "block"]
         if blocked:
             raise ValueError("；".join(item["message"] for item in blocked))
@@ -133,7 +133,7 @@ async def get_plan(plan_id: int, user=Depends(security.require_setup_session)):
 @router.post("/plans/{plan_id}/execute")
 async def execute_plan(plan_id: int, user=Depends(security.require_setup_session)):
     try:
-        check = preflight_checks.run(store.get_draft(), require_docker=True)
+        check = preflight_checks.run(store.get_draft(), require_docker=True, check_ports=True)
         blocked = [item for item in check["checks"] if item["status"] == "block"]
         if blocked:
             raise ValueError("执行前环境复核失败：" + "；".join(item["message"] for item in blocked))

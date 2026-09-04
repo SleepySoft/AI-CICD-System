@@ -8,7 +8,7 @@ from unittest.mock import patch
 import yaml
 
 from chronicler.app.config import Cfg
-from chronicler.app.initialization import catalog, config_store, orchestrator, planner, security, store
+from chronicler.app.initialization import catalog, config_store, orchestrator, planner, preflight, security, store
 
 
 class InitializationTest(unittest.TestCase):
@@ -136,6 +136,19 @@ class InitializationTest(unittest.TestCase):
         store.save_draft("config", "recommended", [], {"HTTP_PORT": 8080}, {})
         with self.assertRaisesRegex(ValueError, "配置已变化"):
             orchestrator.create_run(saved["id"])
+
+    def test_initial_preflight_defers_component_ports(self):
+        draft = {"profile": "recommended", "selections": [], "values": {}}
+        with patch.object(preflight, "port_checks", return_value=[
+            {"name": "端口 2222", "status": "block", "message": "端口不可用"}
+        ]) as mocked:
+            initial = preflight.run(draft)
+            mocked.assert_not_called()
+            self.assertTrue(initial["ok"])
+
+            planned = preflight.run(draft, check_ports=True)
+            mocked.assert_called_once()
+            self.assertFalse(planned["ok"])
 
 
 if __name__ == "__main__":
