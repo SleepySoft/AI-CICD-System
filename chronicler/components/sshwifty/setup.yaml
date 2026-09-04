@@ -5,6 +5,19 @@ conflicts_with: []
 platforms: [windows, linux, darwin]
 resources: {memory_mb: 128, disk_mb: 256}
 fields:
-  - {key: SSHWIFTY_HOSTNAME, label: Web 终端域名, kind: text, required: true, default: ssh.localhost}
-  - {key: SSHWIFTY_SHAREDKEY, label: Web 终端共享密钥, kind: secret, required: true, generate: token}
+  - key: SSHWIFTY_HOSTNAME
+    label: Web 终端域名
+    kind: text
+    required: true
+    default: ssh.localhost
+    help: 浏览器访问 Web 终端使用的完整主机名，应与统一入口中的路由配置一致。
+  - key: SSHWIFTY_SHAREDKEY
+    label: Web 终端访问口令
+    kind: secret
+    secret_type: access-key
+    required: true
+    generate: token
+    generate_length: 32
+    rotation_risk: low
+    help: 浏览器连接 Web 终端时输入的访问口令，不是系统用户密码；轮换后只需使用新口令重新连接。
 readiness: {kind: container-health, timeout_sec: 180}

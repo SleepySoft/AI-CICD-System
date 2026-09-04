@@ -15,18 +15,12 @@ fields:
   - key: KEYCLOAK_ADMIN_PASSWORD
     label: Keycloak 管理员密码
     kind: secret
+    secret_type: password
     required: true
     generate: password
-  - key: OIDC_GITEA_SECRET
-    label: Gitea OIDC 密钥
-    kind: secret
-    required: true
-    generate: token
-  - key: CHRONICLER_OIDC_SECRET
-    label: Chronicler OIDC 密钥
-    kind: secret
-    required: true
-    generate: token
+    generate_length: 20
+    rotation_risk: coordinated
+    help: 登录 Keycloak 管理后台并供初始化 hook 调用管理 API；轮换时必须同步后台账号和部署配置。
 readiness:
   kind: container-health
   timeout_sec: 300

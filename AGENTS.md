@@ -45,6 +45,10 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
   `setup.yaml`（初始化方案/依赖/仅依赖组件/字段/就绪检查）+ 可选 `SKILL.md`（能力注入，ADR-0025）+
   可选 `hooks/backup.py` / `hooks/deploy.py` / `hooks/initialize.py`；
   docker 组件另需 `compose.yml` 服务 + `caddy/Caddyfile` 子域名。
+- **Chronicler 归 Chronicler，组件归组件**：核心初始化代码只实现通用 schema、校验、渲染、计划和执行，
+  不得包含任何组件名、组件字段、端口、默认值或接线知识；这些信息全部由组件自己的 `plugin.yaml`、
+  `setup.yaml`、资源和 hook 提供。秘密字段必须自述类型、生成长度、轮换风险和用途。跨组件配置由能力
+  消费方 hook 拥有，通过声明依赖取得通用上下文，禁止身份服务等提供方硬编码消费者清单。
 - 新增 agent：用户在宿主自装 harness 后，在 `chronicler/config/harness.yaml` 登记一条命令模板
   （ADR-0021；操作流程见 `docs/runbooks/agent-onboarding.md`）。
 - 组件 compose 校验：`docker compose --env-file .env -f chronicler/components/<name>/compose.yml config -q`（在 WSL 中执行，项目路径 `/mnt/c/D/code/AI-CICD-System`）。

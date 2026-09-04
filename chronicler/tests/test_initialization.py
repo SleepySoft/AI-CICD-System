@@ -55,6 +55,44 @@ class InitializationTest(unittest.TestCase):
         entry = catalog.load()["bad"]
         self.assertIn("kind=secret", entry["error"])
 
+    def test_catalog_requires_secret_semantics(self):
+        base = {"key": "APP_SECRET", "kind": "secret", "secret_type": "api-token",
+                "generate": "token", "generate_length": 32, "rotation_risk": "low",
+                "help": "用于测试的 API 认证令牌。"}
+        for missing in ("secret_type", "generate_length", "rotation_risk", "help"):
+            field = dict(base)
+            del field[missing]
+            self.component(f"bad-{missing}", fields=[field])
+        entries = catalog.load()
+        expected = {"secret_type": "secret_type", "generate_length": "generate_length",
+                    "rotation_risk": "rotation_risk", "help": "用途和轮换说明"}
+        for missing, message in expected.items():
+            self.assertIn(message, entries[f"bad-{missing}"]["error"])
+
+    def test_repository_component_catalog_is_valid(self):
+        component_dir = Path(__file__).parents[1] / "components"
+        with patch.object(Cfg, "COMPONENTS_DIR", component_dir):
+            entries = catalog.load()
+        self.assertEqual(15, len(entries))
+        self.assertEqual([], [name for name, entry in entries.items() if entry["error"]])
+
+    def test_identity_provider_template_does_not_own_consumers(self):
+        realm_path = Path(__file__).parents[1] / "components" / "keycloak" / "realm" / "aisystem-realm.json"
+        realm = json.loads(realm_path.read_text(encoding="utf-8"))
+        self.assertEqual([], realm["clients"])
+
+    def test_initialization_core_has_no_managed_component_names(self):
+        source_dir = Path(__file__).parents[1] / "app" / "initialization"
+        managed = ("caddy", "gitea", "jenkins", "keycloak", "mkdocs", "ollama", "openproject",
+                   "outline", "postgres", "qdrant", "redis", "sshwifty", "terminal-runtime",
+                   "uptime-kuma")
+        for path in source_dir.rglob("*"):
+            if not path.is_file() or path.suffix not in {".py", ".js", ".html"}:
+                continue
+            text = path.read_text(encoding="utf-8").lower()
+            for name in managed:
+                self.assertNotIn(name, text, f"{path.name} contains component knowledge: {name}")
+
     def test_plan_adds_dependency_and_is_stable(self):
         self.component("db", profiles=[])
         self.component("app", profiles=["recommended"], depends=["db"])

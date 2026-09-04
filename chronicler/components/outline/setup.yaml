@@ -5,7 +5,32 @@ conflicts_with: []
 platforms: [windows, linux, darwin]
 resources: {memory_mb: 768, disk_mb: 2048}
 fields:
-  - {key: OUTLINE_SECRET_KEY, label: Outline 主密钥, kind: secret, required: true, generate: token}
-  - {key: OUTLINE_UTILS_SECRET, label: Outline 工具密钥, kind: secret, required: true, generate: token}
-  - {key: OIDC_OUTLINE_SECRET, label: Outline OIDC 密钥, kind: secret, required: true, generate: token}
+  - key: OUTLINE_SECRET_KEY
+    label: Outline 主加密密钥
+    kind: secret
+    secret_type: encryption-key
+    required: true
+    generate: token
+    generate_length: 64
+    rotation_risk: critical
+    help: Outline 用于会话签名和内部数据保护的长期密钥，不是用户密码；初始化后不得直接更换。
+  - key: OUTLINE_UTILS_SECRET
+    label: Outline 工具功能密钥
+    kind: secret
+    secret_type: encryption-key
+    required: true
+    generate: token
+    generate_length: 64
+    rotation_risk: critical
+    help: Outline 工具与协作功能使用的长期加密密钥；必须独立于主密钥，初始化后不得直接更换。
+  - key: OIDC_OUTLINE_SECRET
+    label: Outline SSO 客户端秘密
+    kind: secret
+    secret_type: client-secret
+    required: true
+    generate: token
+    generate_length: 40
+    rotation_risk: coordinated
+    help: Outline 与身份服务之间的机器认证秘密，不是用户密码；两端必须保持相同，轮换不同步会导致 SSO 登录失败。
 readiness: {kind: container-health, timeout_sec: 600}
+initialize_hook: hooks/initialize.py

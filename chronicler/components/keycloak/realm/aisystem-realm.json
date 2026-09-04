@@ -36,60 +36,7 @@
       ]
     }
   ],
-  "clients": [
-    {
-      "clientId": "gitea",
-      "enabled": true,
-      "protocol": "openid-connect",
-      "publicClient": false,
-      "secret": "gitea-oidc-secret-change-me",
-      "standardFlowEnabled": true,
-      "directAccessGrantsEnabled": false,
-      "redirectUris": [
-        "http://git.localhost/user/oauth2/keycloak/callback",
-        "http://git.localhost/*"
-      ],
-      "webOrigins": ["http://git.localhost"],
-      "attributes": {
-        "post.logout.redirect.uris": "http://git.localhost/*"
-      }
-    },
-    {
-      "clientId": "manager",
-      "enabled": true,
-      "protocol": "openid-connect",
-      "publicClient": false,
-      "secret": "manager-oidc-secret-change-me",
-      "standardFlowEnabled": true,
-      "directAccessGrantsEnabled": false,
-      "redirectUris": [
-        "http://app.localhost/api/auth/callback",
-        "http://app.localhost/*"
-      ],
-      "webOrigins": ["http://app.localhost"],
-      "attributes": {
-        "post.logout.redirect.uris": "http://app.localhost/*"
-      },
-      "defaultClientScopes": ["web-origins", "acr", "profile", "email", "roles", "groups"]
-    },
-    {
-      "clientId": "outline",
-      "enabled": true,
-      "protocol": "openid-connect",
-      "publicClient": false,
-      "secret": "outline-oidc-secret-change-me",
-      "standardFlowEnabled": true,
-      "directAccessGrantsEnabled": false,
-      "redirectUris": [
-        "http://kb.localhost/auth/oidc.callback",
-        "http://kb.localhost/*"
-      ],
-      "webOrigins": ["http://kb.localhost"],
-      "attributes": {
-        "post.logout.redirect.uris": "http://kb.localhost/*"
-      }
-    }
-  ],
+  "clients": [],
   "clientScopes": [
     {
       "name": "profile",

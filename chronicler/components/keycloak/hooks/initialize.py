@@ -1,7 +1,6 @@
-"""幂等创建/更新 Chronicler 与 Gitea OIDC 客户端。"""
+"""验证 Keycloak 自有 realm；消费方客户端由各消费组件自行管理。"""
 import json
 import os
-import sys
 
 import docker
 
@@ -9,11 +8,11 @@ CONTAINER = os.environ.get("CHRONICLER_COMPONENT_CONTAINER", "aisystem-keycloak-
 KCADM = "/opt/keycloak/bin/kcadm.sh"
 
 
-def run(args, check=True):
+def run(args):
     container = docker.from_env().containers.get(CONTAINER)
     result = container.exec_run([KCADM, *args], user="keycloak")
     text = result.output.decode("utf-8", errors="replace")
-    if check and result.exit_code:
+    if result.exit_code:
         raise RuntimeError(text[-500:])
     return text
 
@@ -24,54 +23,11 @@ def login():
          os.environ["KEYCLOAK_ADMIN_PASSWORD"]])
 
 
-def find(client_id):
-    data = json.loads(run(["get", "clients", "-r", "aisystem", "-q", f"clientId={client_id}"]))
-    return data[0] if data else None
-
-
-def desired(client_id, secret, root):
-    callback = "/api/auth/oidc/callback" if client_id == "chronicler" else "/user/oauth2/keycloak/callback"
-    return {"clientId": client_id, "enabled": True, "protocol": "openid-connect",
-            "publicClient": False, "secret": secret, "standardFlowEnabled": True,
-            "directAccessGrantsEnabled": False,
-            "redirectUris": [root + callback, root + "/*"], "webOrigins": [root],
-            "defaultClientScopes": ["web-origins", "acr", "profile", "email", "roles", "groups"]}
-
-
-def upsert(client_id, secret, root):
-    config = desired(client_id, secret, root)
-    current = find(client_id)
-    if current:
-        args = ["update", f"clients/{current['id']}", "-r", "aisystem"]
-        for key in ("enabled", "protocol", "publicClient", "secret", "standardFlowEnabled",
-                    "directAccessGrantsEnabled", "redirectUris", "webOrigins"):
-            value = json.dumps(config[key]) if isinstance(config[key], (bool, list)) else config[key]
-            args.extend(["-s", f"{key}={value}"])
-        run(args)
-        return
-    args = ["create", "clients", "-r", "aisystem", "-s", f"clientId={client_id}",
-            "-s", "enabled=true", "-s", "protocol=openid-connect", "-s", "publicClient=false",
-            "-s", f"secret={secret}", "-s", "standardFlowEnabled=true",
-            "-s", "directAccessGrantsEnabled=false",
-            "-s", f"redirectUris={json.dumps(config['redirectUris'])}",
-            "-s", f"webOrigins={json.dumps([root])}"]
-    run(args)
-
-
 def check():
     login()
-    missing = [client_id for client_id in ("chronicler", "gitea") if not find(client_id)]
-    if missing:
-        raise RuntimeError("OIDC 客户端尚未创建：" + "、".join(missing))
-
-
-def apply():
-    login()
-    domain = os.environ.get("BASE_DOMAIN", "localhost")
-    upsert("chronicler", os.environ["CHRONICLER_OIDC_SECRET"], f"http://app.{domain}")
-    upsert("gitea", os.environ["OIDC_GITEA_SECRET"], f"http://git.{domain}")
+    run(["get", "realms/aisystem"])
 
 
 if __name__ == "__main__":
-    (apply if sys.argv[1] == "apply" else check)()
+    check()  # apply 与 check 都只验证组件随镜像导入的 realm。
     print(json.dumps({"ok": True}))

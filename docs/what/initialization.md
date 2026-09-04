@@ -1,6 +1,6 @@
 # Web 初始化与环境设置规格
 
-> 版本：v1.1 · 日期：2026-09-04 · 状态：生效
+> 版本：v1.2 · 日期：2026-09-04 · 状态：生效
 > 定位：独立 initialization 模块对用户、组件和 API 暴露的契约；不规定内部线程、数据库实现或具体组件接线命令。
 > 关联需求：FR-INIT-001 ~ FR-INIT-011、NFR-002、NFR-004、NFR-010
 
@@ -38,7 +38,8 @@
 3. **部署方案**：提供“仅 Chronicler / 推荐底座 / 完整底座 / 自定义”四种方案；卡片展示用途、
   资源估算和自动加入的依赖，不用技术名词要求用户理解拓扑。自定义组件按 `plugin.yaml.group`
   分组；数据库、缓存、统一入口等仅依赖组件不提供独立选择，而在选中使用者后自动展示并加入。
-4. **基础配置**：收集域名、HTTP 端口、时区、数据根等共享设置；即时检查路径与端口。
+4. **基础配置**：只收集 Chronicler 自有配置及域名、时区、数据根等共享设置；端口等组件专属参数
+  由组件声明，并在选择组件后即时检查。
 5. **管理员与组件配置**：先创建本地恢复管理员，再按所选组件分组显示字段；秘密可一键生成，
    离开输入框后只显示“已设置”。高级字段默认折叠。
 6. **计划确认**：以组件时间线展示 `skip/create/start/wait/configure/verify/restart`；警告和破坏性
@@ -83,8 +84,12 @@ fields:
   - key: EXAMPLE_PASSWORD
     label: 管理员密码
     kind: secret
+    secret_type: password
     required: true
     generate: password
+    generate_length: 24
+    rotation_risk: coordinated
+    help: 登录该组件后台的管理员密码；轮换后须同步更新使用该账号的自动化工具。
 readiness:
   kind: container-health
   timeout_sec: 300
@@ -96,6 +101,10 @@ initialize_hook: hooks/initialize.py
 - `fields[].key` 必须在初始化模块允许写入的环境变量命名空间内；`kind` 支持
   `text|secret|integer|boolean|choice|path|port`。
 - 字段可声明 `default`、`placeholder`、`pattern`、`choices`、`min/max`、`help`；秘密不得声明真实默认值。
+- `kind: secret` 必须由组件提供非空 `help`，并声明 `secret_type`（`password|client-secret|encryption-key|
+  api-token|access-key`）、16～128 的 `generate_length` 和 `rotation_risk`（`low|coordinated|critical`）。
+  核心只解释和渲染这些通用枚举，不按字段名或组件名猜测用途；具体用途、保存位置与轮换影响均由
+  字段所属组件说明。
 - `depends_on` 只引用组件稳定名称；依赖决定执行顺序，不隐含“启用后一定注入 Agent”。
 - `dependency_only: true` 表示组件不能被用户直接选择，只能由 `profiles` 或其他组件的依赖闭包加入；
   适用于 PostgreSQL、Redis、Caddy 等共享基础服务。选择页必须显示自动加入原因，计划仍完整列出该组件。
@@ -104,8 +113,10 @@ initialize_hook: hooks/initialize.py
   日志不得保存秘密。
 - `initialize_hook` 可选。hook 接收版本化 JSON 上下文，以 JSON Lines 输出检查/配置结果；必须实现
   `check` 和 `apply`，使执行器遵守先检查后修改。hook 路径不得越出组件目录。
-- 组件特定客户端、realm、认证源或账号逻辑只能存在于该组件 hook 或声明中，禁止进入核心
-  initialization 模块的名称分支。
+- 所有组件名称、字段、默认值、端口、客户端、认证源、账号及接线知识只能存在于组件自己的声明、
+  资源或 hook 中，禁止进入核心 initialization 模块。跨组件接线由能力消费方拥有：例如某应用需要
+  身份服务客户端时，由该应用 hook 通过声明依赖获得通用上下文并维护自己的客户端，身份服务不反向
+  硬编码消费应用清单。
 
 `schema_version` 大于当前模块支持版本时，组件标记为“需要升级 Chronicler”且不可选；同版本新增的
 可选字段必须有默认语义，不得改变旧声明行为；删除、改名或改变字段语义必须提升 major schema 版本。

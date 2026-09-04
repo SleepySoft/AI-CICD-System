@@ -1,6 +1,6 @@
 # Web 初始化模块架构与执行机制
 
-> 版本：v1.2 · 日期：2026-09-04 · 状态：生效
+> 版本：v1.3 · 日期：2026-09-04 · 状态：生效
 > 定位：`chronicler.app.initialization` 的内部模块边界、状态机、执行器和安全机制；用户操作步骤不在本文定义。
 > 关联需求：FR-INIT-001 ~ FR-INIT-011、NFR-002、NFR-010
 
@@ -133,7 +133,8 @@ POSIX 尝试收紧为 `0600`。所有子进程显式使用
 ### 2.5 Catalog 与计划器
 
 `catalog.py` 对每个 setup 文件执行 JSON-Schema 等价校验，并拒绝：未知 schema version、重复字段 key、
-依赖缺失、hook 越界、非法环境变量名、不支持的平台与 readiness 类型。Catalog 错误按组件隔离展示，
+依赖缺失、hook 越界、非法环境变量名、不支持的平台与 readiness 类型，以及缺少类型、生成长度、轮换
+风险或用途说明的秘密字段。Catalog 错误按组件隔离展示，
 但被选组件的错误会阻塞计划。Catalog 同时读取相邻 `plugin.yaml` 的 `group` 和 `desc` 作为展示元数据；
 `dependency_only` 组件不出现在直接选择列表中，但会随依赖闭包进入配置、计划和执行。后端拒绝客户端绕过
 页面把此类组件作为显式选择提交。
@@ -191,16 +192,22 @@ persist → admin ─┤                                                     ├
 | finalize | 检查 admin、必需步骤和 restart | 关闭引导能力并记录完成 hash |
 
 hook 通过外部进程执行，沿用 sealed Profile 的 `CHRONICLER_COMPONENT_PYTHON` 约定。调用参数只含 action；
-受控 runner 仅注入宿主执行必需变量和该组件依赖闭包声明的配置字段。stdout/stderr 只在失败时截断、
-脱敏后形成事件摘要，退出码非零与超时分别归类。
+受控 runner 仅注入宿主执行必需变量、当前组件及其依赖闭包声明的配置字段，并按统一命名提供依赖容器
+标识。核心不解释字段或依赖名称。stdout/stderr 只在失败时截断、脱敏后形成事件摘要，退出码非零与
+超时分别归类。
+
+当前组件容器通过 `CHRONICLER_COMPONENT_CONTAINER` 提供；每个依赖容器通过
+`CHRONICLER_DEPENDENCY_<NAME>_CONTAINER` 提供，其中 `<NAME>` 为组件名转大写并把连字符替换为下划线。
+hook 必须读取这些变量，不得复制 `plugin.yaml` 中的容器名默认值。
 
 source 模式默认使用当前 Python；sealed 模式在 preflight 中强制验证 `CHRONICLER_COMPONENT_PYTHON`
 存在且满足组件 hook 声明的 Python 依赖。秘密只在执行对应 hook 的最小环境中短时注入，不出现在命令行、
 上下文 JSON 或子进程继承环境的其它字段中。
 
-首批迁移时，原脚本能力按所有权拆分：Keycloak realm/client/scope 进入 Keycloak initialize hook；Gitea
-管理员与 OIDC 认证源进入 Gitea initialize hook；跨组件参数由依赖上下文引用，但配置逻辑仍由目标组件
-拥有。核心不得出现 `if component == "keycloak"` 一类分支。
+所有权按“Chronicler 归 Chronicler，组件归组件”拆分：身份服务只管理自身 realm 等资源；Gitea 管理员、
+Gitea 的 OIDC 客户端和认证源均由 Gitea hook 管理；Outline 的 OIDC 客户端由 Outline hook 管理。
+跨组件参数和容器标识由通用依赖上下文提供，但配置逻辑仍由能力消费组件拥有。自动化测试扫描核心
+Python/JavaScript/HTML，禁止出现受管组件名称；核心不得出现任何组件名称分支或字段白名单。
 
 ### 2.8 前端组织
 

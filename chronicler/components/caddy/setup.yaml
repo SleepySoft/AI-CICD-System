@@ -7,7 +7,13 @@ platforms: [windows, linux, darwin]
 resources:
   memory_mb: 64
   disk_mb: 128
-fields: []
+fields:
+  - key: HTTP_PORT
+    label: 统一 Web 入口端口
+    kind: port
+    required: true
+    default: 80
+    help: 浏览器访问所有 Web 组件时使用的宿主端口；若 80 被占用可改为 8080 等空闲端口。
 readiness:
   kind: process
   timeout_sec: 60

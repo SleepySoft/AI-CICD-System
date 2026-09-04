@@ -5,5 +5,13 @@ conflicts_with: []
 platforms: [windows, linux, darwin]
 resources: {memory_mb: 512, disk_mb: 2048}
 fields:
-  - {key: ATR_API_TOKEN, label: ATR API Token, kind: secret, required: true, generate: token}
+  - key: ATR_API_TOKEN
+    label: Agent Runtime API 令牌
+    kind: secret
+    secret_type: api-token
+    required: true
+    generate: token
+    generate_length: 40
+    rotation_risk: coordinated
+    help: 调用隔离 Agent Runtime API 时携带的机器认证令牌，不是用户密码；轮换后必须同步所有 API 调用方。
 readiness: {kind: container-health, timeout_sec: 600}

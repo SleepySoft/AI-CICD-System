@@ -45,8 +45,6 @@ def port_checks(draft: dict, entries: dict | None = None) -> list[dict]:
     entries = entries or catalog.load()
     selected = _selected(draft, entries)
     targets: dict[int, str] = {}
-    if "caddy" in selected:
-        targets[int(draft["values"].get("HTTP_PORT", 80))] = "caddy"
     for name in selected:
         for field in entries[name]["component"].get("fields", []):
             if field.get("kind") != "port":

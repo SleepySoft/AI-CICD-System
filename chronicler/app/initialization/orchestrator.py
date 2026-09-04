@@ -118,6 +118,9 @@ def _hook(name: str, action: str):
                  "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "BASE_DOMAIN"}
     env = {key: value for key, value in os.environ.items() if key.upper() in base_keys | field_keys}
     env["CHRONICLER_COMPONENT_CONTAINER"] = get_tool(name).get("container", "")
+    for dependency in dependencies - {name}:
+        env[f"CHRONICLER_DEPENDENCY_{dependency.upper().replace('-', '_')}_CONTAINER"] = \
+            get_tool(dependency).get("container", "")
     proc = subprocess.run([component_python(), str(path), action], cwd=str(path.parent.parent),
                           env=env, capture_output=True, encoding="utf-8", errors="replace", timeout=300)
     if proc.returncode:

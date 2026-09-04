@@ -11,6 +11,8 @@ from ..config import Cfg
 
 KINDS = {"text", "secret", "integer", "boolean", "choice", "path", "port"}
 READINESS = {"container-health", "http", "tcp", "process"}
+SECRET_TYPES = {"password", "client-secret", "encryption-key", "api-token", "access-key"}
+ROTATION_RISKS = {"low", "coordinated", "critical"}
 SENSITIVE = re.compile(r"(?i)(secret|password|token|api_?key|credential)")
 ENV_KEY = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
@@ -34,6 +36,16 @@ def validate(name: str, raw: dict, component_dir: Path) -> dict:
             raise CatalogError(f"敏感字段必须声明 kind=secret：{key}")
         if kind == "secret" and field.get("default"):
             raise CatalogError(f"秘密字段不得包含默认值：{key}")
+        if kind == "secret":
+            if field.get("secret_type") not in SECRET_TYPES:
+                raise CatalogError(f"秘密字段必须声明有效 secret_type：{key}")
+            if field.get("rotation_risk") not in ROTATION_RISKS:
+                raise CatalogError(f"秘密字段必须声明有效 rotation_risk：{key}")
+            length = field.get("generate_length")
+            if not isinstance(length, int) or not 16 <= length <= 128:
+                raise CatalogError(f"秘密字段 generate_length 必须在 16-128：{key}")
+            if not str(field.get("help", "")).strip():
+                raise CatalogError(f"秘密字段必须提供用途和轮换说明：{key}")
         seen.add(key)
     readiness = raw.get("readiness") or {}
     if readiness and readiness.get("kind") not in READINESS:
