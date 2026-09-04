@@ -32,13 +32,18 @@ class InitializationTest(unittest.TestCase):
         self.data_patch.stop()
         self.tmp.cleanup()
 
-    def component(self, name, *, profiles=None, depends=None, fields=None):
+    def component(self, name, *, profiles=None, depends=None, fields=None,
+                  dependency_only=False, group="测试组件"):
         path = self.components / name
         path.mkdir()
+        (path / "plugin.yaml").write_text(yaml.safe_dump({
+            "name": name, "group": group, "desc": f"{name} description",
+        }), encoding="utf-8")
         (path / "setup.yaml").write_text(yaml.safe_dump({
             "schema_version": 1,
             "profiles": profiles or [],
             "depends_on": depends or [],
+            "dependency_only": dependency_only,
             "conflicts_with": [],
             "platforms": [catalog.current_platform()],
             "fields": fields or [],
@@ -58,6 +63,19 @@ class InitializationTest(unittest.TestCase):
         self.assertEqual(["db", "app"], [x["name"] for x in first["components"]])
         self.assertEqual("dependency-of:app", first["components"][0]["reason"])
         self.assertEqual(first["plan_hash"], second["plan_hash"])
+
+    def test_dependency_only_component_is_automatic_and_grouped(self):
+        self.component("db", dependency_only=True, group="数据存储")
+        self.component("app", depends=["db"])
+        entries = catalog.load()
+        selected, reasons = planner._selected("custom", ["app"], entries)
+        self.assertEqual({"app", "db"}, selected)
+        self.assertEqual("dependency-of:app", reasons["db"])
+        with self.assertRaisesRegex(planner.PlanError, "只能由其他组件"):
+            planner._selected("custom", ["db"], entries)
+        public = {item["name"]: item for item in catalog.public_catalog()["components"]}
+        self.assertTrue(public["db"]["dependency_only"])
+        self.assertEqual("数据存储", public["db"]["group"])
 
     def test_plan_rejects_dependency_cycle(self):
         self.component("a", depends=["b"])

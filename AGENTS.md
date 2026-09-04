@@ -42,7 +42,7 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
 - 组件全部免费（含商用）：Python 环境用 **Miniforge**（禁用 Anaconda/defaults 通道）。
 - 新增环境服务/组件：`chronicler/components/<name>/` 一个目录装一切（ADR-0027）——
   `plugin.yaml`（注册：group/desc/url/container/autostart/critical/driver/data）+
-  `setup.yaml`（初始化方案/依赖/字段/就绪检查）+ 可选 `SKILL.md`（能力注入，ADR-0025）+
+  `setup.yaml`（初始化方案/依赖/仅依赖组件/字段/就绪检查）+ 可选 `SKILL.md`（能力注入，ADR-0025）+
   可选 `hooks/backup.py` / `hooks/deploy.py` / `hooks/initialize.py`；
   docker 组件另需 `compose.yml` 服务 + `caddy/Caddyfile` 子域名。
 - 新增 agent：用户在宿主自装 harness 后，在 `chronicler/config/harness.yaml` 登记一条命令模板

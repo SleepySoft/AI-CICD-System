@@ -43,12 +43,16 @@ def validate(name: str, raw: dict, component_dir: Path) -> dict:
         target = (component_dir / hook).resolve()
         if component_dir.resolve() not in target.parents:
             raise CatalogError("initialize_hook 不得越出组件目录")
+    dependency_only = raw.get("dependency_only", False)
+    if not isinstance(dependency_only, bool):
+        raise CatalogError("dependency_only 必须是布尔值")
     return {"name": name, "profiles": raw.get("profiles") or [],
             "depends_on": raw.get("depends_on") or [],
             "conflicts_with": raw.get("conflicts_with") or [],
             "platforms": raw.get("platforms") or ["windows", "linux", "darwin"],
             "resources": raw.get("resources") or {}, "fields": fields,
             "readiness": readiness, "initialize_hook": hook or "",
+            "dependency_only": dependency_only,
             "_dir": str(component_dir)}
 
 
@@ -63,7 +67,12 @@ def load() -> dict:
                 continue
             try:
                 raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-                result[child.name] = {"component": validate(child.name, raw, child), "error": ""}
+                plugin_path = child / "plugin.yaml"
+                plugin = yaml.safe_load(plugin_path.read_text(encoding="utf-8")) or {} if plugin_path.is_file() else {}
+                presentation = {"group": plugin.get("group") or "其他",
+                                "description": plugin.get("desc") or child.name}
+                result[child.name] = {"component": validate(child.name, raw, child),
+                                      "presentation": presentation, "error": ""}
             except (OSError, yaml.YAMLError, CatalogError) as exc:
                 result[child.name] = {"component": {"name": child.name}, "error": str(exc)}
     return result
@@ -87,7 +96,7 @@ def public_catalog() -> dict:
     for name, entry in entries.items():
         component = dict(entry["component"])
         component.pop("_dir", None)
-        components.append({**component, "error": entry["error"]})
+        components.append({**component, **entry.get("presentation", {}), "error": entry["error"]})
     return {"schema_version": 1, "revision": revision(entries),
             "platform": current_platform(), "profiles": ["chronicler-only", "recommended", "full", "custom"],
             "components": components}

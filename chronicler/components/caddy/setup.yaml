@@ -1,5 +1,6 @@
 schema_version: 1
-profiles: [recommended, full]
+profiles: []
+dependency_only: true
 depends_on: []
 conflicts_with: []
 platforms: [windows, linux, darwin]

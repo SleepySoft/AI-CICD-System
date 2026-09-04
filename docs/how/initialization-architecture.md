@@ -1,6 +1,6 @@
 # Web 初始化模块架构与执行机制
 
-> 版本：v1.1 · 日期：2026-09-03 · 状态：生效
+> 版本：v1.2 · 日期：2026-09-04 · 状态：生效
 > 定位：`chronicler.app.initialization` 的内部模块边界、状态机、执行器和安全机制；用户操作步骤不在本文定义。
 > 关联需求：FR-INIT-001 ~ FR-INIT-011、NFR-002、NFR-010
 
@@ -134,12 +134,14 @@ POSIX 尝试收紧为 `0600`。所有子进程显式使用
 
 `catalog.py` 对每个 setup 文件执行 JSON-Schema 等价校验，并拒绝：未知 schema version、重复字段 key、
 依赖缺失、hook 越界、非法环境变量名、不支持的平台与 readiness 类型。Catalog 错误按组件隔离展示，
-但被选组件的错误会阻塞计划。
+但被选组件的错误会阻塞计划。Catalog 同时读取相邻 `plugin.yaml` 的 `group` 和 `desc` 作为展示元数据；
+`dependency_only` 组件不出现在直接选择列表中，但会随依赖闭包进入配置、计划和执行。后端拒绝客户端绕过
+页面把此类组件作为显式选择提交。
 
 计划器算法：
 
 1. 读取固定 catalog revision、用户方案和显式选择。
-2. 计算传递依赖闭包，记录每个选择来源。
+2. 计算传递依赖闭包，记录每个选择来源；前端用同一依赖图即时勾选并锁定自动依赖，后端结果为准。
 3. 检查 conflict、平台、端口和有向环；稳定拓扑排序（同层按组件名）。
 4. 调用每种通用 executor 的只读 `inspect`，判断动作是 skip、create、start、configure 或 verify。
 5. 生成规范化 actions 与 warnings；计算 environment fingerprint 和 plan hash。

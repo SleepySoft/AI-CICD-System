@@ -1,6 +1,6 @@
 # 追溯矩阵
 
-> 版本：v1.10 · 日期：2026-09-03 · 状态：生效
+> 版本：v1.11 · 日期：2026-09-04 · 状态：生效
 > 定位：需求 ID ↔ 设计章节 ↔ 实现位置 ↔ 验证手段。Agent 做 gap 分析的输入；改代码必须同步本表。
 
 ## 功能需求（FR）
@@ -24,12 +24,12 @@
 | FR-INIT-001 | 首次启动进入受限引导 | what/initialization.md §生命周期与可见性 | chronicler/app/main.py + initialization/lifecycle.py + security.py | chronicler/tests/test_initialization.py（受限 API、引导码） |
 | FR-INIT-002 | 分步向导与状态恢复 | what/initialization.md §八阶段用户流程 | chronicler/app/initialization/static/ + store.py | chronicler/tests/test_initialization.py（草稿持久化）；人工刷新续接 |
 | FR-INIT-003 | 环境预检 | what/initialization.md §八阶段用户流程 | chronicler/app/initialization/preflight.py | 人工：Docker/Compose/目录/排除端口故障注入 |
-| FR-INIT-004 | 部署方案与依赖解析 | what/initialization.md §部署方案契约 | chronicler/app/initialization/planner.py | chronicler/tests/test_initialization.py（依赖闭包/环/稳定摘要） |
+| FR-INIT-004 | 部署方案与依赖解析 | what/initialization.md §部署方案契约 | chronicler/app/initialization/planner.py + static/setup.js | chronicler/tests/test_initialization.py（依赖闭包/仅依赖组件/环/稳定摘要） |
 | FR-INIT-005 | 配置收集与秘密保护 | what/initialization.md §安全与错误呈现 | chronicler/app/initialization/config_store.py + router.py | chronicler/tests/test_initialization.py（不回显、换行注入、DB 扫描） |
 | FR-INIT-006 | 可审阅执行计划 | what/initialization.md §计划与运行模型 | chronicler/app/initialization/planner.py + orchestrator.py | chronicler/tests/test_initialization.py（输入摘要、陈旧计划拒绝） |
 | FR-INIT-007 | 批量执行与实时进度 | what/initialization.md §执行语义 | chronicler/app/initialization/orchestrator.py + router.py（SSE） | 单测全量通过；真实组件批量部署按部署 runbook 验收 |
 | FR-INIT-008 | 幂等重试与中断续接 | what/initialization.md §执行语义 | chronicler/app/initialization/store.py + orchestrator.py | 单测全量通过；进程强停续接为发布前黑盒项 |
-| FR-INIT-009 | 组件自描述初始化契约 | what/initialization.md §组件 setup.yaml 契约 | chronicler/components/*/setup.yaml + hooks/initialize.py | 15 个 catalog/Compose 声明校验；容器 hook 由部署验收 |
+| FR-INIT-009 | 组件自描述初始化契约 | what/initialization.md §组件 setup.yaml 契约 | chronicler/components/*/plugin.yaml + setup.yaml + hooks/initialize.py | 15 个 catalog/Compose 声明校验；分组与 dependency-only 单测；容器 hook 由部署验收 |
 | FR-INIT-010 | 初始化完成与环境设置中心 | what/initialization.md §生命周期与可见性 | chronicler/app/initialization/lifecycle.py + security.py + router.py | chronicler/tests/test_initialization.py（关闭与凭据重放） |
 | FR-INIT-011 | 初始化记录与诊断 | what/initialization.md §计划与运行模型 | chronicler/app/initialization/store.py + router.py | 人工：history、SSE 与脱敏 diagnostics API |
 | FR-KB-001 | Markdown vault 事实源 | what/knowledge.md §分区规范 | 已废弃（知识改由 shadow 仓/全局资产库承载，ADR-0028/FR-MGR-013/014） | - |

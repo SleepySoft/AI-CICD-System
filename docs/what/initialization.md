@@ -1,6 +1,6 @@
 # Web 初始化与环境设置规格
 
-> 版本：v1.0 · 日期：2026-09-03 · 状态：生效
+> 版本：v1.1 · 日期：2026-09-04 · 状态：生效
 > 定位：独立 initialization 模块对用户、组件和 API 暴露的契约；不规定内部线程、数据库实现或具体组件接线命令。
 > 关联需求：FR-INIT-001 ~ FR-INIT-011、NFR-002、NFR-004、NFR-010
 
@@ -36,7 +36,8 @@
 1. **欢迎与解锁**：解释数据、端口和组件影响；用一次性引导码换取 HttpOnly 引导会话。
 2. **环境预检**：以“通过 / 警告 / 阻塞”卡片展示检测结果，每项附修复动作和重新检测按钮。
 3. **部署方案**：提供“仅 Chronicler / 推荐底座 / 完整底座 / 自定义”四种方案；卡片展示用途、
-   资源估算和自动加入的依赖，不用技术名词要求用户理解拓扑。
+  资源估算和自动加入的依赖，不用技术名词要求用户理解拓扑。自定义组件按 `plugin.yaml.group`
+  分组；数据库、缓存、统一入口等仅依赖组件不提供独立选择，而在选中使用者后自动展示并加入。
 4. **基础配置**：收集域名、HTTP 端口、时区、数据根等共享设置；即时检查路径与端口。
 5. **管理员与组件配置**：先创建本地恢复管理员，再按所选组件分组显示字段；秘密可一键生成，
    离开输入框后只显示“已设置”。高级字段默认折叠。
@@ -72,6 +73,7 @@
 schema_version: 1
 profiles: [recommended, full]
 depends_on: [postgres]
+dependency_only: false
 conflicts_with: []
 platforms: [windows, linux, darwin]
 resources:
@@ -95,6 +97,9 @@ initialize_hook: hooks/initialize.py
   `text|secret|integer|boolean|choice|path|port`。
 - 字段可声明 `default`、`placeholder`、`pattern`、`choices`、`min/max`、`help`；秘密不得声明真实默认值。
 - `depends_on` 只引用组件稳定名称；依赖决定执行顺序，不隐含“启用后一定注入 Agent”。
+- `dependency_only: true` 表示组件不能被用户直接选择，只能由 `profiles` 或其他组件的依赖闭包加入；
+  适用于 PostgreSQL、Redis、Caddy 等共享基础服务。选择页必须显示自动加入原因，计划仍完整列出该组件。
+- 选择页分组和用途说明复用 `plugin.yaml` 的 `group`、`desc`，不在 `setup.yaml` 维护第二份展示文案。
 - `readiness.kind` 首版支持 `container-health|http|tcp|process`；检查目标可引用已收集字段，但响应和
   日志不得保存秘密。
 - `initialize_hook` 可选。hook 接收版本化 JSON 上下文，以 JSON Lines 输出检查/配置结果；必须实现

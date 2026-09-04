@@ -1,5 +1,6 @@
 """确定性初始化计划：方案展开、依赖闭包、冲突与稳定哈希。"""
 import hashlib
+import heapq
 import json
 
 from . import catalog
@@ -14,21 +15,27 @@ def _selected(profile: str, explicit: list[str], entries: dict) -> tuple[set, di
         raise PlanError("未知部署方案")
     selected = set(explicit if profile == "custom" else [])
     reasons = {name: "explicit" for name in selected}
+    for name in selected:
+        if name not in entries:
+            raise PlanError(f"缺少组件或初始化声明：{name}")
+        if entries[name]["component"].get("dependency_only"):
+            raise PlanError(f"组件 {name} 只能由其他组件按依赖自动加入")
     if profile in {"recommended", "full"}:
         for name, entry in entries.items():
             if profile in entry["component"].get("profiles", []):
                 selected.add(name)
                 reasons[name] = "profile"
     queue = list(selected)
+    heapq.heapify(queue)
     while queue:
-        name = queue.pop()
+        name = heapq.heappop(queue)
         if name not in entries:
             raise PlanError(f"缺少组件或初始化声明：{name}")
-        for dep in entries[name]["component"].get("depends_on", []):
+        for dep in sorted(entries[name]["component"].get("depends_on", [])):
             if dep not in selected:
                 selected.add(dep)
                 reasons[dep] = f"dependency-of:{name}"
-                queue.append(dep)
+                heapq.heappush(queue, dep)
     return selected, reasons
 
 
