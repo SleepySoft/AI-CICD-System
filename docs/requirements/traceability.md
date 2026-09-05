@@ -34,7 +34,7 @@
 | FR-INIT-011 | 初始化记录与诊断 | what/initialization.md §计划与运行模型 | chronicler/app/initialization/store.py + router.py | 人工：history、SSE 与脱敏 diagnostics API |
 | FR-INIT-012 | 恢复式重新初始化（旧数据保留与收敛，ADR-0039） | what/initialization.md §生命周期与可见性 | chronicler/app/initialization/config_store.py + orchestrator.py + preflight.py + scripts/reset-initialization.py | 单测（秘密留空保持）；人工：旧数据环境重跑初始化验收 |
 | FR-INIT-013 | 秘密再导出与重置（按类型分级，ADR-0040） | what/initialization.md §安全与错误呈现 | chronicler/app/vault/（一期：admin 显示/下载/轮换）+ chronicler/app/initialization/config_store.py + router.py | chronicler/tests/test_vault.py（显示/轮换/审计脱敏）；人工：密钥再导出与口令重置验收 |
-| FR-INIT-014 | 秘密加密快照与主密钥恢复（ADR-0041） | what/initialization.md §计划与运行模型 | chronicler/app/vault/（crypto+exporter）+ scripts/vault-inspect.py | chronicler/tests/test_vault.py（快照无明文/错误密钥解密失败/重建一致） |
+| FR-INIT-014 | 秘密加密快照与主密钥恢复（ADR-0041） | what/initialization.md §计划与运行模型；how/secrets-vault.md | chronicler/app/vault/（crypto+store+sync+exporter）+ scripts/vault-inspect.py | chronicler/tests/test_vault.py（快照无明文/错误密钥解密失败/重建一致/锁定与解锁/交接确认/persist 双写/导入与漂移） |
 | FR-INIT-015 | 文件型秘密统一管理（签名证书/keystore，ADR-0042） | what/initialization.md §计划与运行模型 | chronicler/app/vault/（kind=file）+ scripts/vault-inspect.py | chronicler/tests/test_vault.py（文件恢复逐字节一致）；人工：过期告警与 CI 注入验收 |
 | FR-INIT-016 | 秘密作用域分权与审计（ADR-0043） | what/initialization.md §安全与错误呈现 | chronicler/app/initialization/ + app 用户与审计 | 单测（越权拒读/审计脱敏/包口令）；人工：授权收回与分发包验收 |
 | FR-INIT-017 | 接收者密钥体系与提交即加密（ADR-0044） | what/initialization.md §安全与错误呈现 | chronicler/app/initialization/（接收者登记/集合加解密） | 单测（集合外私钥不可解/免私钥提交/增补接收者重加密） |

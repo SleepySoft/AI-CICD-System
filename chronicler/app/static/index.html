@@ -381,6 +381,22 @@
 
         <!-- ============ 秘密库（admin，ADR-0041~0044 一期） ============ -->
         <el-tab-pane v-if="isAdmin" label="秘密库" name="vault">
+          <el-alert v-if="vaultStatus.locked" type="error" :closable="false" style="margin-bottom:12px"
+                    :title="'秘密库已锁定：存在 ' + vaultStatus.count + ' 条既有秘密，但主密钥' + (vaultStatus.reason==='master-key-missing' ? '缺失' : '无法解密（不匹配）') + '。'"></el-alert>
+          <div v-if="vaultStatus.locked" class="card-box" style="max-width:640px">
+            <div class="tool-name" style="margin-bottom:8px">输入解锁密钥</div>
+            <div class="tool-desc">粘贴原主密钥（AGE-SECRET-KEY-...），抽样解密验证通过后恢复使用。
+              若确实没有旧主密钥：停止程序，在程序外删除 vault 数据与 secrets/ 目录后重启——程序不提供清空入口。</div>
+            <el-input v-model="vaultUnlockKey" placeholder="AGE-SECRET-KEY-..." class="mono"></el-input>
+            <el-button type="primary" size="small" style="margin-top:8px" @click="unlockVault" :loading="acting">验证并解锁</el-button>
+          </div>
+          <el-alert v-if="!vaultStatus.locked && vaultStatus.has_key && !vaultStatus.key_acked" type="warning" :closable="false" style="margin-bottom:12px"
+                    title="主密钥尚未完成交接：请点「显示主密钥」转存密码管理器并粘贴回验证，否则主机丢失时全部秘密不可恢复。"></el-alert>
+          <el-alert v-if="!vaultStatus.locked && vaultEnv.missing_in_vault && vaultEnv.missing_in_vault.length" type="info" :closable="false" style="margin-bottom:12px">
+            <template #title>检测到 .env 中 {{ vaultEnv.missing_in_vault.length }} 个组件秘密未纳入管理
+              <el-button size="small" type="primary" style="margin-left:8px" @click="importEnv(false)">从 .env 导入</el-button>
+            </template>
+          </el-alert>
           <div class="card-box">
             <div class="tool-name">主密钥
               <span style="margin-left:auto">
@@ -417,6 +433,14 @@
             </el-table-column>
             <el-table-column prop="summary" label="用途" min-width="140" show-overflow-tooltip></el-table-column>
             <el-table-column prop="owner" label="属主" width="110" show-overflow-tooltip></el-table-column>
+            <el-table-column label="同步" width="90">
+              <template #default="{ row }">
+                <el-tag v-if="vaultDriftMap[row.scope + '/' + row.name] === 'drifted'" type="warning" size="small">漂移</el-tag>
+                <el-tag v-else-if="vaultDriftMap[row.scope + '/' + row.name] === 'missing'" type="danger" size="small">env缺失</el-tag>
+                <el-tag v-else-if="vaultDriftMap[row.scope + '/' + row.name] === 'synced'" type="success" size="small" effect="plain">已同步</el-tag>
+                <span v-else class="muted">—</span>
+              </template>
+            </el-table-column>
             <el-table-column label="过期时间" width="160">
               <template #default="{ row }">
                 <span :style="row.expires_at && row.expires_at * 1000 < Date.now() ? 'color:#f56c6c' : ''">{{ row.expires_at ? fmtTime(row.expires_at) : '—' }}</span>
@@ -854,6 +878,13 @@
     <el-dialog v-model="showVaultMaster" title="主密钥（立即转存密码管理器）" width="560px">
       <el-alert type="warning" :closable="false" title="此密钥可解开全部秘密。请复制到密码管理器并做离线备份；本次查看已写审计。"></el-alert>
       <el-input v-model="vaultMasterSecret" readonly class="mono" style="margin-top:10px"></el-input>
+      <el-form-item label="粘贴回主密钥以确认已收存（prove possession）" style="margin-top:14px">
+        <el-input v-model="vaultAckInput" placeholder="AGE-SECRET-KEY-..." class="mono"></el-input>
+      </el-form-item>
+      <template #footer>
+        <el-button @click="showVaultMaster = false">稍后</el-button>
+        <el-button type="primary" @click="ackMaster" :disabled="!vaultAckInput">确认已收存</el-button>
+      </template>
     </el-dialog>
 
   </template>

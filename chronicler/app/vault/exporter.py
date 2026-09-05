@@ -48,11 +48,12 @@ def _add(tar: tarfile.TarFile, arcname: str, data: bytes, mtime: float, mode: in
 def build_export() -> tuple[bytes, int]:
     """打包全部秘密；返回 (tar 字节, 秘密条数)。"""
     rows = store.all_rows()
+    identity = store._identity_verified()  # 锁定时拒绝导出（VaultLocked）
     payload_buf = io.BytesIO()
     items = []
     with tarfile.open(fileobj=payload_buf, mode="w") as tar:
         for row in rows:
-            plain = crypto.decrypt(row["ciphertext"])
+            plain = crypto.decrypt(row["ciphertext"], identity)
             _add(tar, _arcname(row), plain, row["updated_at"], 0o600)
             items.append({
                 "name": row["name"], "scope": row["scope"], "kind": row["kind"],
@@ -62,12 +63,12 @@ def build_export() -> tuple[bytes, int]:
                 "path": _arcname(row), "size": len(plain),
                 "sha256": hashlib.sha256(plain).hexdigest(),
             })
-    encrypted = crypto.encrypt(payload_buf.getvalue())
+    encrypted = crypto.encrypt(payload_buf.getvalue(), identity)
     manifest = {
         "format": FORMAT,
         "version": 1,
         "exported_at": time.time(),
-        "recipient": crypto.recipient_str(),
+        "recipient": crypto.recipient_str(identity),
         "count": len(items),
         "payload_sha256": hashlib.sha256(encrypted).hexdigest(),
         "items": items,

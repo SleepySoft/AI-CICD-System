@@ -144,6 +144,12 @@ def persist(values: dict, components: dict) -> Path:
     for key, value in updates.items():
         os.environ[key] = value
     load_environment(components)
+    try:  # 双写秘密库（docs/how/secrets-vault.md）；失败不阻断 .env 主流程
+        from ..vault import sync as vault_sync
+        vault_sync.sync_env_secrets(updates, components)
+    except Exception:  # noqa: BLE001
+        import traceback
+        traceback.print_exc()
     return target
 
 

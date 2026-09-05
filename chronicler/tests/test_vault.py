@@ -97,8 +97,9 @@ class VaultTest(unittest.TestCase):
     def test_crypto_roundtrip_and_wrong_key(self):
         from chronicler.app.vault import crypto
         from pyrage import x25519
-        blob = crypto.encrypt(b"top secret")
-        assert crypto.decrypt(blob) == b"top secret"
+        identity = crypto.generate_identity()
+        blob = crypto.encrypt(b"top secret", identity)
+        assert crypto.decrypt(blob, identity) == b"top secret"
         with self.assertRaises(Exception):
             import pyrage
             pyrage.decrypt(blob, [x25519.Identity.generate()])
@@ -156,6 +157,85 @@ class VaultTest(unittest.TestCase):
         assert self.admin.post(f"/api/vault/{sid}/reveal").text == "new-value"
         assert self.admin.delete(f"/api/vault/{sid}").status_code == 200
         assert self.admin.get("/api/vault").json() == []
+
+    # ---------- persist 双写 / 导入 / 漂移 ----------
+
+    COMPONENTS = {"gitea": {"component": {"fields": [
+        {"key": "GITEA_ADMIN_PASSWORD", "kind": "secret", "secret_type": "password",
+         "rotation_risk": "coordinated", "help": "Gitea 管理员密码"},
+        {"key": "GITEA_PORT", "kind": "port"}]}}}
+
+    def test_persist_double_write(self):
+        from types import SimpleNamespace
+        from chronicler.app.initialization import config_store
+        config_store.clear()
+        config_store.set_secrets({"GITEA_ADMIN_PASSWORD": "pw-12345678"})
+        with patch.object(config_store, "PROFILE", SimpleNamespace(install_root=self.root)):
+            config_store.persist({}, self.COMPONENTS)
+        config_store.clear()
+        items = self.admin.get("/api/vault").json()
+        assert len(items) == 1
+        assert items[0]["scope"] == "gitea" and items[0]["name"] == "GITEA_ADMIN_PASSWORD"
+        assert items[0]["secret_type"] == "password"  # 元数据沿用 setup.yaml 自述
+        resp = self.admin.post(f"/api/vault/{items[0]['id']}/reveal")
+        assert resp.text == "pw-12345678"
+        assert (self.root / ".env").is_file()
+
+    def test_import_env_and_drift(self):
+        from types import SimpleNamespace
+        (self.root / ".env").write_text("GITEA_ADMIN_PASSWORD=pw-old-123456\n", encoding="utf-8")
+        with patch("chronicler.app.routers.vault._load_components", return_value=self.COMPONENTS), \
+                patch("chronicler.app.vault.sync.PROFILE", SimpleNamespace(install_root=self.root)):
+            r = self.admin.post("/api/vault/import-env", json={})
+            assert r.json()["imported"] == 1, r.text
+            assert self.admin.post("/api/vault/import-env", json={}).json()["skipped"] == 1
+            # 漂移：.env 被改
+            (self.root / ".env").write_text("GITEA_ADMIN_PASSWORD=pw-new-99999\n", encoding="utf-8")
+            st = self.admin.get("/api/vault/env-status").json()
+            assert st["drifted"] == ["gitea/GITEA_ADMIN_PASSWORD"]
+            # 冲突默认不覆盖；force 后以 .env 为准
+            assert self.admin.post("/api/vault/import-env", json={}).json()["conflicts"] == ["GITEA_ADMIN_PASSWORD"]
+            assert self.admin.post("/api/vault/import-env", json={"force": True}).json()["imported"] == 1
+            assert self.admin.get("/api/vault/env-status").json()["drifted"] == []
+
+    # ---------- 锁定 / 解锁 / 交接 ----------
+
+    def test_lock_and_unlock(self):
+        sid = self._create_text()
+        master = self.admin.post("/api/vault/master/reveal").json()["secret"]
+        (self.secrets_dir / "master.key").unlink()  # 主密钥丢失
+        st = self.admin.get("/api/vault/status").json()
+        assert st["locked"] and st["reason"] == "master-key-missing"
+        # 锁定下写入与解密都被拒绝（绝不静默生成新钥匙）
+        assert self.admin.post("/api/vault/text", json={"name": "B", "value": "x"}).status_code == 409
+        assert self.admin.post(f"/api/vault/{sid}/reveal").status_code == 409
+        from pyrage import x25519
+        bad = self.admin.post("/api/vault/unlock", json={"key": str(x25519.Identity.generate())})
+        assert bad.status_code == 400
+        ok = self.admin.post("/api/vault/unlock", json={"key": master})
+        assert ok.status_code == 200, ok.text
+        assert not self.admin.get("/api/vault/status").json()["locked"]
+        assert self.admin.post(f"/api/vault/{sid}/reveal").text == SECRET_VALUE
+
+    def test_mismatched_key_locks(self):
+        self._create_text()
+        from pyrage import x25519
+        # 主密钥被换成另一把（如恢复时放错文件）→ 拒绝混钥写入
+        (self.secrets_dir / "master.key").write_text(str(x25519.Identity.generate()), encoding="utf-8")
+        st = self.admin.get("/api/vault/status").json()
+        assert st["locked"] and st["reason"] == "master-key-mismatch"
+        assert self.admin.post("/api/vault/text", json={"name": "B", "value": "x"}).status_code == 409
+
+    def test_key_ack(self):
+        self._create_text()  # 触发生成主密钥 → 未交接
+        assert self.admin.get("/api/vault/status").json()["key_acked"] is False
+        assert self.admin.post("/api/vault/master/ack", json={"key": "AGE-SECRET-KEY-WRONG"}).status_code == 400
+        master = self.admin.post("/api/vault/master/reveal").json()["secret"]
+        assert self.admin.post("/api/vault/master/ack", json={"key": master}).status_code == 200
+        assert self.admin.get("/api/vault/status").json()["key_acked"] is True
+        # 审计不含密钥本体
+        audit_rows = json.dumps(self.admin.get("/api/vault/audit").json(), ensure_ascii=False)
+        assert "vault.key_acked" in audit_rows and master not in audit_rows
 
     # ---------- 导出包 + 本地工具 ----------
 

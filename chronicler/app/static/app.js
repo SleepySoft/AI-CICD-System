@@ -64,6 +64,10 @@ const app = createApp({
     const showVaultEdit = ref(false);
     const vaultEditRow = ref(null);
     const vaultEditForm = ref({});
+    const vaultStatus = ref({ locked: false, reason: "", count: 0, has_key: false, key_acked: true, recipient: "" });
+    const vaultEnv = ref({ missing_in_vault: [], drifted: [], missing_in_env: [] });
+    const vaultUnlockKey = ref("");
+    const vaultAckInput = ref("");
 
     const showNewProject = ref(false);
     const newProject = ref({ name: "", git_url: "", default_branch: "", ci_url: "", description: "", harness: "" });
@@ -691,17 +695,62 @@ const app = createApp({
       const m = cd.match(/filename="?([^";]+)/);
       return m ? m[1] : fallback;
     }
+    const vaultDriftMap = computed(() => {
+      const m = {};
+      for (const k of vaultEnv.value.drifted || []) m[k] = "drifted";
+      for (const k of vaultEnv.value.missing_in_env || []) m[k] = "missing";
+      // 组件秘密（在 .env 管理范围内）且未漂移/缺失 → 已同步
+      for (const it of vaultItems.value) {
+        const key = it.scope + "/" + it.name;
+        if (!m[key] && (vaultEnv.value.managed || []).includes(key)) m[key] = "synced";
+      }
+      return m;
+    });
     async function loadVault() {
       loadingVault.value = true;
       try {
-        const [items, master, auditRows] = await Promise.all([
+        const [items, master, auditRows, st, env] = await Promise.all([
           api("/api/vault"), api("/api/vault/master"), api("/api/vault/audit"),
+          api("/api/vault/status"), api("/api/vault/env-status"),
         ]);
         vaultItems.value = items;
         vaultMaster.value = master;
         vaultAudit.value = auditRows;
+        vaultStatus.value = st;
+        vaultEnv.value = env;
       } catch (e) { toast.err(e); }
       finally { loadingVault.value = false; }
+    }
+    async function unlockVault() {
+      if (!vaultUnlockKey.value.trim()) { ElementPlus.ElMessage.warning("请粘贴主密钥"); return; }
+      acting.value = true;
+      try {
+        await api("/api/vault/unlock", { method: "POST", body: JSON.stringify({ key: vaultUnlockKey.value.trim() }) });
+        toast.ok("已解锁，主密钥已恢复"); vaultUnlockKey.value = ""; loadVault();
+      } catch (e) { toast.err(e); }
+      finally { acting.value = false; }
+    }
+    async function ackMaster() {
+      try {
+        await api("/api/vault/master/ack", { method: "POST", body: JSON.stringify({ key: vaultAckInput.value.trim() }) });
+        toast.ok("交接确认完成，主密钥已收存");
+        showVaultMaster.value = false; vaultAckInput.value = ""; loadVault();
+      } catch (e) { toast.err(e); }
+    }
+    async function importEnv(force) {
+      acting.value = true;
+      try {
+        const r = await api("/api/vault/import-env", { method: "POST", body: JSON.stringify({ force }) });
+        if (r.conflicts && r.conflicts.length && !force) {
+          await ElementPlus.ElMessageBox.confirm(
+            `${r.conflicts.length} 个键与 vault 已有值不一致（${r.conflicts.join("、")}）。以 .env 为准覆盖 vault？`,
+            "导入冲突", { type: "warning", confirmButtonText: "以 .env 为准", cancelButtonText: "取消" });
+          return importEnv(true);
+        }
+        toast.ok(`导入完成：新增/更新 ${r.imported}，跳过 ${r.skipped}`);
+        loadVault();
+      } catch (e) { if (e !== "cancel" && e?.message) toast.err(e); }
+      finally { acting.value = false; }
     }
     function openVaultText() {
       vaultTextForm.value = { name: "", scope: "infra", secret_type: "password",
@@ -814,6 +863,7 @@ const app = createApp({
           "显示主密钥", { type: "warning", confirmButtonText: "显示", cancelButtonText: "取消" });
         const r = await api("/api/vault/master/reveal", { method: "POST" });
         vaultMasterSecret.value = r.secret;
+        vaultAckInput.value = "";
         showVaultMaster.value = true;
         loadVaultAuditOnly();
       } catch (e) { if (e !== "cancel" && e?.message) toast.err(e); }
@@ -877,6 +927,8 @@ const app = createApp({
       fmtSize, loadVault, openVaultText, createVaultText, openVaultFile, onVaultFileChange,
       onVaultFileRemove, createVaultFile, revealVault, downloadVault, openVaultEdit,
       saveVaultEdit, removeVault, exportVault, revealMaster,
+      vaultStatus, vaultEnv, vaultUnlockKey, vaultAckInput, vaultDriftMap,
+      unlockVault, ackMaster, importEnv,
     };
   },
 });

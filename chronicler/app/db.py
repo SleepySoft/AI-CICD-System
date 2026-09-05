@@ -91,6 +91,10 @@ CREATE TABLE IF NOT EXISTS vault_secrets (
     updated_at REAL NOT NULL,
     UNIQUE(scope, name)
 );
+CREATE TABLE IF NOT EXISTS vault_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT DEFAULT ''
+);
 """
 
 
