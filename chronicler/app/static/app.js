@@ -106,6 +106,8 @@ const app = createApp({
     let runPollTimer = null;
 
     const isAdmin = computed(() => user.value?.role === "admin");
+    const reportHtml = computed(() =>
+      DOMPurify.sanitize(marked.parse(reportText.value || "", { async: false })));
     const componentList = computed(() =>
       Object.entries(components.value).map(([name, v]) => ({ name, ...v })));
     const taskPromptSource = computed(() => {
@@ -936,7 +938,7 @@ const app = createApp({
       showRunPrompt, runPromptId, runPromptText,
       tasks, loadingTasks, taskFilter, groupedTaskDefs, tasksOfProject,
       showNewTask, newTaskForm, showTaskEdit, taskEditRow, taskEditForm,
-      showPrompt, promptView, taskPromptSource,
+      showPrompt, promptView, taskPromptSource, reportHtml,
       fmtTime, open, projectName, runStatusText, runTagType, toolStatusText,
       changePolicyText, changeSummaryText,
       login, logout, onTabChange,

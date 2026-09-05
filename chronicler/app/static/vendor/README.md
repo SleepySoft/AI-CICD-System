@@ -10,6 +10,10 @@
 | element-plus.css | https://unpkg.com/element-plus@2.14.5/dist/index.css | MIT |
 | element-plus.full.min.js | https://unpkg.com/element-plus@2.14.5/dist/index.full.min.js | MIT |
 | icons.iife.min.js | https://unpkg.com/@element-plus/icons-vue@2.3.2/dist/index.iife.min.js | MIT |
+| marked.umd.js | marked@18.0.11 package/lib/marked.umd.js（npm registry） | MIT |
+| purify.min.js | dompurify@3.4.14 package/dist/purify.min.js（npm registry） | Apache-2.0/MPL-2.0 |
+
+报告渲染链路（2026-09-05）：marked 解析 Markdown → DOMPurify 消毒 → `v-html` 输出，防 XSS。
 
 ## 刷新方式
 
