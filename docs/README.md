@@ -1,6 +1,6 @@
 # 文档索引
 
-> 版本：v1.5 · 日期：2026-09-03 · 状态：生效
+> 版本：v1.12 · 日期：2026-09-05 · 状态：生效
 > 定位：docs/ 全部文档的目录与状态总表；写作规范见 `.agents/skills/docs-management/`
 
 ## 文档总表
@@ -74,6 +74,12 @@
 | ADR-0036 构建时固化 sealed Profile 与结构化 Prompt Catalog | adr/0036-sealed-runtime-prompt-catalog.md | adr | 已接受 |
 | ADR-0037 初始化收归单一入口（Web 初始化界面，启动脚本回收） | adr/0037-single-entry-web-init.md | adr | 已接受 |
 | ADR-0038 受限引导模式与声明式组件初始化 | adr/0038-bootstrap-mode-and-declarative-initialization.md | adr | 已接受 |
+| ADR-0039 重新初始化采用恢复式收敛（recover），不提供全新初始化路径 | adr/0039-reinit-recover-over-fresh.md | adr | 已接受 |
+| ADR-0040 秘密再导出与重置：按 secret_type 分级 | adr/0040-secret-reexport-and-reset-policy.md | adr | 已接受（第 4 条经 ADR-0041 修订） |
+| ADR-0041 秘密的防丢持久化：主密钥 + 加密快照，导出 JSON 不含口令明文 | adr/0041-secret-snapshot-and-master-key.md | adr | 已接受 |
+| ADR-0042 文件型秘密（签名证书/keystore）纳入统一秘密管理 | adr/0042-secret-files-signing-assets.md | adr | 已接受 |
+| ADR-0043 秘密作用域分权与审计：在线取用为主、离线分发包为辅 | adr/0043-secret-scopes-acl-audit.md | adr | 已接受（离线包形态经 ADR-0044 修订） |
+| ADR-0044 多接收者密钥体系：系统秘密仅 admin 可解，工程秘密按接收者集合加密 | adr/0044-recipient-key-hierarchy.md | adr | 已接受 |
 | 部署与初始化 | runbooks/deploy.md | runbooks | 生效 |
 | 备份与恢复 | runbooks/backup-restore.md | runbooks | 生效 |
 | 接入新 Agent | runbooks/agent-onboarding.md | runbooks | 生效 |
@@ -82,6 +88,7 @@
 | Web 终端（SSHwifty）接入与使用 | runbooks/web-terminal.md | runbooks | 生效 |
 | 构建与安装 sealed Chronicler | runbooks/build-sealed-chronicler.md | runbooks | 生效 |
 | Clash Verge 代理排查 | runbooks/proxy-clash.md | runbooks | 生效 |
+| 秘密库操作手册 | runbooks/vault.md | runbooks | 生效 |
 | 旧-需求分析与选型 | 01-需求分析与选型.md | 历史 | 过时（已拆分至本结构） |
 | 旧-Manager 设计 | 02-管理服务设计.md | 历史 | 过时（已拆分至本结构） |
 

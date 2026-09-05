@@ -25,13 +25,19 @@
 | FR-INIT-002 | 分步向导与状态恢复 | what/initialization.md §八阶段用户流程 | chronicler/app/initialization/static/ + store.py | chronicler/tests/test_initialization.py（草稿持久化）；人工刷新续接 |
 | FR-INIT-003 | 环境预检 | what/initialization.md §八阶段用户流程 | chronicler/app/initialization/preflight.py | 人工：Docker/Compose/目录/排除端口故障注入 |
 | FR-INIT-004 | 部署方案与依赖解析 | what/initialization.md §部署方案契约 | chronicler/app/initialization/planner.py + static/setup.js | chronicler/tests/test_initialization.py（依赖闭包/仅依赖组件/环/稳定摘要） |
-| FR-INIT-005 | 配置收集与秘密保护 | what/initialization.md §组件 setup.yaml 契约、§计划与运行模型、§安全与错误呈现 | chronicler/app/initialization/catalog.py + config_store.py + router.py + static/setup.js | chronicler/tests/test_initialization.py（秘密元数据、一次性导出/固定密码掩码、不回显、换行注入、DB 扫描） |
+| FR-INIT-005 | 配置收集与秘密保护 | what/initialization.md §组件 setup.yaml 契约、§计划与运行模型、§安全与错误呈现 | chronicler/app/initialization/catalog.py + config_store.py + router.py + static/setup.js | chronicler/tests/test_initialization.py（秘密元数据、一次性导出/口令不入下载文件、不回显、换行注入、DB 扫描） |
 | FR-INIT-006 | 可审阅执行计划 | what/initialization.md §计划与运行模型 | chronicler/app/initialization/planner.py + orchestrator.py | chronicler/tests/test_initialization.py（输入摘要、陈旧计划拒绝） |
 | FR-INIT-007 | 批量执行与实时进度 | what/initialization.md §执行语义 | chronicler/app/initialization/orchestrator.py + router.py（SSE） | 单测全量通过；真实组件批量部署按部署 runbook 验收 |
 | FR-INIT-008 | 幂等重试与中断续接 | what/initialization.md §执行语义 | chronicler/app/initialization/store.py + orchestrator.py | 单测全量通过；进程强停续接为发布前黑盒项 |
 | FR-INIT-009 | 组件自描述初始化契约 | what/initialization.md §组件 setup.yaml 契约 | chronicler/components/*/plugin.yaml + setup.yaml + hooks/initialize.py | chronicler/tests/test_initialization.py（15 个声明、核心无组件名边界）；容器 hook 由部署验收 |
 | FR-INIT-010 | 初始化完成与环境设置中心 | what/initialization.md §生命周期与可见性 | chronicler/app/initialization/lifecycle.py + security.py + router.py | chronicler/tests/test_initialization.py（关闭与凭据重放） |
 | FR-INIT-011 | 初始化记录与诊断 | what/initialization.md §计划与运行模型 | chronicler/app/initialization/store.py + router.py | 人工：history、SSE 与脱敏 diagnostics API |
+| FR-INIT-012 | 恢复式重新初始化（旧数据保留与收敛，ADR-0039） | what/initialization.md §生命周期与可见性 | chronicler/app/initialization/config_store.py + orchestrator.py + preflight.py + scripts/reset-initialization.py | 单测（秘密留空保持）；人工：旧数据环境重跑初始化验收 |
+| FR-INIT-013 | 秘密再导出与重置（按类型分级，ADR-0040） | what/initialization.md §安全与错误呈现 | chronicler/app/vault/（一期：admin 显示/下载/轮换）+ chronicler/app/initialization/config_store.py + router.py | chronicler/tests/test_vault.py（显示/轮换/审计脱敏）；人工：密钥再导出与口令重置验收 |
+| FR-INIT-014 | 秘密加密快照与主密钥恢复（ADR-0041） | what/initialization.md §计划与运行模型 | chronicler/app/vault/（crypto+exporter）+ scripts/vault-inspect.py | chronicler/tests/test_vault.py（快照无明文/错误密钥解密失败/重建一致） |
+| FR-INIT-015 | 文件型秘密统一管理（签名证书/keystore，ADR-0042） | what/initialization.md §计划与运行模型 | chronicler/app/vault/（kind=file）+ scripts/vault-inspect.py | chronicler/tests/test_vault.py（文件恢复逐字节一致）；人工：过期告警与 CI 注入验收 |
+| FR-INIT-016 | 秘密作用域分权与审计（ADR-0043） | what/initialization.md §安全与错误呈现 | chronicler/app/initialization/ + app 用户与审计 | 单测（越权拒读/审计脱敏/包口令）；人工：授权收回与分发包验收 |
+| FR-INIT-017 | 接收者密钥体系与提交即加密（ADR-0044） | what/initialization.md §安全与错误呈现 | chronicler/app/initialization/（接收者登记/集合加解密） | 单测（集合外私钥不可解/免私钥提交/增补接收者重加密） |
 | FR-KB-001 | Markdown vault 事实源 | what/knowledge.md §分区规范 | 已废弃（知识改由 shadow 仓/全局资产库承载，ADR-0028/FR-MGR-013/014） | - |
 | FR-KB-002 | 来源分区与标注 | what/knowledge.md §frontmatter 契约 | 已废弃（同上，分区约定将迁入 shadow 仓结构） | - |
 | FR-KB-003 | 语义检索（Qdrant） | what/knowledge.md §索引契约 | chronicler/components/qdrant/ | 人工：MCP 语义查询 |
