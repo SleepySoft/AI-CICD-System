@@ -288,6 +288,56 @@ class VaultTest(unittest.TestCase):
         assert (outdir / "text" / "infra" / "API_TOKEN.txt").read_text(encoding="utf-8") == SECRET_VALUE
         assert (outdir / "files" / "signing" / "upload-keystore").read_bytes() == b"\x00\x01keystore-bytes"
 
+    # ---------- 导出包恢复（新部署/灾难恢复） ----------
+
+    def _import_export(self, export: Path, force: bool = False):
+        with open(export, "rb") as f:
+            return self.admin.post("/api/vault/import-export",
+                                   files={"file": ("export.tar", f.read(), "application/x-tar")},
+                                   data={"force": "true" if force else "false"})
+
+    def test_import_export_restore(self):
+        self._create_text()
+        file_bytes = b"\x00\x01keystore-bytes"
+        self._create_file(data=file_bytes)
+        export = self._export()
+        # 模拟新部署：清空 vault（程序外清理），主密钥已由解锁流程恢复
+        db.execute("DELETE FROM vault_secrets")
+        assert self.admin.get("/api/vault").json() == []
+        r = self._import_export(export)
+        assert r.status_code == 200, r.text
+        assert r.json()["imported"] == 2
+        items = self.admin.get("/api/vault").json()
+        text_item = next(i for i in items if i["kind"] == "text")
+        file_item = next(i for i in items if i["kind"] == "file")
+        assert self.admin.post(f"/api/vault/{text_item['id']}/reveal").text == SECRET_VALUE
+        assert self.admin.get(f"/api/vault/{file_item['id']}/download").content == file_bytes
+        assert file_item["summary"] == "Android 签名"  # 元数据成套恢复
+        # 幂等：重复恢复全部跳过
+        assert self._import_export(export).json()["skipped"] == 2
+
+    def test_import_export_conflict_and_force(self):
+        sid = self._create_text()
+        export = self._export()
+        self.admin.post(f"/api/vault/{sid}/value", json={"value": "changed-later"})
+        r = self._import_export(export)
+        assert r.json()["conflicts"] == ["infra/API_TOKEN"]
+        assert self.admin.post(f"/api/vault/{sid}/reveal").text == "changed-later"  # 未被覆盖
+        r2 = self._import_export(export, force=True)
+        assert r2.json()["imported"] == 1
+        assert self.admin.post(f"/api/vault/{sid}/reveal").text == SECRET_VALUE
+
+    def test_import_export_wrong_key(self):
+        from pyrage import x25519
+        self._create_text()
+        export = self._export()
+        db.execute("DELETE FROM vault_secrets")
+        # 空库 + 错误主密钥（新部署放了别的密钥）→ 明确报错而非静默
+        (self.secrets_dir / "master.key").write_text(str(x25519.Identity.generate()), encoding="utf-8")
+        r = self._import_export(export)
+        assert r.status_code == 400
+        assert "解锁" in r.json()["detail"]
+
 
 if __name__ == "__main__":
     unittest.main()

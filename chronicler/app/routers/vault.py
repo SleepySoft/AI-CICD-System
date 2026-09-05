@@ -120,6 +120,22 @@ def env_status():
     return sync.env_status(_load_components())
 
 
+@router.post("/import-export")
+async def import_export(user: dict = Depends(require_admin),
+                        file: UploadFile = File(...), force: bool = Form(False)):
+    """从导出包恢复秘密（新部署/灾难恢复）；冲突默认不覆盖。"""
+    _guard()
+    data = await file.read()
+    try:
+        result = exporter.restore_export(data, actor=user["username"], force=force)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    audit(user["username"], "vault.import_export", "",
+          f"imported={result['imported']} skipped={result['skipped']} "
+          f"conflicts={len(result['conflicts'])} force={force}")
+    return result
+
+
 @router.get("/export")
 def export_all(user: dict = Depends(require_admin)):
     """全量导出：明文 manifest + age 密文负载（ADR-0041）。"""

@@ -68,6 +68,8 @@ const app = createApp({
     const vaultEnv = ref({ missing_in_vault: [], drifted: [], missing_in_env: [] });
     const vaultUnlockKey = ref("");
     const vaultAckInput = ref("");
+    const showVaultRestore = ref(false);
+    let vaultRestoreData = null;  // 非响应式 File 对象
 
     const showNewProject = ref(false);
     const newProject = ref({ name: "", git_url: "", default_branch: "", ci_url: "", description: "", harness: "" });
@@ -871,6 +873,30 @@ const app = createApp({
     async function loadVaultAuditOnly() {
       try { vaultAudit.value = await api("/api/vault/audit"); } catch (_) {}
     }
+    function openVaultRestore() { vaultRestoreData = null; showVaultRestore.value = true; }
+    function onVaultRestoreFile(uploadFile) { vaultRestoreData = uploadFile.raw; }
+    async function restoreVault(force) {
+      if (!vaultRestoreData) { ElementPlus.ElMessage.warning("请选择导出包"); return; }
+      acting.value = true;
+      try {
+        const fd = new FormData();
+        fd.append("file", vaultRestoreData);
+        fd.append("force", force ? "true" : "false");
+        const resp = await apiRaw("/api/vault/import-export", { method: "POST", body: fd });
+        const r = await resp.json();
+        if (r.conflicts && r.conflicts.length && !force) {
+          await ElementPlus.ElMessageBox.confirm(
+            `${r.conflicts.length} 条与现有值不一致（${r.conflicts.join("、")}）。以导出包为准覆盖？`,
+            "恢复冲突", { type: "warning", confirmButtonText: "以导出包为准", cancelButtonText: "取消" });
+          return restoreVault(true);
+        }
+        toast.ok(`恢复完成：新增/更新 ${r.imported}，跳过 ${r.skipped}` +
+                 (r.corrupted?.length ? `；${r.corrupted.length} 条校验失败！` : ""));
+        showVaultRestore.value = false;
+        loadVault();
+      } catch (e) { if (e !== "cancel" && e?.message) toast.err(e); }
+      finally { acting.value = false; }
+    }
 
     function loadAll() {
       loadProjects(); loadRuns(); loadTasks(); loadConfig(); loadTools();
@@ -929,6 +955,7 @@ const app = createApp({
       saveVaultEdit, removeVault, exportVault, revealMaster,
       vaultStatus, vaultEnv, vaultUnlockKey, vaultAckInput, vaultDriftMap,
       unlockVault, ackMaster, importEnv,
+      showVaultRestore, openVaultRestore, onVaultRestoreFile, restoreVault,
     };
   },
 });

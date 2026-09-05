@@ -401,6 +401,7 @@
             <div class="tool-name">主密钥
               <span style="margin-left:auto">
                 <el-button size="small" text type="warning" @click="revealMaster">显示主密钥</el-button>
+                <el-button size="small" plain @click="openVaultRestore">从导出包恢复</el-button>
                 <el-button size="small" type="primary" plain @click="exportVault">全量导出</el-button>
               </span>
             </div>
@@ -884,6 +885,18 @@
       <template #footer>
         <el-button @click="showVaultMaster = false">稍后</el-button>
         <el-button type="primary" @click="ackMaster" :disabled="!vaultAckInput">确认已收存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 从导出包恢复 -->
+    <el-dialog v-model="showVaultRestore" title="从导出包恢复秘密" width="520px">
+      <el-alert type="info" :closable="false" title="上传 vault-export-*.tar；包内需用当前主密钥解密（新机器请先在锁定提示处解锁恢复旧主密钥）。同名同值跳过，同名不同值默认不覆盖。" style="margin-bottom:12px"></el-alert>
+      <el-upload :auto-upload="false" :limit="1" :on-change="onVaultRestoreFile" :on-remove="() => vaultRestoreData = null">
+        <el-button size="small">选择导出包</el-button>
+      </el-upload>
+      <template #footer>
+        <el-button @click="showVaultRestore = false">取消</el-button>
+        <el-button type="primary" @click="restoreVault(false)" :loading="acting">恢复</el-button>
       </template>
     </el-dialog>
 

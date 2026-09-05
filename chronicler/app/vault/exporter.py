@@ -81,3 +81,53 @@ def build_export() -> tuple[bytes, int]:
         _add(tar, "payload.age", encrypted, now, 0o644)
         _add(tar, "README.txt", README.encode("utf-8"), now, 0o644)
     return out.getvalue(), len(items)
+
+
+def restore_export(blob: bytes, actor: str, force: bool = False) -> dict:
+    """从导出包恢复进 vault（新部署/灾难恢复）。
+
+    流程：校验 payload 摘要 → 主密钥解密 → 逐条校验明文 sha256 → upsert。
+    冲突（同名不同值）默认不覆盖，报告由 admin 确认后 force 重试。
+    """
+    try:
+        with tarfile.open(fileobj=io.BytesIO(blob)) as tar:
+            manifest = json.loads(tar.extractfile("manifest.json").read().decode("utf-8"))
+            payload = tar.extractfile("payload.age").read()
+    except (KeyError, tarfile.TarError, json.JSONDecodeError) as e:
+        raise ValueError(f"不是有效的导出包：{e}")
+    if manifest.get("format") != FORMAT:
+        raise ValueError("不是 Chronicler 秘密库导出包（format 不匹配）")
+    if hashlib.sha256(payload).hexdigest() != manifest.get("payload_sha256"):
+        raise ValueError("payload.age 与清单摘要不一致：导出包可能已被篡改")
+    identity = crypto.load_identity()
+    try:
+        plain_tar = crypto.decrypt(payload, identity)
+    except Exception:
+        raise ValueError("无法用当前主密钥解密：请先通过「解锁」恢复导出包对应的主密钥"
+                         f"（本包接收者：{manifest.get('recipient', '?')}）")
+    entries = {}
+    with tarfile.open(fileobj=io.BytesIO(plain_tar)) as tar:
+        for member in tar.getmembers():
+            if member.isfile():
+                entries[member.name] = tar.extractfile(member).read()
+    imported, skipped, conflicts, corrupted = 0, 0, [], []
+    for item in manifest.get("items", []):
+        data = entries.get(item["path"])
+        if data is None or hashlib.sha256(data).hexdigest() != item["sha256"]:
+            corrupted.append(item["path"])
+            continue
+        existing = store.find(item["scope"], item["name"])
+        if existing and existing["sha256"] == item["sha256"]:
+            skipped += 1
+            continue
+        if existing and not force:
+            conflicts.append(f"{item['scope']}/{item['name']}")
+            continue
+        store.upsert(kind=item["kind"], name=item["name"], scope=item["scope"], plain=data,
+                     actor=actor, secret_type=item["secret_type"],
+                     rotation_risk=item["rotation_risk"], summary=item.get("summary", ""),
+                     owner=item.get("owner", ""), expires_at=item.get("expires_at"),
+                     filename=item.get("filename", ""))
+        imported += 1
+    return {"imported": imported, "skipped": skipped, "conflicts": conflicts,
+            "corrupted": corrupted, "total": len(manifest.get("items", []))}
