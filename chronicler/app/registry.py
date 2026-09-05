@@ -30,14 +30,6 @@ TASK_TYPES = (
      "desc": "从指定 Run、提交或故障中沉淀可验证的项目经验"},
 )
 
-LEGACY_TASK_TYPES = {
-    "code-insight": {"prompt": "project-analysis", "mode": "architecture"},
-    "deviation-analysis": {"prompt": "project-analysis", "mode": "requirements"},
-    "compliance-check": {"prompt": "project-analysis", "mode": "compliance"},
-    "structured-docs": {"prompt": "documentation-update", "mode": "incremental"},
-    "knowhow-distill": {"prompt": "knowledge-capture", "mode": "focused"},
-}
-
 
 def _write_data_yaml(name: str, data, header: str = "") -> Path:
     """写 DATA 覆盖文件（LF 行尾；父目录自动创建）"""
@@ -148,16 +140,13 @@ def get_publish_policy(project: dict | None = None) -> str:
 
 
 def get_task_type(task_type: str) -> dict:
-    """解析任务到 Prompt 家族与模式；旧任务类型仅作存量兼容。"""
+    """解析任务到 Prompt 家族与模式。旧任务类型的兼容映射已按计划清理（ADR-0034 后果项）。"""
     current = next((dict(item) for item in TASK_TYPES if item["name"] == task_type), None)
     if current:
         return current
     if task_type == "custom":
         return {"name": "custom", "prompt": "", "mode": "custom",
                 "desc": "使用任务级 Prompt 覆盖的自定义任务"}
-    legacy = LEGACY_TASK_TYPES.get(task_type)
-    if legacy:
-        return {"name": task_type, "desc": "旧任务类型（兼容）", "legacy": True, **legacy}
     raise HTTPException(status_code=404, detail=f"未知任务类型：{task_type}")
 
 

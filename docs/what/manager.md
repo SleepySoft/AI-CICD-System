@@ -148,7 +148,7 @@ GET    /api/health                   供 Uptime Kuma
 
 职责边界：项目分析只报告、不改文档；文档更新消费需求、实现和已验证分析，不重新做全项目审计；周期报告聚合已有事实，不替代分析；经验沉淀要求具体来源且允许零产出，不做泛化代码摘要。事实优先级统一为：生效需求 > 代码/测试/配置 > 已接受 ADR/正式文档 > Git 历史 > 既有报告与 AI 草稿。
 
-存量兼容：`code-insight`、`deviation-analysis`、`compliance-check` 映射到 `project-analysis` 的不同 mode，`structured-docs` 映射到 `documentation-update`，`knowhow-distill` 映射到 `knowledge-capture`；兼容类型不再出现在新建任务选项和预置任务中。
+旧任务类型（`code-insight`、`deviation-analysis`、`compliance-check`、`structured-docs`、`knowhow-distill`）的兼容映射已按计划清理（ADR-0034 后果项）：存量 task_def 触发时返回“未知任务类型”，需在任务页删除或重建；不再出现在新建任务选项和预置任务中。
 
 自定义任务：选 repo + agent + prompt + cron 即成新任务（`type=custom`）。
 

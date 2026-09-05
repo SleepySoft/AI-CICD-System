@@ -21,20 +21,14 @@ class PromptRegistryTest(unittest.TestCase):
         self.assertEqual("daily", registry.get_task_type("daily-report")["mode"])
         self.assertEqual("comprehensive", registry.get_task_type("comprehensive-report")["mode"])
 
-    def test_legacy_task_types_resolve_to_new_prompt_families(self):
-        expected = {
-            "code-insight": ("project-analysis", "architecture"),
-            "deviation-analysis": ("project-analysis", "requirements"),
-            "compliance-check": ("project-analysis", "compliance"),
-            "structured-docs": ("documentation-update", "incremental"),
-            "knowhow-distill": ("knowledge-capture", "focused"),
-        }
-
-        for task_type, mapping in expected.items():
+    def test_legacy_task_types_are_rejected(self):
+        """旧任务类型的兼容映射已按计划清理（ADR-0034 后果项）：直接拒绝。"""
+        for task_type in ("code-insight", "deviation-analysis", "compliance-check",
+                          "structured-docs", "knowhow-distill"):
             with self.subTest(task_type=task_type):
-                _, _, spec = registry.load_task_prompt(task_type)
-                self.assertEqual(mapping, (spec["prompt"], spec["mode"]))
-                self.assertTrue(spec["legacy"])
+                with self.assertRaises(HTTPException) as raised:
+                    registry.load_task_prompt(task_type)
+                self.assertEqual(404, raised.exception.status_code)
 
     def test_custom_task_requires_its_own_prompt(self):
         self.assertEqual("custom", registry.get_task_type("custom")["mode"])
