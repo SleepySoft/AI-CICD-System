@@ -75,6 +75,13 @@ def sync_project(pid: int) -> dict:
     dest = repo_dir(pid)
     try:
         if dest.is_dir():
+            if not _is_own_repo(dest):
+                # 损坏克隆：禁止在其中执行任何 git 操作（会向上逃逸到宿主仓库）。
+                # 程序不自行删除（清理是显式人工动作），引导用户走「重置克隆」。
+                _mark_sync_error(pid, "工作区克隆已损坏（不是独立 git 仓库），请用「重置克隆」重建")
+                raise HTTPException(status_code=409,
+                                    detail="工作区克隆已损坏（不是独立 git 仓库），已阻止同步；"
+                                           "请在工程页用「重置克隆」重建")
             r = _git(["-C", str(dest), "fetch", "--all", "--prune"], timeout=300)
             if r.returncode != 0:
                 raise RuntimeError(f"git fetch 失败：{r.stderr.strip()[:500]}")
@@ -125,6 +132,20 @@ def _git(args: list[str], timeout: int = 120) -> subprocess.CompletedProcess:
     return subprocess.run(["git", "-c", "http.proxy=", "-c", "https.proxy=", *args],
                           capture_output=True, env=env,
                           encoding="utf-8", errors="replace", timeout=timeout)
+
+
+def _is_own_repo(dest: Path) -> bool:
+    """dest 必须是独立的 git 仓库（其 toplevel 就是自身）。
+    损坏克隆（.git 残缺/丢失）时 git 会向上逃逸到宿主仓库——2026-09-05 实测：
+    残缺的 data/workspace/repos/<id> 导致 reset --hard 打在主源码库上，丢掉未推送提交。"""
+    r = _git(["-C", str(dest), "rev-parse", "--show-toplevel"])
+    if r.returncode != 0:
+        return False
+    try:
+        return os.path.normcase(str(Path(r.stdout.strip()).resolve())) == \
+            os.path.normcase(str(dest.resolve()))
+    except OSError:
+        return False
 
 
 def _last_commit(pid: int) -> str | None:
