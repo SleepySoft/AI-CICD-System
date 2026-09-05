@@ -1,6 +1,6 @@
 # 文档索引
 
-> 版本：v1.12 · 日期：2026-09-05 · 状态：生效
+> 版本：v1.13 · 日期：2026-09-05 · 状态：生效
 > 定位：docs/ 全部文档的目录与状态总表；写作规范见 `.agents/skills/docs-management/`
 
 ## 文档总表
@@ -36,6 +36,7 @@
 | 部署与交付机制 | how/deployment.md | how | 生效 |
 | 工具链镜像机制 | how/images-toolchain.md | how | 生效 |
 | SSO 接线机制 | how/sso-wiring.md | how | 生效 |
+| 秘密库与组件密钥对接设计 | how/secrets-vault.md | how | 生效 |
 | ADR-0001 Gitea | adr/0001-gitea-as-git-platform.md | adr | 已接受 |
 | ADR-0002 Jenkins | adr/0002-jenkins-for-cicd.md | adr | 已接受 |
 | ADR-0003 Miniforge | adr/0003-miniforge-replaces-anaconda.md | adr | 已接受 |
@@ -111,3 +112,4 @@
 | 任务管理 | why/vision.md | what/task-mgmt.md | .agents/skills/openproject/ | requirements/functional/task.md |
 | Manager | why/vision.md | what/manager.md | how/manager-architecture.md | requirements/functional/manager.md |
 | Web 初始化与环境设置 | why/principles.md | what/initialization.md | how/initialization-architecture.md | requirements/functional/initialization.md |
+| 秘密库（vault） | why/principles.md | what/initialization.md §安全 | how/secrets-vault.md | requirements/functional/initialization.md（FR-INIT-012~017） |
