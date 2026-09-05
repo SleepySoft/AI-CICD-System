@@ -6,3 +6,5 @@ itsdangerous
 docker
 croniter
 cryptography
+pyrage
+python-multipart

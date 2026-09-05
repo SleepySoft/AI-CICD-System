@@ -72,6 +72,25 @@ CREATE TABLE IF NOT EXISTS audit_log (
     target TEXT DEFAULT '', detail TEXT DEFAULT '',
     at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS vault_secrets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    scope TEXT NOT NULL DEFAULT 'infra',       -- 作用域（FR-INIT-016，默认对齐工程）
+    kind TEXT NOT NULL,                        -- text | file（ADR-0042）
+    secret_type TEXT DEFAULT 'password',       -- password|client-secret|encryption-key|api-token|access-key|certificate
+    rotation_risk TEXT DEFAULT 'coordinated',  -- low|coordinated|critical
+    summary TEXT DEFAULT '',                   -- 用途说明（透明元数据）
+    owner TEXT DEFAULT '',                     -- 属主（工程/团队/人）
+    expires_at REAL,                           -- 过期时间（证书/令牌，可空）
+    filename TEXT DEFAULT '',                  -- kind=file 的原始文件名
+    size INTEGER NOT NULL DEFAULT 0,
+    sha256 TEXT NOT NULL,                      -- 明文摘要（完整性验证用）
+    ciphertext BLOB NOT NULL,                  -- age 密文（主密钥在 data/ 之外）
+    created_by TEXT DEFAULT '',
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL,
+    UNIQUE(scope, name)
+);
 """
 
 

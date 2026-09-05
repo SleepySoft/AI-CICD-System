@@ -46,6 +46,25 @@ const app = createApp({
     const resetPwUser = ref("");
     const resetPwForm = ref({ password: "", temporary: true });
 
+    // ---- 秘密库（admin，ADR-0041~0044 一期）----
+    const vaultItems = ref([]);
+    const vaultAudit = ref([]);
+    const loadingVault = ref(false);
+    const vaultMaster = ref({ recipient: "", path: "" });
+    const vaultMasterSecret = ref("");
+    const showVaultMaster = ref(false);
+    const showVaultText = ref(false);
+    const vaultTextForm = ref({});
+    const showVaultFile = ref(false);
+    const vaultFileForm = ref({});
+    let vaultFileData = null;  // 非响应式 File 对象
+    const showVaultReveal = ref(false);
+    const vaultRevealName = ref("");
+    const vaultRevealValue = ref("");
+    const showVaultEdit = ref(false);
+    const vaultEditRow = ref(null);
+    const vaultEditForm = ref({});
+
     const showNewProject = ref(false);
     const newProject = ref({ name: "", git_url: "", default_branch: "", ci_url: "", description: "", harness: "" });
     const showEdit = ref(false);
@@ -644,6 +663,165 @@ const app = createApp({
       } catch (e) { if (e !== "cancel" && e?.message) toast.err(e); }
     }
 
+    // ---- 秘密库 ----
+    function fmtSize(n) {
+      if (n == null) return "-";
+      if (n < 1024) return n + "B";
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + "KB";
+      return (n / 1024 / 1024).toFixed(1) + "MB";
+    }
+    async function apiRaw(path, opts = {}) {  // 非 JSON 响应（文本/文件下载）的 fetch 封装
+      const resp = await fetch(path, opts);
+      if (resp.status === 401) { user.value = null; throw new Error("未登录"); }
+      if (!resp.ok) {
+        let msg = resp.statusText;
+        try { msg = (await resp.json()).detail || msg; } catch (_) {}
+        throw new Error(msg);
+      }
+      return resp;
+    }
+    function saveBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    }
+    function downloadFilename(resp, fallback) {
+      const cd = resp.headers.get("content-disposition") || "";
+      const m = cd.match(/filename="?([^";]+)/);
+      return m ? m[1] : fallback;
+    }
+    async function loadVault() {
+      loadingVault.value = true;
+      try {
+        const [items, master, auditRows] = await Promise.all([
+          api("/api/vault"), api("/api/vault/master"), api("/api/vault/audit"),
+        ]);
+        vaultItems.value = items;
+        vaultMaster.value = master;
+        vaultAudit.value = auditRows;
+      } catch (e) { toast.err(e); }
+      finally { loadingVault.value = false; }
+    }
+    function openVaultText() {
+      vaultTextForm.value = { name: "", scope: "infra", secret_type: "password",
+                              rotation_risk: "coordinated", summary: "", owner: "",
+                              expires_at: null, value: "" };
+      showVaultText.value = true;
+    }
+    async function createVaultText() {
+      const f = vaultTextForm.value;
+      if (!f.name || !f.value) { ElementPlus.ElMessage.warning("名称与值必填"); return; }
+      acting.value = true;
+      try {
+        await api("/api/vault/text", { method: "POST", body: JSON.stringify({
+          name: f.name, scope: f.scope || "infra", secret_type: f.secret_type,
+          rotation_risk: f.rotation_risk, summary: f.summary, owner: f.owner,
+          expires_at: f.expires_at ? Number(f.expires_at) : null, value: f.value }) });
+        toast.ok("已加密保存"); showVaultText.value = false; loadVault();
+      } catch (e) { toast.err(e); }
+      finally { acting.value = false; }
+    }
+    function openVaultFile() {
+      vaultFileForm.value = { name: "", scope: "signing", secret_type: "access-key",
+                              rotation_risk: "critical", summary: "", owner: "", expires_at: null };
+      vaultFileData = null;
+      showVaultFile.value = true;
+    }
+    function onVaultFileChange(uploadFile) { vaultFileData = uploadFile.raw; }
+    function onVaultFileRemove() { vaultFileData = null; }
+    async function createVaultFile() {
+      if (!vaultFileData) { ElementPlus.ElMessage.warning("请选择文件"); return; }
+      acting.value = true;
+      try {
+        const fd = new FormData();
+        fd.append("file", vaultFileData);
+        for (const [k, v] of Object.entries(vaultFileForm.value)) {
+          if (v !== null && v !== "") fd.append(k, v);
+        }
+        await apiRaw("/api/vault/file", { method: "POST", body: fd });
+        toast.ok("已加密保存"); showVaultFile.value = false; loadVault();
+      } catch (e) { toast.err(e); }
+      finally { acting.value = false; }
+    }
+    async function revealVault(row) {
+      try {
+        const resp = await apiRaw(`/api/vault/${row.id}/reveal`, { method: "POST" });
+        vaultRevealValue.value = await resp.text();
+        vaultRevealName.value = `${row.scope}/${row.name}`;
+        showVaultReveal.value = true;
+        loadVaultAuditOnly();
+      } catch (e) { toast.err(e); }
+    }
+    async function downloadVault(row) {
+      try {
+        const resp = await apiRaw(`/api/vault/${row.id}/download`);
+        saveBlob(await resp.blob(), downloadFilename(resp, row.filename || row.name));
+        toast.ok("已下载（已写审计）"); loadVaultAuditOnly();
+      } catch (e) { toast.err(e); }
+    }
+    function openVaultEdit(row) {
+      vaultEditRow.value = row;
+      vaultEditForm.value = { summary: row.summary || "", owner: row.owner || "",
+                              secret_type: row.secret_type, rotation_risk: row.rotation_risk,
+                              expires_at: row.expires_at ? String(row.expires_at) : null, value: "" };
+      showVaultEdit.value = true;
+    }
+    async function saveVaultEdit() {
+      const f = vaultEditForm.value, row = vaultEditRow.value;
+      acting.value = true;
+      try {
+        await api(`/api/vault/${row.id}`, { method: "PATCH", body: JSON.stringify({
+          summary: f.summary, owner: f.owner, secret_type: f.secret_type,
+          rotation_risk: f.rotation_risk,
+          expires_at: f.expires_at ? Number(f.expires_at) : null }) });
+        if (f.value && f.value.trim()) {
+          if (row.rotation_risk === "critical") {
+            await ElementPlus.ElMessageBox.confirm(
+              "该秘密标记为高危轮换：旧值加密的数据/会话将不可恢复，确认轮换？",
+              "高危轮换", { type: "error", confirmButtonText: "确认轮换", cancelButtonText: "取消" });
+          }
+          await api(`/api/vault/${row.id}/value`, { method: "POST", body: JSON.stringify({ value: f.value }) });
+          toast.ok("元数据已保存，值已轮换");
+        } else {
+          toast.ok("已保存");
+        }
+        showVaultEdit.value = false; loadVault();
+      } catch (e) { if (e !== "cancel" && e?.message) toast.err(e); }
+      finally { acting.value = false; }
+    }
+    async function removeVault(row) {
+      try {
+        await ElementPlus.ElMessageBox.confirm(
+          `确认删除秘密 ${row.scope}/${row.name}？删除后仅存于历史导出包中。`,
+          "删除秘密", { type: "warning", confirmButtonText: "确认删除", cancelButtonText: "取消" });
+        await api(`/api/vault/${row.id}`, { method: "DELETE" });
+        toast.ok("已删除"); loadVault();
+      } catch (e) { if (e !== "cancel" && e?.message) toast.err(e); }
+    }
+    async function exportVault() {
+      try {
+        const resp = await apiRaw("/api/vault/export");
+        saveBlob(await resp.blob(), downloadFilename(resp, "vault-export.tar"));
+        toast.ok("导出包已下载：manifest.json 明文可浏览，payload.age 需主密钥解密（scripts/vault-inspect.py）");
+        loadVaultAuditOnly();
+      } catch (e) { toast.err(e); }
+    }
+    async function revealMaster() {
+      try {
+        await ElementPlus.ElMessageBox.confirm(
+          "主密钥可解开全部秘密。请立即转存密码管理器并做离线备份。本次查看将写审计。",
+          "显示主密钥", { type: "warning", confirmButtonText: "显示", cancelButtonText: "取消" });
+        const r = await api("/api/vault/master/reveal", { method: "POST" });
+        vaultMasterSecret.value = r.secret;
+        showVaultMaster.value = true;
+        loadVaultAuditOnly();
+      } catch (e) { if (e !== "cancel" && e?.message) toast.err(e); }
+    }
+    async function loadVaultAuditOnly() {
+      try { vaultAudit.value = await api("/api/vault/audit"); } catch (_) {}
+    }
+
     function loadAll() {
       loadProjects(); loadRuns(); loadTasks(); loadConfig(); loadTools();
       if (isAdmin.value) loadUsers();
@@ -655,6 +833,7 @@ const app = createApp({
       else if (name === "runs") { loadTasks(); loadRuns(); }
       else if (name === "config") loadConfig();
       else if (name === "users") loadUsers();
+      else if (name === "vault") loadVault();
     }
 
     onMounted(async () => {
@@ -692,6 +871,12 @@ const app = createApp({
       openPrompt, savePrompt, resetPrompt,
       loadTools, ctlTool, createUser, removeUser, openResetPw, doResetPw, showResetPw, resetPwUser, resetPwForm,
       saveDefaultHarness, openHarnessForm, saveHarness, removeHarness,
+      vaultItems, vaultAudit, loadingVault, vaultMaster, vaultMasterSecret, showVaultMaster,
+      showVaultText, vaultTextForm, showVaultFile, vaultFileForm,
+      showVaultReveal, vaultRevealName, vaultRevealValue, showVaultEdit, vaultEditRow, vaultEditForm,
+      fmtSize, loadVault, openVaultText, createVaultText, openVaultFile, onVaultFileChange,
+      onVaultFileRemove, createVaultFile, revealVault, downloadVault, openVaultEdit,
+      saveVaultEdit, removeVault, exportVault, revealMaster,
     };
   },
 });

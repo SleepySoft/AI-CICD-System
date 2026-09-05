@@ -58,9 +58,9 @@ def create_app(mode: str = "normal") -> FastAPI:
     backfill_preset_tasks()
     start_scheduler()
 
-    from .routers import auth, config, oidc, projects, runs, tasks, tools, users
+    from .routers import auth, config, oidc, projects, runs, tasks, tools, users, vault
     for item in (auth.router, oidc.router, users.router, projects.router, runs.router,
-                 tasks.router, config.router, tools.router):
+                 tasks.router, config.router, tools.router, vault.router):
         app.include_router(item)
 
     @app.on_event("startup")

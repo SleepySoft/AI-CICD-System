@@ -35,3 +35,7 @@ chronicler-server.err.log
 /build/chronicler/
 /dist/chronicler-*/
 chronicler/app/_sealed_profile.py
+
+# 秘密库主密钥与敏感文件（ADR-0041：明文永不入库；age 密文快照可入库）
+secrets/*
+!secrets/*.age

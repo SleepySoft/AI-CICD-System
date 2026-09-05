@@ -42,7 +42,7 @@
             {{ showLocalLogin ? '收起' : '本地应急账号登录' }}
           </el-link>
         </div>
-      </template>
+        </template>
       <el-form v-if="authBackend !== 'oidc' || showLocalLogin" label-position="top" @submit.prevent style="margin-top:8px">
         <el-form-item label="用户名"><el-input v-model="loginForm.username" @keyup.enter="login"></el-input></el-form-item>
         <el-form-item label="密码"><el-input v-model="loginForm.password" type="password" show-password @keyup.enter="login"></el-input></el-form-item>
@@ -378,6 +378,72 @@
             </el-table-column>
           </el-table>
         </el-tab-pane>
+
+        <!-- ============ 秘密库（admin，ADR-0041~0044 一期） ============ -->
+        <el-tab-pane v-if="isAdmin" label="秘密库" name="vault">
+          <div class="card-box">
+            <div class="tool-name">主密钥
+              <span style="margin-left:auto">
+                <el-button size="small" text type="warning" @click="revealMaster">显示主密钥</el-button>
+                <el-button size="small" type="primary" plain @click="exportVault">全量导出</el-button>
+              </span>
+            </div>
+            <div class="tool-desc">全部秘密以此主密钥（age）加密存储；主密钥仅存于宿主 secrets/master.key，永不入库。
+              请转存密码管理器并做离线备份——丢失且无副本时全部秘密不可恢复（ADR-0041）。</div>
+            <div class="muted" style="font-family:Consolas,monospace">{{ vaultMaster.recipient || '加载中…' }}</div>
+            <div class="muted">{{ vaultMaster.path }}</div>
+          </div>
+          <div style="margin-bottom: 8px">
+            <el-button size="small" @click="loadVault" :loading="loadingVault">刷新</el-button>
+            <el-button size="small" type="primary" @click="openVaultText">新增文本秘密</el-button>
+            <el-button size="small" type="primary" plain @click="openVaultFile">新增秘密文件</el-button>
+          </div>
+          <el-table :data="vaultItems" size="small" style="width:100%">
+            <el-table-column label="名称（作用域/名称）" min-width="180">
+              <template #default="{ row }"><span style="font-family:Consolas,monospace">{{ row.scope }}/{{ row.name }}</span></template>
+            </el-table-column>
+            <el-table-column label="类型" width="80">
+              <template #default="{ row }">
+                <el-tag size="small" :type="row.kind==='file'?'warning':'info'" effect="plain">{{ row.kind === 'file' ? '文件' : '文本' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="secret_type" label="秘密类型" width="110"></el-table-column>
+            <el-table-column label="轮换风险" width="90">
+              <template #default="{ row }">
+                <el-tag size="small" :type="row.rotation_risk==='critical'?'danger':(row.rotation_risk==='coordinated'?'warning':'success')" effect="plain">
+                  {{ { low: '低', coordinated: '需协调', critical: '高危' }[row.rotation_risk] }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="summary" label="用途" min-width="140" show-overflow-tooltip></el-table-column>
+            <el-table-column prop="owner" label="属主" width="110" show-overflow-tooltip></el-table-column>
+            <el-table-column label="过期时间" width="160">
+              <template #default="{ row }">
+                <span :style="row.expires_at && row.expires_at * 1000 < Date.now() ? 'color:#f56c6c' : ''">{{ row.expires_at ? fmtTime(row.expires_at) : '—' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="大小" width="80"><template #default="{ row }">{{ fmtSize(row.size) }}</template></el-table-column>
+            <el-table-column label="更新时间" width="160"><template #default="{ row }">{{ fmtTime(row.updated_at) }}</template></el-table-column>
+            <el-table-column label="操作" width="200" align="center">
+              <template #default="{ row }">
+                <el-button v-if="row.kind==='text'" size="small" text type="primary" @click="revealVault(row)">显示</el-button>
+                <el-button size="small" text type="primary" @click="downloadVault(row)">下载</el-button>
+                <el-button size="small" text @click="openVaultEdit(row)">编辑</el-button>
+                <el-button size="small" text type="danger" @click="removeVault(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <p v-if="!vaultItems.length" class="muted">暂无秘密；可新增文本秘密或上传秘密文件</p>
+
+          <div class="group-title">存取审计（永不含秘密值）</div>
+          <el-table :data="vaultAudit" size="small" style="width:100%" max-height="300">
+            <el-table-column label="时间" width="170"><template #default="{ row }">{{ fmtTime(row.at) }}</template></el-table-column>
+            <el-table-column prop="actor" label="操作人" width="110"></el-table-column>
+            <el-table-column prop="action" label="动作" width="150"></el-table-column>
+            <el-table-column prop="target" label="对象" min-width="170" show-overflow-tooltip></el-table-column>
+            <el-table-column prop="detail" label="详情" min-width="130" show-overflow-tooltip></el-table-column>
+          </el-table>
+        </el-tab-pane>
       </el-tabs>
     </div>
 
@@ -670,12 +736,132 @@
         </template>
       </el-descriptions>
     </el-dialog>
+        <!-- 新增文本秘密 -->
+    <el-dialog v-model="showVaultText" title="新增文本秘密" width="520px">
+      <el-form label-position="top" size="small">
+        <el-form-item label="名称（英数开头，可含 . _ -）"><el-input v-model="vaultTextForm.name" placeholder="API_TOKEN"></el-input></el-form-item>
+        <el-form-item label="作用域（小写英数/连字符，建议对齐工程名）"><el-input v-model="vaultTextForm.scope" placeholder="infra / signing / 工程名"></el-input></el-form-item>
+        <el-form-item label="秘密类型">
+          <el-select v-model="vaultTextForm.secret_type" style="width:100%">
+            <el-option label="口令 password" value="password"></el-option>
+            <el-option label="客户端密钥 client-secret" value="client-secret"></el-option>
+            <el-option label="加密密钥 encryption-key" value="encryption-key"></el-option>
+            <el-option label="API 令牌 api-token" value="api-token"></el-option>
+            <el-option label="访问密钥 access-key" value="access-key"></el-option>
+            <el-option label="证书 certificate" value="certificate"></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="轮换风险">
+          <el-radio-group v-model="vaultTextForm.rotation_risk">
+            <el-radio-button label="low">低</el-radio-button>
+            <el-radio-button label="coordinated">需协调</el-radio-button>
+            <el-radio-button label="critical">高危（轮换销毁旧数据）</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="值（提交后加密存储，明文不落盘）"><el-input v-model="vaultTextForm.value" type="textarea" :rows="3" class="mono"></el-input></el-form-item>
+        <el-form-item label="用途说明"><el-input v-model="vaultTextForm.summary"></el-input></el-form-item>
+        <el-form-item label="属主（工程/团队/人）"><el-input v-model="vaultTextForm.owner"></el-input></el-form-item>
+        <el-form-item label="过期时间（可选，过期后列表标红）">
+          <el-date-picker v-model="vaultTextForm.expires_at" type="datetime" value-format="X" style="width:100%"></el-date-picker>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showVaultText = false">取消</el-button>
+        <el-button type="primary" @click="createVaultText" :loading="acting">加密保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 新增秘密文件 -->
+    <el-dialog v-model="showVaultFile" title="新增秘密文件（证书/keystore 等）" width="520px">
+      <el-form label-position="top" size="small">
+        <el-form-item label="选择文件（≤10MB）">
+          <el-upload :auto-upload="false" :limit="1" :on-change="onVaultFileChange" :on-remove="onVaultFileRemove">
+            <el-button size="small">选择文件</el-button>
+          </el-upload>
+        </el-form-item>
+        <el-form-item label="名称（留空=文件名去扩展名）"><el-input v-model="vaultFileForm.name" placeholder="upload-keystore"></el-input></el-form-item>
+        <el-form-item label="作用域"><el-input v-model="vaultFileForm.scope" placeholder="signing / 工程名"></el-input></el-form-item>
+        <el-form-item label="秘密类型">
+          <el-select v-model="vaultFileForm.secret_type" style="width:100%">
+            <el-option label="访问密钥 access-key" value="access-key"></el-option>
+            <el-option label="证书 certificate" value="certificate"></el-option>
+            <el-option label="加密密钥 encryption-key" value="encryption-key"></el-option>
+            <el-option label="API 令牌 api-token" value="api-token"></el-option>
+            <el-option label="客户端密钥 client-secret" value="client-secret"></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="轮换风险">
+          <el-radio-group v-model="vaultFileForm.rotation_risk">
+            <el-radio-button label="low">低</el-radio-button>
+            <el-radio-button label="coordinated">需协调</el-radio-button>
+            <el-radio-button label="critical">高危</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="用途说明"><el-input v-model="vaultFileForm.summary" placeholder="如：应用 X 的 Android 上传签名 keystore"></el-input></el-form-item>
+        <el-form-item label="属主"><el-input v-model="vaultFileForm.owner"></el-input></el-form-item>
+        <el-form-item label="过期时间（可选）">
+          <el-date-picker v-model="vaultFileForm.expires_at" type="datetime" value-format="X" style="width:100%"></el-date-picker>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showVaultFile = false">取消</el-button>
+        <el-button type="primary" @click="createVaultFile" :loading="acting">加密保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 显示秘密值 -->
+    <el-dialog v-model="showVaultReveal" :title="'秘密值 - ' + vaultRevealName" width="520px">
+      <el-input v-model="vaultRevealValue" type="textarea" :rows="4" readonly class="mono"></el-input>
+      <p class="muted">本次查看已写审计；请勿粘贴到聊天/工单等不可控位置。</p>
+    </el-dialog>
+
+    <!-- 编辑秘密（元数据 + 可选轮换值） -->
+    <el-dialog v-model="showVaultEdit" :title="'编辑 - ' + (vaultEditRow ? vaultEditRow.scope + '/' + vaultEditRow.name : '')" width="520px">
+      <el-form label-position="top" size="small">
+        <el-form-item label="用途说明"><el-input v-model="vaultEditForm.summary"></el-input></el-form-item>
+        <el-form-item label="属主"><el-input v-model="vaultEditForm.owner"></el-input></el-form-item>
+        <el-form-item label="秘密类型">
+          <el-select v-model="vaultEditForm.secret_type" style="width:100%">
+            <el-option label="口令 password" value="password"></el-option>
+            <el-option label="客户端密钥 client-secret" value="client-secret"></el-option>
+            <el-option label="加密密钥 encryption-key" value="encryption-key"></el-option>
+            <el-option label="API 令牌 api-token" value="api-token"></el-option>
+            <el-option label="访问密钥 access-key" value="access-key"></el-option>
+            <el-option label="证书 certificate" value="certificate"></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="轮换风险">
+          <el-radio-group v-model="vaultEditForm.rotation_risk">
+            <el-radio-button label="low">低</el-radio-button>
+            <el-radio-button label="coordinated">需协调</el-radio-button>
+            <el-radio-button label="critical">高危</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="过期时间（可选）">
+          <el-date-picker v-model="vaultEditForm.expires_at" type="datetime" value-format="X" style="width:100%"></el-date-picker>
+        </el-form-item>
+        <el-form-item v-if="vaultEditRow && vaultEditRow.kind === 'text'" label="新值（留空=保持不变；填入即轮换，旧值不可恢复）">
+          <el-input v-model="vaultEditForm.value" type="textarea" :rows="3" class="mono"></el-input>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showVaultEdit = false">取消</el-button>
+        <el-button type="primary" @click="saveVaultEdit" :loading="acting">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 主密钥 -->
+    <el-dialog v-model="showVaultMaster" title="主密钥（立即转存密码管理器）" width="560px">
+      <el-alert type="warning" :closable="false" title="此密钥可解开全部秘密。请复制到密码管理器并做离线备份；本次查看已写审计。"></el-alert>
+      <el-input v-model="vaultMasterSecret" readonly class="mono" style="margin-top:10px"></el-input>
+    </el-dialog>
+
   </template>
 </div>
 
 <script src="/vendor/vue.global.prod.js"></script>
 <script src="/vendor/element-plus.full.min.js"></script>
 <script src="/vendor/icons.iife.min.js"></script>
-<script src="/app.js?v=6"></script>
+<script src="/app.js?v=7"></script>
 </body>
 </html>

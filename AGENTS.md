@@ -33,7 +33,12 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
 
 - 所有脚本/配置文件统一 **LF 行尾**（.gitattributes 已强制；Windows 编辑后注意转换，
   或运行 `scripts/dev-sync.sh`）。
-- **密钥绝不入库**：只提交 `.env.example`；`.env` 已在 .gitignore。
+- **密钥绝不入库**：只提交 `.env.example`；`.env` 已在 .gitignore。例外：age 密文（`secrets/*.age`、
+  导出包）可入库，主密钥 `secrets/master.key` 永不入库。
+- **秘密库（vault，ADR-0041~0044，一期已实现）**：秘密值一律 age 密文存储，元数据透明可查；
+  Web 管理页「秘密库」（admin 专属 tab），API `/api/vault/*`；全量导出 = 明文 manifest + 密文
+  payload.age；本地浏览/验证用 `python scripts/vault-inspect.py list|verify|show|extract`；
+  主密钥在 `<install_root>/secrets/master.key`（可用 CHRONICLER_SECRETS_DIR 覆盖，测试用）。
 - **数据显式落宿主**（NFR-008/009，ADR-0012/0026）：三层——`data/public/`（组件交换区，挂所有容器）、
   `data/private/<组件>/`（仅挂载声明者）、`data/workspace/`（工作区，工程克隆等可由 git 重建，不进备份）；
   机密永不落 data。禁止命名卷存业务数据；`data/` 已入 .gitignore。
