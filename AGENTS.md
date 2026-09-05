@@ -109,6 +109,11 @@ chronicler\.venv-win\Scripts\python.exe -m chronicler serve   # 主入口；首�
   手动操作须显式 `DATA_ROOT=<仓库根>/data`（或走首页工具面板「部署」，supervisor 注入绝对路径）（本机实测，2026-09-01）。
 - Windows 侧 Python subprocess 捕获输出必须显式 `encoding="utf-8", errors="replace"`
   （`text=True` 用 GBK 解码，遇 UTF-8 提交信息 stdout 变 None，2026-08-27 实测）。
+- **git 向上逃逸**（2026-09-05 实测事故）：`data/workspace/repos/<id>` 的 `.git` 残缺/丢失后，
+  `git -C <克隆目录> ...` 会向上解析到宿主源码库执行——sync_project 的 `reset --hard origin/<branch>`
+  曾因此打在主仓库上、抹掉未推送提交（reflog 可找回）。已在 sync_project 加守卫
+  （toplevel==自身才允许操作，否则 409 引导「重置克隆」；程序永不自行删除目录）。
+  教训：任何对子目录的 git 写操作，先验证它是独立仓库。
 - Windows 部署时建议 Docker Desktop 随登录自启（Settings → General → Start when you sign in），
   否则栈和 SSO 全不可用。supervisor 自启钩子会先按平台拉起缺失的引擎（Windows 启动 Docker
   Desktop；Linux/WSL 用 systemd/service；macOS `open -a Docker`），再带 dockerd 就绪重试
