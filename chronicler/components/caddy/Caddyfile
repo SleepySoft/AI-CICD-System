@@ -57,3 +57,9 @@ http://browser.localhost {
 http://llm.localhost {
 	reverse_proxy ollama:11434
 }
+
+# 局域网兜底站点：裸 IP / 未匹配域名（手机等局域网设备）默认进 Chronicler。
+# 子域名站点（*.localhost）仅在宿主 hosts 钉装后可用；局域网设备走这里。
+http:// {
+	reverse_proxy host.docker.internal:8600
+}
