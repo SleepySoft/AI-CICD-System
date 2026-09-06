@@ -177,7 +177,7 @@ async function viewProjects() {
         <div class="row">
           <b class="grow">${esc(p.name)}</b>
           ${p.last_sync_error ? '<span class="tag" style="color:#f85149">同步失败</span>' : ""}
-          ${chatUrl ? `<a class="btn primary" style="text-decoration:none" href="${chatUrl}" target="_blank">💬 对话</a>` : ""}
+          ${isAdmin ? `<button class="btn primary" data-chat="${p.id}">💬 对话</button>` : (chatUrl ? `<a class="btn primary" style="text-decoration:none" href="${chatUrl}" target="_blank">💬 对话</a>` : "")}
         </div>
         <div class="muted" style="margin:4px 0 6px">${esc(p.git_url)}</div>
         ${last ? `<div class="muted mono" style="font-size:12px">${last}</div>` : ""}
@@ -193,6 +193,14 @@ async function viewProjects() {
     b.disabled = true;
     try { await api(`/api/tasks/${b.dataset.trigger}/trigger`, { method: "POST" }); } catch (e) { alert(e.message); }
     setTimeout(() => { tab = "runs"; render(); }, 1200);
+  }));
+  view.querySelectorAll("[data-chat]").forEach(b => b.addEventListener("click", async () => {
+    b.disabled = true; b.textContent = "打开中…";
+    try {
+      const r = await api(`/api/projects/${b.dataset.chat}/session/open`, { method: "POST" });
+      window.open(r.chat_url, "_blank");
+    } catch (e) { alert("打开会话失败：" + e.message); }
+    b.disabled = false; b.textContent = "💬 对话";
   }));
 }
 const STATUS_TEXT = { queued: "排队中", running: "运行中", success: "成功", failed: "失败", skipped: "跳过" };

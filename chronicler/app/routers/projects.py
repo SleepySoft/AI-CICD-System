@@ -81,3 +81,38 @@ async def sync(pid: int, user: dict = Depends(require_admin)):
     result = projects.sync_project(pid)
     audit(user["username"], "project.sync", projects.get_project(pid)["name"])
     return result
+
+
+@router.get("/{pid}/session")
+async def session_status(pid: int, user: dict = Depends(current_user)):
+    """工程常驻会话状态（ADR-0046）。"""
+    projects.get_project(pid)
+    from .. import atr
+    sid = f"atr-proj-{pid}"
+    return {"session_id": sid, "exists": atr.session_exists(sid)}
+
+
+@router.post("/{pid}/session/open")
+async def session_open(pid: int, user: dict = Depends(require_admin)):
+    """打开工程常驻会话：幂等 ensure（tmux 后端）+ 首次注入工程上下文（ADR-0046）。"""
+    p = projects.get_project(pid)
+    from .. import atr, registry
+    sid = f"atr-proj-{pid}"
+    try:
+        created = atr.ensure_session(sid, cwd=atr.container_repo_path(pid),
+                                     purpose=f"工程 {p['name']} 常驻会话")
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=502, detail=f"ATR 不可达或拒绝：{e}") from e
+    context_written = False
+    if created:
+        skills = [c["name"] for c in registry.injectable_components()]
+        context_written = atr.write_context_file(p, skills) is not None
+        try:
+            atr.send_text(sid, "cat ATR_CONTEXT.md 2>/dev/null || "
+                               "echo '（无 ATR_CONTEXT.md：工作区克隆缺失）'")
+        except Exception:  # noqa: BLE001 注入失败不影响会话使用
+            pass
+        audit(user["username"], "project.session_create", p["name"], f"session={sid}")
+    return {"session_id": sid, "created": created, "context_written": context_written,
+            "chat_url": atr.chat_url(sid)}

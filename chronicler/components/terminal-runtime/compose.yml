@@ -18,6 +18,7 @@ services:
     volumes:
     - ${DATA_ROOT:-./data}/private/terminal-runtime:/opt/agents
     - ${DATA_ROOT:-./data}/public:/public
+    - ${DATA_ROOT:-./data}/workspace:/workspace
     - ${REPO_ROOT:-../../..}/scripts/agents:/opt/agent-install:ro
     healthcheck:
       test:
