@@ -236,6 +236,15 @@ class VaultTest(unittest.TestCase):
         assert st["locked"] and st["reason"] == "master-key-mismatch"
         assert self.admin.post("/api/vault/text", json={"name": "B", "value": "x"}).status_code == 409
 
+    # ---------- 移动工作台页面 ----------
+
+    def test_mobile_page_served(self):
+        resp = self.admin.get("/m")
+        assert resp.status_code == 200
+        assert "移动工作台" in resp.text
+
+    # ---------- 锁定 / 解锁 / 交接 ----------
+
     def test_key_ack(self):
         self._create_text()  # 触发生成主密钥 → 未交接
         assert self.admin.get("/api/vault/status").json()["key_acked"] is False

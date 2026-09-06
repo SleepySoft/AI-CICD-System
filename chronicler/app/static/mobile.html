@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- 手机优先：键盘弹出压缩布局；刘海屏安全区；禁缩放（工具型界面） -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content, user-scalable=no">
+<title>Chronicler 移动工作台</title>
+<script src="/vendor/marked.umd.js"></script>
+<script src="/vendor/purify.min.js"></script>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    display: flex; flex-direction: column; height: 100dvh;
+    background: #0d1117; color: #e6edf3;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 16px;
+  }
+  header {
+    flex: none; display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top));
+    background: #161b22; border-bottom: 1px solid #30363d;
+  }
+  header .title { font-weight: 600; font-size: 17px; }
+  #view { flex: 1; overflow-y: auto; padding: 12px; -webkit-overflow-scrolling: touch; }
+  nav {
+    flex: none; display: flex; background: #161b22; border-top: 1px solid #30363d;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  nav button {
+    flex: 1; background: none; border: none; color: #8b949e; font-size: 13px;
+    padding: 8px 0 6px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  }
+  nav button.active { color: #58a6ff; }
+  nav button .ico { font-size: 20px; }
+  .card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 10px;
+  }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .grow { flex: 1; min-width: 0; }
+  .muted { color: #8b949e; font-size: 13px; }
+  .mono { font-family: ui-monospace, Consolas, monospace; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .dot.running, .dot.success { background: #3fb950; }
+  .dot.stopped, .dot.skipped { background: #8b949e; }
+  .dot.absent, .dot.queued { background: #d29922; }
+  .dot.failed, .dot.unknown { background: #f85149; }
+  .dot.running { animation: blink 1.8s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: .4; } }
+  .btn {
+    background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 8px;
+    padding: 8px 14px; font-size: 14px; cursor: pointer; flex: none;
+  }
+  .btn.primary { background: #238636; border-color: #238636; color: #fff; }
+  .btn.warn { background: #9e6a03; border-color: #9e6a03; color: #fff; }
+  .btn:disabled { opacity: .4; }
+  input, select {
+    background: #0d1117; color: #e6edf3; border: 1px solid #30363d; border-radius: 8px;
+    padding: 10px 12px; font-size: 16px; width: 100%;
+  }
+  .tag { font-size: 11px; border: 1px solid #30363d; border-radius: 10px; padding: 1px 8px; color: #8b949e; flex: none; }
+  .md { background: #0d1117; border: 1px solid #30363d; border-radius: 10px; padding: 12px 14px; line-height: 1.65; font-size: 15px; overflow-wrap: anywhere; }
+  .md pre { background: #161b22; padding: 10px; border-radius: 8px; overflow-x: auto; }
+  .md code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+  .md table { border-collapse: collapse; width: 100%; }
+  .md th, .md td { border: 1px solid #30363d; padding: 4px 8px; font-size: 13px; }
+  .md img { max-width: 100%; }
+  .logview {
+    background: #0d1117; border: 1px solid #30363d; border-radius: 10px; padding: 10px;
+    font-family: ui-monospace, Consolas, monospace; font-size: 12px; white-space: pre-wrap;
+    overflow-wrap: anywhere; max-height: 60dvh; overflow-y: auto;
+  }
+  .login-wrap { max-width: 420px; margin: 12dvh auto 0; }
+  .err { color: #f85149; font-size: 13px; margin-top: 8px; }
+  .group-title { color: #8b949e; font-size: 13px; margin: 16px 2px 8px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <span class="title">📜 Chronicler</span>
+  <span class="row">
+    <span class="dot" id="netDot" style="background:#8b949e"></span>
+    <span class="muted" id="who"></span>
+  </span>
+</header>
+
+<div id="view"></div>
+
+<nav id="nav" class="hidden">
+  <button data-tab="tools" class="active"><span class="ico">🧰</span>组件</button>
+  <button data-tab="runs"><span class="ico">▶️</span>任务</button>
+  <button data-tab="me"><span class="ico">👤</span>我的</button>
+</nav>
+
+<script>
+"use strict";
+/* Chronicler 移动工作台：遥控工作站的手机入口。
+   稳定原则：页面无关键本地状态，后台切回前台即全量刷新（visibilitychange）。 */
+
+const $ = s => document.querySelector(s);
+const view = $("#view");
+let user = null, tab = "tools", pollTimer = null;
+let detailRun = null;  // 正在查看的 run（日志/报告）
+
+async function api(path, opts = {}) {
+  const resp = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  if (resp.status === 401) { user = null; render(); throw new Error("未登录"); }
+  if (!resp.ok) {
+    let msg = resp.statusText;
+    try { msg = (await resp.json()).detail || msg; } catch (_) {}
+    throw new Error(msg);
+  }
+  const ct = resp.headers.get("content-type") || "";
+  return ct.includes("json") ? resp.json() : resp.text();
+}
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmtT = ts => ts ? new Date(ts * 1000).toLocaleString("zh-CN", { hour12: false, month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
+function netDot(ok) { $("#netDot").style.background = ok ? "#3fb950" : "#f85149"; }
+
+// ---------- 视图：组件 ----------
+async function viewTools() {
+  let tools = [];
+  try { tools = await api("/api/tools"); netDot(true); } catch (e) { netDot(false); }
+  const isAdmin = user?.role === "admin";
+  view.innerHTML = "<div class='group-title'>组件状态</div>" + (tools.length ? "" : "<p class='muted'>暂无组件</p>") +
+    tools.map(t => `
+      <div class="card">
+        <div class="row">
+          <span class="dot ${esc(t.status)}"></span>
+          <b class="grow">${esc(t.desc || t.name)}</b>
+          ${t.critical ? '<span class="tag">关键</span>' : ""}
+        </div>
+        <div class="muted" style="margin:4px 0 8px">${esc(t.name)} · ${{ running: "运行中", stopped: "已停止", absent: "未部署", unknown: "未知" }[t.status] || esc(t.status)}</div>
+        <div class="row">
+          ${t.url ? `<a class="btn" style="text-decoration:none" href="${esc(t.url)}" target="_blank">打开</a>` : ""}
+          ${isAdmin && t.driver === "docker" && t.status === "absent" ? `<button class="btn primary" data-act="deploy" data-n="${esc(t.name)}">部署</button>` : ""}
+          ${isAdmin && t.driver === "docker" && t.status === "stopped" ? `<button class="btn primary" data-act="start" data-n="${esc(t.name)}">启动</button>` : ""}
+          ${isAdmin && t.driver === "docker" && t.status === "running" ? `<button class="btn warn" data-act="stop" data-n="${esc(t.name)}">停止</button>` : ""}
+        </div>
+      </div>`).join("");
+  view.querySelectorAll("[data-act]").forEach(b => b.addEventListener("click", async () => {
+    b.disabled = true;
+    try { await api(`/api/tools/${b.dataset.n}/${b.dataset.act}`, { method: "POST" }); } catch (e) { alert(e.message); }
+    setTimeout(viewTools, 1500);
+  }));
+}
+
+// ---------- 视图：任务 ----------
+const STATUS_TEXT = { queued: "排队中", running: "运行中", success: "成功", failed: "失败", skipped: "跳过" };
+async function viewRuns() {
+  const [tasks, runs, projects] = await Promise.all([
+    api("/api/tasks").catch(() => []),
+    api("/api/runs").catch(() => []),
+    api("/api/projects").catch(() => []),
+  ]);
+  netDot(true);
+  const isAdmin = user?.role === "admin";
+  const projName = id => projects.find(p => p.id === id)?.name || "#" + id;
+  let html = "";
+  if (isAdmin && tasks.length) {
+    html += "<div class='group-title'>触发任务</div>" + tasks.filter(t => t.enabled).map(t => `
+      <div class="card"><div class="row">
+        <b class="grow">${esc(t.name)}</b><span class="tag">${esc(t.task_type)}</span>
+        <button class="btn primary" data-trigger="${t.id}">执行</button>
+      </div><div class="muted">${esc(projName(t.project_id))}</div></div>`).join("");
+  }
+  html += "<div class='group-title'>执行记录</div>";
+  if (!runs.length) html += "<p class='muted'>暂无记录</p>";
+  html += runs.slice(0, 30).map(r => `
+    <div class="card" data-run="${r.id}" style="cursor:pointer">
+      <div class="row">
+        <span class="dot ${esc(r.status)}"></span>
+        <b class="grow">#${r.id} ${esc(r.task_type)}</b>
+        <span class="tag">${STATUS_TEXT[r.status] || esc(r.status)}</span>
+      </div>
+      <div class="muted">${esc(projName(r.project_id))} · ${fmtT(r.started_at)}</div>
+    </div>`).join("");
+  view.innerHTML = html;
+  view.querySelectorAll("[data-trigger]").forEach(b => b.addEventListener("click", async () => {
+    b.disabled = true;
+    try { await api(`/api/tasks/${b.dataset.trigger}/trigger`, { method: "POST" }); } catch (e) { alert(e.message); }
+    setTimeout(viewRuns, 1500);
+  }));
+  view.querySelectorAll("[data-run]").forEach(c => c.addEventListener("click", () => viewRunDetail(+c.dataset.run)));
+}
+
+async function viewRunDetail(id) {
+  detailRun = id;
+  view.innerHTML = "<p class='muted'>加载中…</p>";
+  try {
+    const report = await api(`/api/runs/${id}/report`).catch(() => "");
+    const log = await api(`/api/runs/${id}/log`).catch(() => "");
+    const reportHtml = report ? DOMPurify.sanitize(marked.parse(report, { async: false })) : "";
+    view.innerHTML = `
+      <div class="row" style="margin-bottom:10px">
+        <button class="btn" id="backBtn">← 返回</button>
+        <b class="grow">Run #${id}</b>
+      </div>
+      ${report ? `<div class="group-title">报告</div><div class="md">${reportHtml}</div>` : ""}
+      <div class="group-title">日志</div>
+      <div class="logview">${esc(log || "（暂无日志）")}</div>`;
+    $("#backBtn").addEventListener("click", () => { detailRun = null; viewRuns(); });
+  } catch (e) { view.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+
+// ---------- 视图：我的 ----------
+async function viewMe() {
+  view.innerHTML = `
+    <div class="card">
+      <div class="row"><b class="grow">${esc(user.username)}</b><span class="tag">${esc(user.role)}</span></div>
+      <div class="muted" style="margin:6px 0 10px">Chronicler 移动工作台</div>
+      <button class="btn" id="logoutBtn">登出</button>
+    </div>
+    <div class="card">
+      <b>完整功能</b>
+      <div class="muted" style="margin:6px 0 10px">秘密库 / 工程管理 / 初始化设置等请在桌面端访问。</div>
+      <a class="btn" style="text-decoration:none" href="/" target="_blank">桌面版</a>
+    </div>`;
+  $("#logoutBtn").addEventListener("click", async () => {
+    try { await api("/api/auth/logout", { method: "POST" }); } catch (_) {}
+    user = null; render();
+  });
+}
+
+// ---------- 登录 ----------
+function viewLogin() {
+  view.innerHTML = `
+    <div class="login-wrap">
+      <div class="card">
+        <h2 style="margin:0 0 4px">📜 Chronicler</h2>
+        <p class="muted" style="margin-top:0">遥控工作站 · 移动入口</p>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+          <input id="loginUser" placeholder="用户名" autocomplete="username">
+          <input id="loginPass" type="password" placeholder="密码" autocomplete="current-password">
+          <button class="btn primary" id="loginBtn" style="padding:12px">登录</button>
+          <div class="err hidden" id="loginErr"></div>
+        </div>
+      </div>
+    </div>`;
+  const doLogin = async () => {
+    const err = $("#loginErr");
+    err.classList.add("hidden");
+    try {
+      user = await api("/api/auth/login", { method: "POST", body: JSON.stringify({
+        username: $("#loginUser").value, password: $("#loginPass").value }) });
+      render();
+    } catch (e) { err.textContent = e.message === "未登录" ? "用户名或密码错误" : e.message; err.classList.remove("hidden"); }
+  };
+  $("#loginBtn").addEventListener("click", doLogin);
+  $("#loginPass").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+}
+
+// ---------- 框架：切换 / 轮询 / 前后台稳定 ----------
+const VIEWS = { tools: viewTools, runs: viewRuns, me: viewMe };
+function render() {
+  $("#nav").classList.toggle("hidden", !user);
+  $("#who").textContent = user ? user.username : "";
+  if (!user) { stopPoll(); viewLogin(); return; }
+  (VIEWS[tab] || viewTools)();
+}
+function startPoll() {
+  stopPoll();
+  pollTimer = setInterval(() => {
+    if (document.visibilityState === "visible" && user && !detailRun) (VIEWS[tab] || viewTools)();
+  }, 8000);
+}
+function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("nav button").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  tab = b.dataset.tab; detailRun = null; render();
+}));
+/* 后台切前台：立即全量刷新，不依赖轮询间隙 */
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && user) { detailRun ? viewRunDetail(detailRun) : render(); }
+});
+window.addEventListener("pageshow", e => { if (e.persisted && user) render(); });
+
+(async function init() {
+  try { user = await api("/api/auth/me"); } catch (_) { user = null; }
+  render();
+  startPoll();
+})();
+</script>
+</body>
+</html>

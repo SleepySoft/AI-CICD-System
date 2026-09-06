@@ -78,6 +78,11 @@ def create_app(mode: str = "normal") -> FastAPI:
 
     static = Cfg.STATIC_DIR
 
+    @app.get("/m", include_in_schema=False)
+    async def mobile_page():
+        """移动工作台入口（手机布局 + 前后台切换稳定；静态页在 static/mobile.html）。"""
+        return FileResponse(static / "mobile.html")
+
     @app.exception_handler(404)
     async def not_found(request, exc):
         if not request.url.path.startswith("/api/"):
