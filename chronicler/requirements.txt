@@ -8,3 +8,4 @@ croniter
 cryptography
 pyrage
 python-multipart
+keyring

@@ -54,6 +54,14 @@ def create_app(mode: str = "normal") -> FastAPI:
     from . import db
     db.init()
 
+    try:  # ADR-0045：存量明文 .env 自动迁移——导入秘密库后糊化（锁定时跳过）
+        from .initialization import catalog as _catalog
+        from .vault import sync as _vault_sync
+        _vault_sync.migrate_env_to_masked(_catalog.load())
+    except Exception:  # noqa: BLE001 迁移失败不阻断启动
+        import traceback
+        traceback.print_exc()
+
     from .tasks import backfill_preset_tasks, start_scheduler
     backfill_preset_tasks()
     start_scheduler()

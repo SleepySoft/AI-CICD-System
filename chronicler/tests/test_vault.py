@@ -28,6 +28,9 @@ class VaultTest(unittest.TestCase):
         self.data_patch.start()
         self._old_env = os.environ.get("CHRONICLER_SECRETS_DIR")
         os.environ["CHRONICLER_SECRETS_DIR"] = str(self.secrets_dir)
+        # 测试不碰真实 OS 钥匙串，强制文件后端
+        self._old_backend = os.environ.get("CHRONICLER_VAULT_KEY_BACKEND")
+        os.environ["CHRONICLER_VAULT_KEY_BACKEND"] = "file"
         db.close()
         db.init()
         db.execute("INSERT INTO users(username, password_hash, role, created_at) VALUES (?,?,?,1)",
@@ -55,6 +58,10 @@ class VaultTest(unittest.TestCase):
             os.environ.pop("CHRONICLER_SECRETS_DIR", None)
         else:
             os.environ["CHRONICLER_SECRETS_DIR"] = self._old_env
+        if self._old_backend is None:
+            os.environ.pop("CHRONICLER_VAULT_KEY_BACKEND", None)
+        else:
+            os.environ["CHRONICLER_VAULT_KEY_BACKEND"] = self._old_backend
         gc.collect()
         for _ in range(20):  # Windows 文件锁释放有延迟
             try:
@@ -179,7 +186,10 @@ class VaultTest(unittest.TestCase):
         assert items[0]["secret_type"] == "password"  # 元数据沿用 setup.yaml 自述
         resp = self.admin.post(f"/api/vault/{items[0]['id']}/reveal")
         assert resp.text == "pw-12345678"
-        assert (self.root / ".env").is_file()
+        # ADR-0045：.env 中秘密字段已糊化为 VAULT: 引用，明文不落盘
+        env_text = (self.root / ".env").read_text(encoding="utf-8")
+        assert "GITEA_ADMIN_PASSWORD=VAULT:gitea/GITEA_ADMIN_PASSWORD" in env_text
+        assert "pw-12345678" not in env_text
 
     def test_import_env_and_drift(self):
         from types import SimpleNamespace
@@ -287,6 +297,50 @@ class VaultTest(unittest.TestCase):
         assert extract.returncode == 0, extract.stderr
         assert (outdir / "text" / "infra" / "API_TOKEN.txt").read_text(encoding="utf-8") == SECRET_VALUE
         assert (outdir / "files" / "signing" / "upload-keystore").read_bytes() == b"\x00\x01keystore-bytes"
+
+    def test_masked_env_migrate_and_render(self):
+        """ADR-0045：存量明文 .env 迁移后糊化；渲染可还原真实值；锁定拒绝迁移。"""
+        from types import SimpleNamespace
+        from chronicler.app.vault import sync
+        (self.root / ".env").write_text(
+            "BASE_DOMAIN=localhost\nGITEA_ADMIN_PASSWORD=pw-legacy-001\n", encoding="utf-8")
+        with patch.object(sync, "PROFILE", SimpleNamespace(install_root=self.root)):
+            migrated = sync.migrate_env_to_masked(self.COMPONENTS)
+            assert migrated == 1
+            env_text = (self.root / ".env").read_text(encoding="utf-8")
+            assert "BASE_DOMAIN=localhost" in env_text  # 非秘密原样保留
+            assert "VAULT:gitea/GITEA_ADMIN_PASSWORD" in env_text
+            assert "pw-legacy-001" not in env_text
+            # 渲染还原
+            assert "pw-legacy-001" in sync.resolve_env_text(env_text)
+            # 幂等：再次迁移无动作
+            assert sync.migrate_env_to_masked(self.COMPONENTS) == 0
+        # 锁定态拒绝迁移（防止糊化后解不开）
+        (self.root / ".env").write_text("GITEA_ADMIN_PASSWORD=pw-locked-002\n", encoding="utf-8")
+        (self.secrets_dir / "master.key").unlink()
+        with patch.object(sync, "PROFILE", SimpleNamespace(install_root=self.root)):
+            assert sync.migrate_env_to_masked(self.COMPONENTS) == 0
+            assert "pw-locked-002" in (self.root / ".env").read_text(encoding="utf-8")
+
+    def test_auto_snapshot_on_mutation(self):
+        """ADR-0045 强制项：每次变更自动重写 secrets.age，且内容反映最新值。"""
+        from chronicler.app.vault import crypto, store
+        self._create_text()
+        snapshot = self.secrets_dir / "secrets.age"
+        assert snapshot.is_file()
+        identity = crypto.load_identity()
+        import io, tarfile
+        payload = crypto.decrypt(snapshot.read_bytes(), identity)
+        with tarfile.open(fileobj=io.BytesIO(payload)) as tar:
+            data = tar.extractfile("text/infra/API_TOKEN.txt").read().decode()
+        assert data == SECRET_VALUE
+        # 轮转后快照反映新值
+        sid = self.admin.get("/api/vault").json()[0]["id"]
+        self.admin.post(f"/api/vault/{sid}/value", json={"value": "rotated-999"})
+        payload = crypto.decrypt(snapshot.read_bytes(), identity)
+        with tarfile.open(fileobj=io.BytesIO(payload)) as tar:
+            assert tar.extractfile("text/infra/API_TOKEN.txt").read().decode() == "rotated-999"
+        assert store.count() == 1
 
     # ---------- 导出包恢复（新部署/灾难恢复） ----------
 

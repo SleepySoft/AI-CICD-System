@@ -1,6 +1,6 @@
 # 文档索引
 
-> 版本：v1.13 · 日期：2026-09-05 · 状态：生效
+> 版本：v1.14 · 日期：2026-09-05 · 状态：生效
 > 定位：docs/ 全部文档的目录与状态总表；写作规范见 `.agents/skills/docs-management/`
 
 ## 文档总表
@@ -81,6 +81,7 @@
 | ADR-0042 文件型秘密（签名证书/keystore）纳入统一秘密管理 | adr/0042-secret-files-signing-assets.md | adr | 已接受 |
 | ADR-0043 秘密作用域分权与审计：在线取用为主、离线分发包为辅 | adr/0043-secret-scopes-acl-audit.md | adr | 已接受（离线包形态经 ADR-0044 修订） |
 | ADR-0044 多接收者密钥体系：系统秘密仅 admin 可解，工程秘密按接收者集合加密 | adr/0044-recipient-key-hierarchy.md | adr | 已接受 |
+| ADR-0045 vault 为唯一静态事实源：糊化 .env、使用时渲染、轮转单点写入 | adr/0045-vault-single-source-masked-env.md | adr | 已接受 |
 | 部署与初始化 | runbooks/deploy.md | runbooks | 生效 |
 | 备份与恢复 | runbooks/backup-restore.md | runbooks | 生效 |
 | 接入新 Agent | runbooks/agent-onboarding.md | runbooks | 生效 |

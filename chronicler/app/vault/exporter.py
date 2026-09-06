@@ -45,10 +45,10 @@ def _add(tar: tarfile.TarFile, arcname: str, data: bytes, mtime: float, mode: in
     tar.addfile(info, io.BytesIO(data))
 
 
-def build_export() -> tuple[bytes, int]:
-    """打包全部秘密；返回 (tar 字节, 秘密条数)。"""
+def build_payload() -> tuple[bytes, list, "object"]:
+    """打包全部秘密为 payload tar；返回 (tar 字节, 条目清单, 主密钥身份)。锁定时抛 VaultLocked。"""
     rows = store.all_rows()
-    identity = store._identity_verified()  # 锁定时拒绝导出（VaultLocked）
+    identity = store._identity_verified()
     payload_buf = io.BytesIO()
     items = []
     with tarfile.open(fileobj=payload_buf, mode="w") as tar:
@@ -63,7 +63,29 @@ def build_export() -> tuple[bytes, int]:
                 "path": _arcname(row), "size": len(plain),
                 "sha256": hashlib.sha256(plain).hexdigest(),
             })
-    encrypted = crypto.encrypt(payload_buf.getvalue(), identity)
+    return payload_buf.getvalue(), items, identity
+
+
+def write_snapshot():
+    """自动快照（ADR-0045 强制项）：每次变更后重写 secrets/secrets.age（密文，可入库）。"""
+    import os
+    payload, _, identity = build_payload()
+    blob = crypto.encrypt(payload, identity)
+    path = crypto.secrets_dir() / "secrets.age"
+    tmp = path.with_suffix(".tmp")
+    tmp.write_bytes(blob)
+    os.replace(tmp, path)
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+    return path
+
+
+def build_export() -> tuple[bytes, int]:
+    """打包全部秘密；返回 (tar 字节, 秘密条数)。"""
+    payload, items, identity = build_payload()
+    encrypted = crypto.encrypt(payload, identity)
     manifest = {
         "format": FORMAT,
         "version": 1,

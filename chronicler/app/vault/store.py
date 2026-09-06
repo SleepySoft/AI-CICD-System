@@ -111,6 +111,16 @@ def meta_set(key: str, value: str):
             " ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value))
 
 
+def _auto_snapshot():
+    """每次变更后自动重写密文快照（ADR-0045 强制项）；失败不阻断主流程。"""
+    try:
+        from . import exporter
+        exporter.write_snapshot()
+    except Exception:  # noqa: BLE001
+        import traceback
+        traceback.print_exc()
+
+
 # ---------- 元数据 CRUD ----------
 
 def validate_meta(name: str, scope: str, kind: str, secret_type: str, rotation_risk: str):
@@ -160,12 +170,14 @@ def create(kind: str, name: str, scope: str, plain: bytes, actor: str,
     identity = _identity_verified()
     digest = hashlib.sha256(plain).hexdigest()
     now = time.time()
-    return execute(
+    sid = execute(
         "INSERT INTO vault_secrets(name, scope, kind, secret_type, rotation_risk, summary, owner,"
         " expires_at, filename, size, sha256, ciphertext, created_by, created_at, updated_at)"
         " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (name, scope, kind, secret_type, rotation_risk, summary, owner, expires_at, filename,
          len(plain), digest, crypto.encrypt(plain, identity), actor, now, now))
+    _auto_snapshot()
+    return sid
 
 
 def upsert(kind: str, name: str, scope: str, plain: bytes, actor: str, **meta) -> str:
@@ -208,6 +220,7 @@ def replace_value(sid: int, plain: bytes) -> None:
     execute("UPDATE vault_secrets SET ciphertext=?, size=?, sha256=?, updated_at=? WHERE id=?",
             (crypto.encrypt(plain, identity), len(plain),
              hashlib.sha256(plain).hexdigest(), time.time(), sid))
+    _auto_snapshot()
 
 
 def decrypt_value(row: dict) -> bytes:
@@ -219,4 +232,5 @@ def delete(sid: int) -> dict | None:
     row = get_meta(sid)
     if row:
         execute("DELETE FROM vault_secrets WHERE id=?", (sid,))
+        _auto_snapshot()
     return row

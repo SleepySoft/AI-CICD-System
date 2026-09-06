@@ -8,6 +8,7 @@ docker 控制走本地 socket（ADR-0020：supervisor 与 dockerd 同环境）�
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.request
@@ -95,8 +96,28 @@ def set_autostart(name: str, enabled: bool) -> dict:
     return {"ok": True, "name": name, "autostart": bool(enabled), "critical": tool["critical"]}
 
 
-def _compose_up_cmd(tool: dict) -> tuple[list, dict]:
-    """构造组件 compose 拉起命令（args, env）。"""
+def _render_env_if_masked() -> str | None:
+    """ADR-0045：.env 含 VAULT: 糊化引用时，从秘密库渲染临时完整 env（0600，调用方用后删除）。"""
+    env_file = PROFILE.install_root / ".env"
+    if not env_file.is_file():
+        return None
+    text = env_file.read_text(encoding="utf-8")
+    if "VAULT:" not in text:
+        return None
+    from .vault import sync as vault_sync
+    rendered = vault_sync.resolve_env_text(text)  # 锁定/缺条目时抛错，让部署明确失败
+    fd, tmp = tempfile.mkstemp(prefix=".env.render.")
+    with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(rendered)
+    try:
+        os.chmod(tmp, 0o600)
+    except OSError:
+        pass
+    return tmp
+
+
+def _compose_up_cmd(tool: dict) -> tuple[list, dict, str | None]:
+    """构造组件 compose 拉起命令（args, env, 待清理的临时 env 文件或 None）。"""
     compose_file = Path(tool["_dir"]) / "compose.yml"
     if not compose_file.is_file():
         raise HTTPException(status_code=400, detail=f"组件无部署定义（缺 compose.yml）")
@@ -118,17 +139,23 @@ def _compose_up_cmd(tool: dict) -> tuple[list, dict]:
     except docker.errors.DockerException:
         pass
     service = tool.get("compose_service") or tool["name"]
-    return (["docker", "compose", "-p", "aisystem", "--env-file", str(PROFILE.install_root / ".env"),
-             "-f", str(compose_file), "up", "-d", service], env)
+    rendered = _render_env_if_masked()
+    env_file = rendered or str(PROFILE.install_root / ".env")
+    return (["docker", "compose", "-p", "aisystem", "--env-file", env_file,
+             "-f", str(compose_file), "up", "-d", service], env, rendered)
 
 
 def _compose_up(tool: dict) -> subprocess.CompletedProcess:
     """串行执行组件 Compose，避免同项目的网络创建与状态写入竞态。"""
-    args, env = _compose_up_cmd(tool)
-    with _compose_lock:
-        _ensure_network()
-        return subprocess.run(args, env=env, capture_output=True,
-                              encoding="utf-8", errors="replace", timeout=900)
+    args, env, rendered = _compose_up_cmd(tool)
+    try:
+        with _compose_lock:
+            _ensure_network()
+            return subprocess.run(args, env=env, capture_output=True,
+                                  encoding="utf-8", errors="replace", timeout=900)
+    finally:
+        if rendered:
+            Path(rendered).unlink(missing_ok=True)  # 临时明文即用即删
 
 
 def _ensure_network():

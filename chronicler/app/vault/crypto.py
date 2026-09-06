@@ -16,6 +16,8 @@ from pyrage import x25519
 from ..runtime import PROFILE
 
 _KEY_PREFIX = "AGE-SECRET-KEY-"
+_KEYRING_SERVICE = "chronicler-vault"
+_KEYRING_USER = "master-key"
 
 
 def secrets_dir() -> Path:
@@ -42,8 +44,38 @@ def parse_identity(text: str) -> "x25519.Identity":
     raise ValueError("密钥文件中找不到 AGE-SECRET-KEY 行")
 
 
+def _backend_override() -> str:
+    """强制后端：CHRONICLER_VAULT_KEY_BACKEND=file|keyring（测试/无头服务器用）。"""
+    return os.environ.get("CHRONICLER_VAULT_KEY_BACKEND", "").strip().lower()
+
+
+def _keyring_get() -> "x25519.Identity | None":
+    if _backend_override() == "file":
+        return None
+    try:
+        import keyring  # Windows DPAPI / macOS Keychain / Linux libsecret（ADR-0045）
+        stored = keyring.get_password(_KEYRING_SERVICE, _KEYRING_USER)
+        return parse_identity(stored) if stored else None
+    except Exception:
+        return None  # 无钥匙串环境（无头 Linux 等）回落文件
+
+
+def _keyring_set(identity: "x25519.Identity") -> bool:
+    if _backend_override() == "file":
+        return False
+    try:
+        import keyring
+        keyring.set_password(_KEYRING_SERVICE, _KEYRING_USER, str(identity))
+        return True
+    except Exception:
+        return False
+
+
 def load_identity() -> "x25519.Identity | None":
-    """读取现有主密钥；文件不存在返回 None（绝不生成）。"""
+    """读取现有主密钥（钥匙串优先，文件回落）；不存在返回 None（绝不生成）。"""
+    identity = _keyring_get()
+    if identity is not None:
+        return identity
     path = master_key_path()
     if not path.exists():
         return None
@@ -51,7 +83,9 @@ def load_identity() -> "x25519.Identity | None":
 
 
 def write_identity(identity: "x25519.Identity"):
-    """把身份写入 master.key（首次生成或解锁收养）；原子替换 + chmod 600。"""
+    """把身份写入存储（首次生成或解锁收养）：钥匙串优先，不可用才落 master.key 文件。"""
+    if _keyring_set(identity):
+        return
     path = master_key_path()
     content = ("# Chronicler 秘密库主密钥（ADR-0041）\n"
                "# 请立即转存密码管理器并离线备份；丢失且无副本时全部秘密不可恢复。\n"

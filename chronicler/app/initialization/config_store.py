@@ -32,7 +32,8 @@ def presence() -> dict[str, bool]:
 
 
 def configured_presence(components: dict) -> dict[str, bool]:
-    """返回当前进程或现有 .env 中可用的秘密，不信任持久草稿中的旧 presence。"""
+    """返回当前进程或现有 .env 中可用的秘密，不信任持久草稿中的旧 presence。
+    糊化后的 .env（ADR-0045）中 VAULT: 引用以秘密库中是否存在该条目为准。"""
     result = presence()
     target = PROFILE.install_root / ".env"
     if target.is_file():
@@ -43,9 +44,25 @@ def configured_presence(components: dict) -> dict[str, bool]:
             clean = line.strip()
             if clean and not clean.startswith("#") and "=" in clean:
                 key, _, value = clean.partition("=")
-                if key.strip() in secret_keys and value.strip() and "change_me" not in value.lower():
-                    result[key.strip()] = True
+                key, value = key.strip(), value.strip()
+                if key not in secret_keys or not value:
+                    continue
+                if value.startswith("VAULT:"):
+                    if _vault_has(value[len("VAULT:"):]):
+                        result[key] = True
+                elif "change_me" not in value.lower():
+                    result[key] = True
     return result
+
+
+def _vault_has(ref: str) -> bool:
+    """糊化引用在秘密库中是否存在（锁定/异常视为不存在，由页面另行提示）。"""
+    try:
+        from ..vault import store as vault_store
+        scope, _, name = ref.partition("/")
+        return vault_store.find(scope, name) is not None
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def get_secret(key: str) -> str:
@@ -96,7 +113,8 @@ def _parse(path: Path) -> tuple[list[str], dict[str, int]]:
 
 
 def load_environment(components: dict):
-    """把已持久化的白名单配置载入当前进程，供重试和中断续接使用。"""
+    """把已持久化的白名单配置载入当前进程，供重试和中断续接使用。
+    糊化引用（VAULT:scope/KEY，ADR-0045）在此从秘密库解密为真实值。"""
     target = PROFILE.install_root / ".env"
     if not target.is_file():
         return
@@ -106,7 +124,18 @@ def load_environment(components: dict):
         if clean and not clean.startswith("#") and "=" in clean:
             key, _, value = clean.partition("=")
             if key.strip() in allowed:
-                os.environ[key.strip()] = value.strip()
+                os.environ[key.strip()] = _resolve_ref(value.strip())
+
+
+def _resolve_ref(value: str) -> str:
+    """VAULT: 引用从秘密库取值；锁定/缺库时保留占位（调用方会以明确错误失败）。"""
+    if not value.startswith("VAULT:"):
+        return value
+    try:
+        from ..vault import sync as vault_sync
+        return vault_sync.resolve_ref(value[len("VAULT:"):])
+    except Exception:  # noqa: BLE001
+        return value
 
 
 def persist(values: dict, components: dict) -> Path:
@@ -127,10 +156,13 @@ def persist(values: dict, components: dict) -> Path:
         else:
             lines.append(line)
     target.parent.mkdir(parents=True, exist_ok=True)
+    # ADR-0045：写盘前糊化秘密字段（VAULT: 引用），真实值只在秘密库
+    from ..vault import sync as vault_sync
+    masked = vault_sync.mask_env_text("\n".join(lines).rstrip() + "\n", components)
     fd, temp_name = tempfile.mkstemp(prefix=".env.", dir=target.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write("\n".join(lines).rstrip() + "\n")
+            handle.write(masked)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temp_name, target)
@@ -145,7 +177,6 @@ def persist(values: dict, components: dict) -> Path:
         os.environ[key] = value
     load_environment(components)
     try:  # 双写秘密库（docs/how/secrets-vault.md）；失败不阻断 .env 主流程
-        from ..vault import sync as vault_sync
         vault_sync.sync_env_secrets(updates, components)
     except Exception:  # noqa: BLE001
         import traceback

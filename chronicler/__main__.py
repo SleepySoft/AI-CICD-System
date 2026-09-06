@@ -3,6 +3,7 @@
   python -m chronicler create-admin       交互创建 admin 账号
   python -m chronicler backup [目录]       组件化一键备份（ADR-0027）
   python -m chronicler restore <备份目录>  恢复
+  python -m chronicler env render [输出文件]   从秘密库渲染完整 env（默认 stdout；ADR-0045）
     python -m chronicler setup-recover       本机显式重开初始化引导（危险操作）
   python -m chronicler test [--component X] [--deploy] [--timeout N]   组件自检（FR-MGR-023）
 """
@@ -73,6 +74,29 @@ def main():
         result = restore(Path(sys.argv[2]))
         for name, r in result["components"].items():
             print(f"  {name}: {r}")
+    elif cmd == "env":
+        # ADR-0045：手动 compose 运维前渲染真实 env（糊化 .env 不能直接用）
+        if len(sys.argv) < 3 or sys.argv[2] != "render":
+            sys.exit("用法: python -m chronicler env render [输出文件]")
+        from .app.initialization import catalog
+        from .app.runtime import PROFILE
+        from .app.vault import sync as vault_sync
+        env_path = PROFILE.install_root / ".env"
+        if not env_path.is_file():
+            sys.exit("缺少 .env")
+        rendered = vault_sync.resolve_env_text(env_path.read_text(encoding="utf-8"))
+        if len(sys.argv) > 3:
+            import os
+            from pathlib import Path
+            out = Path(sys.argv[3])
+            out.write_text(rendered, encoding="utf-8", newline="\n")
+            try:
+                os.chmod(out, 0o600)
+            except OSError:
+                pass
+            print(f"已渲染到 {out}（含明文秘密，用后请删除）", file=sys.stderr)
+        else:
+            sys.stdout.write(rendered)
     elif cmd == "create-admin":
         import getpass
         from .app import db

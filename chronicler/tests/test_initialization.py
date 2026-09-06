@@ -25,12 +25,21 @@ class InitializationTest(unittest.TestCase):
         self.components_patch.start()
 
     def tearDown(self):
+        import gc
+        import time
         from chronicler.app import db
         db.close()
         config_store.clear()
         self.components_patch.stop()
         self.data_patch.stop()
-        self.tmp.cleanup()
+        gc.collect()
+        for _ in range(20):  # Windows：TestClient worker 线程的数据库连接释放有延迟
+            try:
+                self.tmp.cleanup()
+                break
+            except PermissionError:
+                gc.collect()
+                time.sleep(0.2)
 
     def component(self, name, *, profiles=None, depends=None, fields=None,
                   dependency_only=False, group="测试组件"):

@@ -11,6 +11,8 @@ from ..db import init as db_init
 from ..runtime import PROFILE
 from . import store
 
+VAULT_PREFIX = "VAULT:"  # 糊化占位引用（ADR-0045）：KEY=VAULT:<scope>/<KEY>
+
 # 全局秘密键（比 config_store.GLOBAL_SECRET_KEYS 多收 OIDC 客户端密钥——它也是秘密）
 GLOBAL_SECRETS = {
     "CHRONICLER_SECRET": {"secret_type": "encryption-key", "rotation_risk": "critical",
@@ -43,23 +45,27 @@ def sync_env_secrets(values: dict, components: dict, actor: str = "setup") -> in
                if key in fmap and value and not key.startswith("INIT_ADMIN_")}
     if not targets:
         return 0
-    db_init()  # bootstrap 模式下幂等补表（normal 模式为 no-op）
-    changed = 0
-    for key, value in sorted(targets.items()):
-        outcome = store.upsert(kind="text", name=key, scope=fmap[key]["scope"],
-                               plain=str(value).encode("utf-8"), actor=actor,
-                               secret_type=fmap[key]["secret_type"],
-                               rotation_risk=fmap[key]["rotation_risk"],
-                               summary=fmap[key]["summary"], owner=fmap[key]["scope"])
-        if outcome != "unchanged":
-            changed += 1
-    if changed:
-        audit(actor, "vault.sync", "", f"count={changed}")
-    return changed
+    from ..db import close as db_close
+    try:
+        db_init()  # bootstrap 模式下幂等补表（normal 模式为 no-op）
+        changed = 0
+        for key, value in sorted(targets.items()):
+            outcome = store.upsert(kind="text", name=key, scope=fmap[key]["scope"],
+                                   plain=str(value).encode("utf-8"), actor=actor,
+                                   secret_type=fmap[key]["secret_type"],
+                                   rotation_risk=fmap[key]["rotation_risk"],
+                                   summary=fmap[key]["summary"], owner=fmap[key]["scope"])
+            if outcome != "unchanged":
+                changed += 1
+        if changed:
+            audit(actor, "vault.sync", "", f"count={changed}")
+        return changed
+    finally:
+        db_close()  # 双写可能在任意线程（bootstrap 请求线程）执行，用完即关防 Windows 文件锁
 
 
 def read_env_secrets(components: dict) -> dict:
-    """只读解析 .env 中已配置的组件秘密（跳过占位值）。"""
+    """只读解析 .env 中已配置的组件秘密（跳过占位值与糊化引用）。"""
     path = PROFILE.install_root / ".env"
     if not path.is_file():
         return {}
@@ -70,7 +76,8 @@ def read_env_secrets(components: dict) -> dict:
         if clean and not clean.startswith("#") and "=" in clean:
             key, _, value = clean.partition("=")
             key, value = key.strip(), value.strip()
-            if key in declared and value and "change_me" not in value.lower():
+            if (key in declared and value and "change_me" not in value.lower()
+                    and not value.startswith(VAULT_PREFIX)):
                 found[key] = value
     return found
 
@@ -119,3 +126,77 @@ def env_status(components: dict) -> dict:
     return {"missing_in_vault": missing_in_vault, "drifted": drifted,
             "missing_in_env": missing_in_env,
             "managed": [f"{meta['scope']}/{key}" for key, meta in sorted(fmap.items())]}
+
+
+# ---------- 糊化与使用时渲染（ADR-0045） ----------
+
+def mask_ref(scope: str, key: str) -> str:
+    return f"{VAULT_PREFIX}{scope}/{key}"
+
+
+def mask_env_text(text: str, components: dict) -> str:
+    """把 .env 文本中秘密字段的值替换为 VAULT: 占位引用（非秘密原样保留）。"""
+    fmap = secret_field_map(components)
+    out = []
+    for line in text.splitlines():
+        clean = line.strip()
+        if clean and not clean.startswith("#") and "=" in clean:
+            key, _, value = clean.partition("=")
+            key = key.strip()
+            if key in fmap and value.strip() and not value.strip().startswith(VAULT_PREFIX):
+                indent = line[:len(line) - len(line.lstrip())]
+                out.append(f"{indent}{key}={mask_ref(fmap[key]['scope'], key)}")
+                continue
+        out.append(line)
+    return "\n".join(out) + "\n"
+
+
+def resolve_ref(ref: str) -> str:
+    """把 VAULT:<scope>/<name> 解析为真实值；缺条目抛错，锁定经 store 抛 VaultLocked。"""
+    scope, _, name = ref.partition("/")
+    row = store.find(scope, name)
+    if not row:
+        raise ValueError(f"秘密库缺少条目：{ref}")
+    return store.decrypt_value(row).decode("utf-8")
+
+
+def resolve_env_text(text: str) -> str:
+    """渲染：把文本中的 VAULT: 占位替换为 vault 中的真实值。"""
+    out = []
+    for line in text.splitlines():
+        clean = line.strip()
+        if clean and not clean.startswith("#") and "=" in clean:
+            key, _, value = clean.partition("=")
+            value = value.strip()
+            if value.startswith(VAULT_PREFIX):
+                indent = line[:len(line) - len(line.lstrip())]
+                out.append(f"{indent}{key.strip()}={resolve_ref(value[len(VAULT_PREFIX):])}")
+                continue
+        out.append(line)
+    return "\n".join(out) + "\n"
+
+
+def migrate_env_to_masked(components: dict, actor: str = "supervisor") -> int:
+    """启动迁移：.env 中仍是明文的秘密先导入 vault（以 .env 现实为准），再糊化该文件。
+    库锁定时拒绝迁移（绝不把值抹成占位后解不开）。返回迁移条数。"""
+    path = PROFILE.install_root / ".env"
+    if not path.is_file():
+        return 0
+    if not read_env_secrets(components):
+        return 0  # 没有明文秘密（已是糊化态或无秘密），不动
+    if store.lock_state()["locked"]:
+        print("[WARN] 秘密库已锁定，跳过 .env 糊化迁移（请先解锁）")
+        return 0
+    result = import_env(components, actor=actor, force=True)
+    masked = mask_env_text(path.read_text(encoding="utf-8"), components)
+    tmp = path.with_suffix(".mask.tmp")
+    tmp.write_text(masked, encoding="utf-8", newline="\n")
+    import os
+    os.replace(tmp, path)
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+    audit(actor, "vault.env_masked", "", f"migrated={result['imported']}")
+    print(f"[INFO] .env 已糊化：{result['imported']} 个秘密字段改为 VAULT: 引用（ADR-0045）")
+    return result["imported"]

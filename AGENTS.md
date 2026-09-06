@@ -33,14 +33,16 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
 
 - 所有脚本/配置文件统一 **LF 行尾**（.gitattributes 已强制；Windows 编辑后注意转换，
   或运行 `scripts/dev-sync.sh`）。
-- **密钥绝不入库**：只提交 `.env.example`；`.env` 已在 .gitignore。例外：age 密文（`secrets/*.age`、
-  导出包）可入库，主密钥 `secrets/master.key` 永不入库。
-- **秘密库（vault，ADR-0041~0044）**：秘密值一律 age 密文存储，元数据透明可查；
+- **密钥绝不入库**：只提交 `.env.example`；`.env` 已在 .gitignore，且其中秘密字段为 `VAULT:`
+  糊化占位（ADR-0045：真实值只在秘密库，启动时自动迁移存量明文）。例外：age 密文
+  （`secrets/*.age`、导出包）可入库，主密钥 `secrets/master.key` 永不入库。
+- **秘密库（vault，ADR-0041~0045）**：秘密值一律 age 密文存储，元数据透明可查；
   Web 管理页「秘密库」（admin 专属 tab），API `/api/vault/*`；全量导出 = 明文 manifest + 密文
   payload.age；本地浏览/验证用 `python scripts/vault-inspect.py list|verify|show|extract`；
-  主密钥在 `<install_root>/secrets/master.key`（可用 CHRONICLER_SECRETS_DIR 覆盖，测试用）。
-  对接规则（docs/how/secrets-vault.md）：vault 对 `.env` 只读（persist 双写 + import-env 导入 +
-  sha256 漂移检测）；库非空而主密钥缺失/不匹配时锁定，须解锁密钥收养，程序不做任何清理操作。
+  主密钥优先存 OS 钥匙串（keyring，无匙串环境回落 `<install_root>/secrets/master.key`，
+  CHRONICLER_SECRETS_DIR 可覆盖）。变更自动重写密文快照 `secrets/secrets.age`（可入 git）。
+  对接规则（docs/how/secrets-vault.md）：库非空而主密钥缺失/不匹配时锁定，须解锁密钥收养，
+  程序不做任何清理操作。
 - **数据显式落宿主**（NFR-008/009，ADR-0012/0026）：三层——`data/public/`（组件交换区，挂所有容器）、
   `data/private/<组件>/`（仅挂载声明者）、`data/workspace/`（工作区，工程克隆等可由 git 重建，不进备份）；
   机密永不落 data。禁止命名卷存业务数据；`data/` 已入 .gitignore。
