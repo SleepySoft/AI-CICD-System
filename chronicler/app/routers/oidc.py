@@ -9,7 +9,7 @@ Keycloak chronicler 客户端一致，scripts/wire-chronicler.sh 创建）。
 import time
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 
@@ -49,7 +49,7 @@ async def oidc_login():
 
 
 @router.get("/callback")
-async def oidc_callback(code: str | None = None, state: str = "",
+async def oidc_callback(request: Request, code: str | None = None, state: str = "",
                         error: str | None = None, error_description: str | None = None):
     if Cfg.AUTH_BACKEND != "oidc":
         raise HTTPException(status_code=400, detail="未启用 OIDC 后端")
@@ -72,7 +72,16 @@ async def oidc_callback(code: str | None = None, state: str = "",
                                       "client_secret": Cfg.OIDC_CLIENT_SECRET,
                                       "redirect_uri": f"{Cfg.PUBLIC_URL}/api/auth/oidc/callback"})
         if tok.status_code != 200:
-            raise HTTPException(status_code=401, detail=f"token 交换失败：{tok.text[:200]}")
+            # 重放容错（2026-09-06 实测）：浏览器模拟插件/刷新会重复请求回调，
+            # code 一次性已被首次消费（Keycloak: invalid_grant/already used）。
+            # 若请求已带有效会话 cookie（首次成功所发），视为重放直接放行。
+            if "invalid_grant" in tok.text or "already used" in tok.text:
+                existing = auth.read_session(request.cookies.get(Cfg.SESSION_COOKIE, ""))
+                if existing:
+                    return RedirectResponse("/")
+            raise HTTPException(status_code=401,
+                                detail="登录链接已使用或过期，请回到首页重新发起登录"
+                                       f"（{tok.text[:160]}）")
         info = await client.get(f"{_realm_url(public=False)}/userinfo",
                                 headers={**_headers(public=False),
                                          "Authorization": f"Bearer {tok.json()['access_token']}"})
