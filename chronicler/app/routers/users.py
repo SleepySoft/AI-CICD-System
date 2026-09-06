@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from ..auth import hash_password, require_admin
 from ..config import Cfg
 from ..db import audit, execute, q, q1
-from .. import kc_admin
+from .. import component_exec
 
 router = APIRouter(prefix="/api/users", tags=["users"], dependencies=[Depends(require_admin)])
 
@@ -57,14 +57,20 @@ class ResetPasswordBody(BaseModel):
 
 @router.post("/{username}/reset-password")
 async def reset_password(username: str, body: ResetPasswordBody):
-    """管理员经 Keycloak Admin API 重置用户密码（SSO 找回密码的管理员通道）"""
+    """管理员重置用户密码：由提供 hooks/users.py 能力的身份组件执行（ADR-0027 能力脚本）。"""
     if Cfg.AUTH_BACKEND != "oidc":
         raise HTTPException(status_code=400, detail="仅 OIDC 模式可用；local 模式请删除后重建用户")
     if len(body.password) < 6:
         raise HTTPException(status_code=400, detail="密码至少 6 位")
     if not q1("SELECT id FROM users WHERE username=?", (username,)):
         raise HTTPException(status_code=404, detail="用户不存在")
-    await kc_admin.reset_password(username, body.password, body.temporary)
+    import asyncio
+    args = ["reset-password", username, body.password] + ([] if body.temporary else ["--permanent"])
+    result = await asyncio.to_thread(component_exec.run_capability, "users.py", args)
+    if result is None:
+        raise HTTPException(status_code=400, detail="当前部署的身份组件不支持在线重置密码")
+    if not result.get("ok"):
+        raise HTTPException(status_code=502, detail=f"重置失败：{result.get('error', '')[:200]}")
     audit("admin", "user.reset_password", username, f"temporary={body.temporary}")
     return {"ok": True, "username": username}
 

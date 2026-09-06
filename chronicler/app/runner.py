@@ -17,7 +17,6 @@ import threading
 import time
 from pathlib import Path
 
-import httpx
 from fastapi import HTTPException
 
 from . import change_detection, projects, registry
@@ -142,28 +141,21 @@ def _exec(command: str, cwd: str, env: dict, stdin_data: str | None,
 
 
 def _ci_context(project: dict) -> dict:
-    """同期 CI 构建上下文（FR-MGR-010 最小实现）：从 Jenkins job 拉 lastBuild
-    注：supervisor 在宿主，ci.localhost 等域名走 127.0.0.1 + Host 头（容器不解析 *.localhost）"""
+    """同期 CI 构建上下文（FR-MGR-010）：由提供 hooks/ci.py 能力的组件完成（ADR-0025/0027）。"""
     ci_url = (project.get("ci_url") or "").strip().rstrip("/")
     if not ci_url:
         return {}
     try:
-        from urllib.parse import urlparse
-        u = urlparse(ci_url)
-        host = u.hostname or ""
-        base = "http://127.0.0.1" if host.endswith(".localhost") else f"{u.scheme}://{u.netloc}"
-        headers = {"Host": host} if host.endswith(".localhost") else {}
-        auth = (os.environ.get("JENKINS_ADMIN_ID", ""), os.environ.get("JENKINS_ADMIN_PASSWORD", ""))
-        with httpx.Client(timeout=5, trust_env=False) as client:
-            r = client.get(f"{base}{u.path}/lastBuild/api/json?tree=number,result,timestamp,url",
-                           headers=headers, auth=auth if auth[1] else None)
-        if r.status_code == 200:
-            b = r.json()
-            return {"job": ci_url, "build": b.get("number"), "result": b.get("result"),
-                    "timestamp": b.get("timestamp")}
+        from . import component_exec
+        result = component_exec.run_capability("ci.py", ["last-build", ci_url], timeout=15)
+        if result is None:
+            return {"job": ci_url, "error": "no-ci-capability"}
+        if result.get("ok"):
+            return {"job": ci_url, "build": result.get("number"), "result": result.get("result"),
+                    "timestamp": result.get("timestamp")}
+        return {"job": ci_url, "error": result.get("error", "unreachable")}
     except Exception:  # noqa: BLE001 - CI 上下文缺失不阻塞任务
-        pass
-    return {"job": ci_url, "error": "unreachable"}
+        return {"job": ci_url, "error": "unreachable"}
 
 
 def _runner_env() -> str:

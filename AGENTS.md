@@ -54,6 +54,11 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
   `setup.yaml`（初始化方案/依赖/仅依赖组件/字段/就绪检查）+ 可选 `SKILL.md`（能力注入，ADR-0025）+
   可选 `hooks/backup.py` / `hooks/deploy.py` / `hooks/initialize.py`；
   docker 组件另需 `compose.yml` 服务 + `caddy/Caddyfile` 子域名。
+- **组件能力脚本**（ADR-0027 扩展）：`chronicler/components/<name>/hooks/<能力>.py` 存在即声明能力
+  （ADR-0025），核心经 `app/component_exec.py` 按文件名发现并调用（`run_capability`），注入基础键 +
+  依赖闭包自述字段（糊化 VAULT: 引用由秘密库解析）+ 容器名变量；脚本以 stdout 末行 JSON 汇报结果。
+  现有能力：`users.py`（身份组件：重置密码）、`repos.py`（git 托管组件：幂等建仓）、
+  `ci.py`（CI 组件：last-build 查询）。核心禁止出现组件名/字段名硬编码。
 - **Chronicler 归 Chronicler，组件归组件**：核心初始化代码只实现通用 schema、校验、渲染、计划和执行，
   不得包含任何组件名、组件字段、端口、默认值或接线知识；这些信息全部由组件自己的 `plugin.yaml`、
   `setup.yaml`、资源和 hook 提供。秘密字段必须自述类型、生成长度、轮换风险和用途。跨组件配置由能力

@@ -5,7 +5,6 @@ import re
 import subprocess
 from pathlib import Path
 
-import httpx
 from fastapi import HTTPException
 
 from .config import Cfg
@@ -188,7 +187,7 @@ def ensure_shadow_repo(pid: int) -> Path:
         return dest
     url = (p.get("shadow_repo") or "").strip()
     if not url:
-        url = _gitea_auto_shadow_repo(p) or ""  # 建仓成功会回写 project.shadow_repo
+        url = _auto_shadow_repo(p) or ""  # 建仓成功会回写 project.shadow_repo
     dest.parent.mkdir(parents=True, exist_ok=True)
     if url:
         r = _git(["clone", url, str(dest)], timeout=300)
@@ -232,43 +231,20 @@ def shadow_head(pid: int) -> str:
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
-def _gitea_auto_shadow_repo(project: dict) -> str | None:
-    """Gitea 自动建仓 <工程名>-shadow（幂等，ADR-0028）；凭据环境注入。返回 clone URL 或 None"""
-    user, pw = os.environ.get("GITEA_ADMIN_USER", ""), os.environ.get("GITEA_ADMIN_PASSWORD", "")
-    if not (user and pw):
-        return None
+def _auto_shadow_repo(project: dict) -> str | None:
+    """影子库远端建仓：由提供 hooks/repos.py 能力的组件完成（存在即声明，ADR-0025/0027）。
+    核心不认识任何 git 托管组件；无提供者时返回 None（降级为纯本地仓）。"""
+    from . import component_exec
     try:
-        gitea = next((t for t in load_tools_safe() if t["name"] == "gitea"), None)
-        if not gitea:
-            return None
-        base = gitea.get("url", "http://git.localhost").rstrip("/")
-        host = base.split("//")[1]
-        api = f"http://127.0.0.1/api/v1" if host.endswith(".localhost") else f"{base}/api/v1"
-        headers = {"Host": host} if host.endswith(".localhost") else {}
-        repo_name = f"{project['name']}-shadow"
-        with httpx.Client(timeout=10, trust_env=False) as client:
-            auth = (user, pw)
-            r = client.get(f"{api}/repos/{user}/{repo_name}", headers=headers, auth=auth)
-            if r.status_code == 404:
-                r = client.post(f"{api}/user/repos", headers=headers, auth=auth, json={
-                    "name": repo_name,
-                    "description": f"Chronicler shadow：{project['name']} 的分析报告与蒸馏文档（ADR-0028）",
-                    "private": False, "auto_init": False})
-                if r.status_code not in (200, 201, 409):
-                    return None
-            clone_url = f"{base}/{user}/{repo_name}.git"
-            execute("UPDATE projects SET shadow_repo=? WHERE id=?", (clone_url, project["id"]))
-            return clone_url
-    except Exception:  # noqa: BLE001 - 建仓失败降级为本地仓
+        result = component_exec.run_capability("repos.py", ["ensure", f"{project['name']}-shadow"])
+    except Exception:  # noqa: BLE001 建仓失败降级为本地仓
         return None
-
-
-def load_tools_safe():
-    from .tools import load_tools
-    try:
-        return load_tools()
-    except Exception:
-        return []
+    if not result or not result.get("ok"):
+        return None
+    url = result.get("clone_url", "")
+    if url:
+        execute("UPDATE projects SET shadow_repo=? WHERE id=?", (url, project["id"]))
+    return url or None
 
 
 def push_shadow(pid: int, branch: str = SHADOW_MAIN_BRANCH) -> str | None:
@@ -276,8 +252,8 @@ def push_shadow(pid: int, branch: str = SHADOW_MAIN_BRANCH) -> str | None:
     p = get_project(pid)
     url = (p.get("shadow_repo") or "").strip()
     if not url:
-        # 本地仓已存在但远端未登记：尝试 Gitea 自动建仓（幂等）并回写（ADR-0028）
-        url = _gitea_auto_shadow_repo(p) or ""
+        # 本地仓已存在但远端未登记：尝试能力组件建仓（幂等）并回写（ADR-0028）
+        url = _auto_shadow_repo(p) or ""
     if not url:
         return None
     dest = shadow_dir(pid)
