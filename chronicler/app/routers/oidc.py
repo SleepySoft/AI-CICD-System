@@ -21,6 +21,12 @@ router = APIRouter(prefix="/api/auth/oidc", tags=["auth-oidc"])
 _state = URLSafeTimedSerializer(Cfg.SESSION_SECRET + ":oidc")
 
 
+def refresh_serializer():
+    """同 auth.refresh_signer：秘密库解析出真实会话密钥后重建（ADR-0045）。"""
+    global _state
+    _state = URLSafeTimedSerializer(Cfg.SESSION_SECRET + ":oidc")
+
+
 def _realm_url(public: bool) -> str:
     base = Cfg.KC_PUBLIC if public else Cfg.KC_INTERNAL
     return f"{base}/realms/{Cfg.KC_REALM}/protocol/openid-connect"

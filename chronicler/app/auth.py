@@ -42,6 +42,12 @@ def read_session(token: str) -> str | None:
         return None
 
 
+def refresh_signer():
+    """启动时从秘密库解析出真实 CHRONICLER_SECRET 后重建签名器（ADR-0045；import 时 .env 只含占位）。"""
+    global _signer
+    _signer = TimestampSigner(Cfg.SESSION_SECRET)
+
+
 def current_user(request: Request) -> dict:
     token = request.cookies.get(Cfg.SESSION_COOKIE, "")
     username = read_session(token) if token else None

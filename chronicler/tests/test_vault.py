@@ -243,6 +243,33 @@ class VaultTest(unittest.TestCase):
         assert resp.status_code == 200
         assert "移动工作台" in resp.text
 
+    def test_device_redirect(self):
+        """手机 UA 进 /m，桌面 UA 进桌面 SPA。"""
+        anon = TestClient(self.app, follow_redirects=False)
+        mobile = anon.get("/", headers={"user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)"})
+        assert mobile.status_code == 307 and mobile.headers["location"] == "/m"
+        desktop = anon.get("/", headers={"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+        assert desktop.status_code == 200
+        anon.close()
+
+    def test_apply_chronicler_secrets(self):
+        """ADR-0045：糊化的 Chronicler 自身秘密在启动时从秘密库解析进进程。"""
+        from types import SimpleNamespace
+        from chronicler.app.config import Cfg as AppCfg
+        from chronicler.app.vault import sync
+        old_oidc = AppCfg.OIDC_CLIENT_SECRET
+        try:
+            self._create_text(name="CHRONICLER_OIDC_SECRET", scope="infra", value="oidc-real-secret")
+            (self.root / ".env").write_text(
+                "CHRONICLER_OIDC_SECRET=VAULT:infra/CHRONICLER_OIDC_SECRET\n", encoding="utf-8")
+            with patch.object(sync, "PROFILE", SimpleNamespace(install_root=self.root)):
+                assert sync.apply_chronicler_secrets() == 1
+            assert AppCfg.OIDC_CLIENT_SECRET == "oidc-real-secret"
+            assert os.environ.get("CHRONICLER_OIDC_SECRET") == "oidc-real-secret"
+        finally:
+            AppCfg.OIDC_CLIENT_SECRET = old_oidc
+            os.environ.pop("CHRONICLER_OIDC_SECRET", None)
+
     # ---------- 锁定 / 解锁 / 交接 ----------
 
     def test_key_ack(self):

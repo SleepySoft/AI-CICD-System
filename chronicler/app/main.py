@@ -2,8 +2,8 @@
 import threading
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import Cfg
@@ -58,6 +58,8 @@ def create_app(mode: str = "normal") -> FastAPI:
         from .initialization import catalog as _catalog
         from .vault import sync as _vault_sync
         _vault_sync.migrate_env_to_masked(_catalog.load())
+        # 糊化后 Chronicler 自身秘密（会话密钥/OIDC 密钥）从秘密库解析进进程
+        _vault_sync.apply_chronicler_secrets()
     except Exception:  # noqa: BLE001 迁移失败不阻断启动
         import traceback
         traceback.print_exc()
@@ -77,6 +79,14 @@ def create_app(mode: str = "normal") -> FastAPI:
         threading.Thread(target=autostart_boot, daemon=True).start()
 
     static = Cfg.STATIC_DIR
+
+    @app.get("/", include_in_schema=False)
+    async def index_page(request: Request):
+        """按设备分流：手机浏览器进移动工作台 /m，其余进桌面 SPA。"""
+        ua = request.headers.get("user-agent", "").lower()
+        if any(k in ua for k in ("mobile", "android", "iphone", "ipod")):
+            return RedirectResponse("/m")
+        return FileResponse(static / "index.html")
 
     @app.get("/m", include_in_schema=False)
     async def mobile_page():

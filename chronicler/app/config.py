@@ -20,7 +20,12 @@ def _load_dotenv():
         if not line or line.startswith("#") or "=" not in line:
             continue
         k, _, v = line.partition("=")
-        os.environ.setdefault(k.strip(), v.strip())  # 已有环境变量优先
+        v = v.strip()
+        # 糊化引用（ADR-0045）不进进程环境：真实值由 vault.sync.apply_chronicler_secrets
+        # 在启动时解析（本模块 import 时数据库尚未就绪，不能在此解密）
+        if v.startswith("VAULT:"):
+            continue
+        os.environ.setdefault(k.strip(), v)  # 已有环境变量优先
 
 
 _load_dotenv()

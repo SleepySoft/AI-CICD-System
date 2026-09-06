@@ -200,3 +200,39 @@ def migrate_env_to_masked(components: dict, actor: str = "supervisor") -> int:
     audit(actor, "vault.env_masked", "", f"migrated={result['imported']}")
     print(f"[INFO] .env 已糊化：{result['imported']} 个秘密字段改为 VAULT: 引用（ADR-0045）")
     return result["imported"]
+
+
+def apply_chronicler_secrets() -> int:
+    """启动时（db 就绪后）把糊化的 Chronicler 自身秘密从秘密库解析进进程。
+
+    config._load_dotenv 在 import 时跳过 VAULT: 引用；本函数在 normal 模式启动时
+    （迁移之后、服务之前）解析 CHRONICLER_SECRET / CHRONICLER_OIDC_SECRET 等自身秘密，
+    更新 os.environ + Cfg，并重建 import 时固化的签名器。返回解析条数。
+    """
+    path = PROFILE.install_root / ".env"
+    if not path.is_file():
+        return 0
+    resolved = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        clean = line.strip()
+        if not clean or clean.startswith("#") or "=" not in clean:
+            continue
+        key, _, value = clean.partition("=")
+        key, value = key.strip(), value.strip()
+        if key in GLOBAL_SECRETS and value.startswith(VAULT_PREFIX):
+            resolved[key] = resolve_ref(value[len(VAULT_PREFIX):])  # 锁定/缺条目会抛错
+    if not resolved:
+        return 0
+    import os
+    for key, value in resolved.items():
+        os.environ[key] = value
+    from ..config import Cfg
+    if "CHRONICLER_SECRET" in resolved:
+        Cfg.SESSION_SECRET = resolved["CHRONICLER_SECRET"]
+        from .. import auth
+        auth.refresh_signer()
+        from ..routers import oidc
+        oidc.refresh_serializer()
+    if "CHRONICLER_OIDC_SECRET" in resolved:
+        Cfg.OIDC_CLIENT_SECRET = resolved["CHRONICLER_OIDC_SECRET"]
+    return len(resolved)
