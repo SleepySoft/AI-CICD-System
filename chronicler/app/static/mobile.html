@@ -72,6 +72,13 @@
     font-family: ui-monospace, Consolas, monospace; font-size: 12px; white-space: pre-wrap;
     overflow-wrap: anywhere; max-height: 60dvh; overflow-y: auto;
   }
+  details.taskbox { margin-top: 8px; }
+  details.taskbox > summary {
+    cursor: pointer; color: #8b949e; font-size: 13px; padding: 4px 0;
+    list-style: none; user-select: none;
+  }
+  details.taskbox > summary::before { content: "▸ "; }
+  details.taskbox[open] > summary::before { content: "▾ "; }
   .login-wrap { max-width: 420px; margin: 12dvh auto 0; }
   .err { color: #f85149; font-size: 13px; margin-top: 8px; }
   .group-title { color: #8b949e; font-size: 13px; margin: 16px 2px 8px; }
@@ -174,11 +181,11 @@ async function viewProjects() {
         </div>
         <div class="muted" style="margin:4px 0 6px">${esc(p.git_url)}</div>
         ${last ? `<div class="muted mono" style="font-size:12px">${last}</div>` : ""}
-        ${ts.length ? `<div class="group-title" style="margin:10px 0 6px">任务</div>` + ts.map(t => `
-          <div class="row" style="margin-bottom:6px">
+        ${ts.length ? `<details class="taskbox"><summary>任务（${ts.length}）</summary>` + ts.map(t => `
+          <div class="row" style="margin:6px 0">
             <span class="grow">${esc(t.name)} ${t.enabled ? "" : "<span class='tag'>停用</span>"}</span>
             ${isAdmin && t.enabled ? `<button class="btn primary" data-trigger="${t.id}">执行</button>` : ""}
-          </div>`).join("") : '<div class="muted">无任务定义</div>'}
+          </div>`).join("") + "</details>" : '<div class="muted">无任务定义</div>'}
       </div>`;
   }).join("");
   view.innerHTML = html;
