@@ -90,8 +90,9 @@
 <div id="view"></div>
 
 <nav id="nav" class="hidden">
-  <button data-tab="tools" class="active"><span class="ico">🧰</span>组件</button>
+  <button data-tab="projects" class="active"><span class="ico">📁</span>工程</button>
   <button data-tab="runs"><span class="ico">▶️</span>任务</button>
+  <button data-tab="tools"><span class="ico">🧰</span>组件</button>
   <button data-tab="me"><span class="ico">👤</span>我的</button>
 </nav>
 
@@ -102,8 +103,9 @@
 
 const $ = s => document.querySelector(s);
 const view = $("#view");
-let user = null, tab = "tools", pollTimer = null;
+let user = null, tab = "projects", pollTimer = null;
 let detailRun = null;  // 正在查看的 run（日志/报告）
+let chatUrl = "";       // ATR 对话页地址（探测到 terminal-runtime 组件才有）
 
 async function api(path, opts = {}) {
   const resp = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
@@ -148,7 +150,44 @@ async function viewTools() {
   }));
 }
 
-// ---------- 视图：任务 ----------
+// ---------- 视图：工程（第一入口：对话与任务触发都在这里） ----------
+async function viewProjects() {
+  const [projects, tasks] = await Promise.all([
+    api("/api/projects").catch(() => []),
+    api("/api/tasks").catch(() => []),
+  ]);
+  netDot(true);
+  const isAdmin = user?.role === "admin";
+  const tasksOf = pid => tasks.filter(t => t.project_id === pid);
+  let html = "<div class='group-title'>工程</div>";
+  if (!projects.length) html += "<p class='muted'>暂无工程</p>";
+  html += projects.map(p => {
+    const ts = tasksOf(p.id);
+    const last = p.last_commit && typeof p.last_commit === "object"
+      ? `${esc(p.last_commit.hash)} · ${esc(p.last_commit.date)}` : "";
+    return `
+      <div class="card">
+        <div class="row">
+          <b class="grow">${esc(p.name)}</b>
+          ${p.last_sync_error ? '<span class="tag" style="color:#f85149">同步失败</span>' : ""}
+          ${chatUrl ? `<a class="btn primary" style="text-decoration:none" href="${chatUrl}" target="_blank">💬 对话</a>` : ""}
+        </div>
+        <div class="muted" style="margin:4px 0 6px">${esc(p.git_url)}</div>
+        ${last ? `<div class="muted mono" style="font-size:12px">${last}</div>` : ""}
+        ${ts.length ? `<div class="group-title" style="margin:10px 0 6px">任务</div>` + ts.map(t => `
+          <div class="row" style="margin-bottom:6px">
+            <span class="grow">${esc(t.name)} ${t.enabled ? "" : "<span class='tag'>停用</span>"}</span>
+            ${isAdmin && t.enabled ? `<button class="btn primary" data-trigger="${t.id}">执行</button>` : ""}
+          </div>`).join("") : '<div class="muted">无任务定义</div>'}
+      </div>`;
+  }).join("");
+  view.innerHTML = html;
+  view.querySelectorAll("[data-trigger]").forEach(b => b.addEventListener("click", async () => {
+    b.disabled = true;
+    try { await api(`/api/tasks/${b.dataset.trigger}/trigger`, { method: "POST" }); } catch (e) { alert(e.message); }
+    setTimeout(() => { tab = "runs"; render(); }, 1200);
+  }));
+}
 const STATUS_TEXT = { queued: "排队中", running: "运行中", success: "成功", failed: "失败", skipped: "跳过" };
 async function viewRuns() {
   const [tasks, runs, projects] = await Promise.all([
@@ -179,11 +218,6 @@ async function viewRuns() {
       <div class="muted">${esc(projName(r.project_id))} · ${fmtT(r.started_at)}</div>
     </div>`).join("");
   view.innerHTML = html;
-  view.querySelectorAll("[data-trigger]").forEach(b => b.addEventListener("click", async () => {
-    b.disabled = true;
-    try { await api(`/api/tasks/${b.dataset.trigger}/trigger`, { method: "POST" }); } catch (e) { alert(e.message); }
-    setTimeout(viewRuns, 1500);
-  }));
   view.querySelectorAll("[data-run]").forEach(c => c.addEventListener("click", () => viewRunDetail(+c.dataset.run)));
 }
 
@@ -263,7 +297,15 @@ function viewLogin() {
 }
 
 // ---------- 框架：切换 / 轮询 / 前后台稳定 ----------
-const VIEWS = { tools: viewTools, runs: viewRuns, me: viewMe };
+const VIEWS = { projects: viewProjects, runs: viewRuns, tools: viewTools, me: viewMe };
+async function detectChatUrl() {
+  // ATR 对话页（terminal-runtime 组件）：有注册 URL 才显示对话入口（ADR-0046 P1 前置）
+  try {
+    const tools = await api("/api/tools");
+    const t = tools.find(x => /terminal|term/i.test(x.name) && x.url);
+    chatUrl = t ? t.url.replace(/\/$/, "") + "/chat" : "";
+  } catch (_) { chatUrl = ""; }
+}
 function render() {
   $("#nav").classList.toggle("hidden", !user);
   $("#who").textContent = user ? user.username : "";
@@ -273,7 +315,7 @@ function render() {
 function startPoll() {
   stopPoll();
   pollTimer = setInterval(() => {
-    if (document.visibilityState === "visible" && user && !detailRun) (VIEWS[tab] || viewTools)();
+    if (document.visibilityState === "visible" && user && !detailRun) (VIEWS[tab] || viewProjects)();
   }, 8000);
 }
 function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
@@ -291,6 +333,7 @@ window.addEventListener("pageshow", e => { if (e.persisted && user) render(); })
 (async function init() {
   try { authBackend = (await api("/api/auth/method")).backend; } catch (_) {}
   try { user = await api("/api/auth/me"); } catch (_) { user = null; }
+  if (user) await detectChatUrl();
   render();
   startPoll();
 })();
