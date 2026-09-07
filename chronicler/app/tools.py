@@ -165,6 +165,32 @@ def _ensure_network():
         _client().networks.create("aisystem", driver="bridge")
 
 
+def deploy_component(tool: dict) -> str:
+    """部署组件（初始化执行用）：有部署钩子走钩子，否则无条件 compose up
+    （compose 按配置哈希自行决定是否重建容器，确保秘密/配置漂移能落到已存在容器）。"""
+    import subprocess
+    from .db import audit
+    name = tool["name"]
+    if tool["driver"] != "docker":
+        return "skip"
+    hook = Path(tool["_dir"]) / "hooks" / "deploy.py" if tool.get("_dir") else None
+    if hook and hook.is_file():
+        r = subprocess.run([component_python(), str(hook), "up"],
+                           cwd=str(PROFILE.install_root), capture_output=True,
+                           encoding="utf-8", errors="replace", timeout=600)
+        if r.returncode == 0:
+            audit("supervisor", "tool.deploy_hook", name)
+            return "deploy-hook"
+        raise RuntimeError((r.stderr or r.stdout or "组件部署 hook 失败").strip()[-2000:])
+    if not (Path(tool["_dir"]) / "compose.yml").is_file():
+        return "skip"
+    r = _compose_up(tool)
+    if r.returncode == 0:
+        audit("supervisor", "tool.deploy", name)
+        return "compose-up"
+    raise RuntimeError((r.stderr or r.stdout or f"Compose 退出码 {r.returncode}").strip()[-2000:])
+
+
 def ensure_running(tool: dict, raise_on_error: bool = False) -> str:
     """确保组件运行：running→跳过；stopped→docker start；absent→compose up -d 现场创建
     返回动作：skip/start/compose-up/error"""
@@ -376,8 +402,9 @@ def _deploy_worker(tool: dict):
         del task["lines"][:-200]  # 只保留最近 200 行
 
     emit(f"$ compose up（组件定义 {Path(tool['_dir']).name}/compose.yml）")
+    rendered = None
     try:
-        args, env = _compose_up_cmd(tool)
+        args, env, rendered = _compose_up_cmd(tool)
         with _compose_lock:
             _ensure_network()
             proc = sp.Popen(args, env=env, stdout=sp.PIPE, stderr=sp.STDOUT,
@@ -396,6 +423,9 @@ def _deploy_worker(tool: dict):
     except Exception as e:  # noqa: BLE001 - 部署线程兜底
         emit(f"✘ {type(e).__name__}: {e}")
         task["state"] = "error"
+    finally:
+        if rendered:
+            Path(rendered).unlink(missing_ok=True)  # 临时明文即用即删
 
 
 def deploy_status(name: str) -> dict:
