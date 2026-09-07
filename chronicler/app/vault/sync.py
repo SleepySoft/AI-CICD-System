@@ -42,7 +42,8 @@ def sync_env_secrets(values: dict, components: dict, actor: str = "setup") -> in
     """persist 双写：把本次写入 .env 的秘密键同步进 vault。返回变化条数。"""
     fmap = secret_field_map(components)
     targets = {key: value for key, value in values.items()
-               if key in fmap and value and not key.startswith("INIT_ADMIN_")}
+               if (key in fmap and value and not key.startswith("INIT_ADMIN_")
+                   and "change_me" not in str(value).lower())}
     if not targets:
         return 0
     from ..db import close as db_close
@@ -135,7 +136,10 @@ def mask_ref(scope: str, key: str) -> str:
 
 
 def mask_env_text(text: str, components: dict) -> str:
-    """把 .env 文本中秘密字段的值替换为 VAULT: 占位引用（非秘密原样保留）。"""
+    """把 .env 文本中秘密字段的值替换为 VAULT: 占位引用（非秘密原样保留）。
+
+    change_me 占位值与 read_env_secrets 一致跳过：它们不是秘密、不会导入秘密库，
+    糊化它们会留下永远无法解析的悬空 VAULT: 引用。"""
     fmap = secret_field_map(components)
     out = []
     for line in text.splitlines():
@@ -143,7 +147,9 @@ def mask_env_text(text: str, components: dict) -> str:
         if clean and not clean.startswith("#") and "=" in clean:
             key, _, value = clean.partition("=")
             key = key.strip()
-            if key in fmap and value.strip() and not value.strip().startswith(VAULT_PREFIX):
+            if (key in fmap and value.strip()
+                    and not value.strip().startswith(VAULT_PREFIX)
+                    and "change_me" not in value.lower()):
                 indent = line[:len(line) - len(line.lstrip())]
                 out.append(f"{indent}{key}={mask_ref(fmap[key]['scope'], key)}")
                 continue
