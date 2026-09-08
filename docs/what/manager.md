@@ -203,7 +203,7 @@ FR-MGR-009/013/014/026 共用同一个 Git 变更审核模型，完整决策见 
 
 ### 2.4 权限规格（FR-MGR-008、FR-MGR-017）
 
-- 鉴权后端可插拔（ADR-0023）：`local` 本地账密（零依赖默认）/ `oidc` Keycloak（`CHRONICLER_AUTH_BACKEND` 切换，接线见 ../runbooks/deploy.md 与 scripts/wire-chronicler.sh）。
+- 鉴权后端可插拔（ADR-0023）：`local` 本地账密（零依赖默认）/ `oidc` Keycloak（`CHRONICLER_AUTH_BACKEND` 切换，接线见 ../runbooks/deploy.md 与 keycloak 组件 `oidc.py` 能力，ADR-0047）。
 - 角色：admin（全部 + 配置/触发/用户管理）/ user（只读）；OIDC 模式下 Keycloak groups 映射：boss→admin、其余→user，首次登录自动 provisioning 本地用户记录。
 - 找回密码：OIDC 模式由 admin 在用户页「重置密码」（经 Keycloak Admin API，支持临时密码标记）；SMTP 未配置时 Keycloak 自助找回不可用。
 - 账号事实源唯一：OIDC 模式下本地密码登录仅 admin 应急可用（登录页入口收起于「本地应急账号登录」链接），本地表为 OIDC 首次登录的影子记录、只读；local 模式下本地账号全功能。

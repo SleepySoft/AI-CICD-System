@@ -38,7 +38,7 @@
 
 ### 2.3 SSO 契约
 
-Keycloak 预置 realm：组 `dev` / `boss`；token 的 `groups` claim 为各系统的角色映射依据。Chronicler 客户端由 `scripts/wire-chronicler.sh` 注册（可选 OIDC 后端，ADR-0023）。
+Keycloak 预置 realm：组 `dev` / `boss`；token 的 `groups` claim 为各系统的角色映射依据。Chronicler 客户端经 Keycloak 组件的 `oidc.py` 能力注册（可选 OIDC 后端，ADR-0023/ADR-0047）。
 
 ### 2.4 资源分档（NFR-003）
 

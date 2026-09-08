@@ -83,6 +83,7 @@
 | ADR-0044 多接收者密钥体系：系统秘密仅 admin 可解，工程秘密按接收者集合加密 | adr/0044-recipient-key-hierarchy.md | adr | 已接受 |
 | ADR-0045 vault 为唯一静态事实源：糊化 .env、使用时渲染、轮转单点写入 | adr/0045-vault-single-source-masked-env.md | adr | 已接受 |
 | ADR-0046 工程常驻会话：任务与对话复用同一 ATR 会话 | adr/0046-project-session-harness.md | adr | 已接受 |
+| ADR-0047 OIDC 客户端注册收归 Keycloak 组件 oidc 能力 | adr/0047-keycloak-oidc-client-capability.md | adr | 已接受 |
 | 部署与初始化 | runbooks/deploy.md | runbooks | 生效 |
 | 备份与恢复 | runbooks/backup-restore.md | runbooks | 生效 |
 | 接入新 Agent | runbooks/agent-onboarding.md | runbooks | 生效 |

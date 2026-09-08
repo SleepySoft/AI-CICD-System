@@ -44,10 +44,11 @@ chronicler/.venv/bin/python -m chronicler setup-recover
 
 1. `bash scripts/up.sh`：底座接线、SSO 接线和冒烟验证，不拉起 supervisor。
 2. `bash scripts/build-images.sh`（Windows：`scripts\build-images.ps1`）：构建可选工具链镜像。
-3. 需要单独切换 OIDC 时可执行：
+3. Chronicler 自身 OIDC 客户端接线（ADR-0047，栈就绪后执行一次；`<CHRONICLER_OIDC_SECRET>` 从秘密库管理页查看）：
    ```bash
-   bash scripts/wire-chronicler.sh
+   python -c "from chronicler.app import component_exec; print(component_exec.run_capability('oidc.py', ['upsert-client','chronicler','<CHRONICLER_OIDC_SECRET>','http://app.localhost','/api/auth/oidc/callback']))"
    ```
+   老的 `scripts/wire-chronicler.sh` 在糊化 .env（ADR-0045）后已不可用（`source .env` 取到 VAULT: 占位）。
 
 访问入口：无底座时直连 http://127.0.0.1:8600 ；两段并存时经 Caddy 访问
 http://app.localhost （Caddy 已反代到 host.docker.internal:8600，caddy 服务带
