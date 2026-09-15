@@ -110,15 +110,27 @@ def _generate(field: dict) -> str:
     return secrets.token_urlsafe(length)[:length]
 
 
-def generate_env(closure: dict, workdir: Path, http_port: int) -> Path:
-    """按 setup.yaml 字段声明生成一次性测试 env；秘密字段随机，普通字段用默认值"""
+def generate_env(closure: dict, workdir: Path, http_port: int, host_root: str = "") -> Path:
+    """按 setup.yaml 字段声明生成一次性测试 env；秘密字段随机，普通字段用默认值。
+
+    host_root：CI 场景（Jenkins agent 容器内经 docker.sock 操作宿主 dockerd）下，
+    工作区路径在宿主视角的真实前缀；所有作为卷挂载源/构建上下文的值须翻译，
+    否则 dockerd 在宿主上找不到路径、静默挂空目录。"""
+    install_root = PROFILE.install_root.resolve().as_posix()
+
+    def host_path(p: Path) -> str:
+        s = p.resolve().as_posix()
+        if host_root and s.startswith(install_root):
+            s = host_root.rstrip("/").replace("\\", "/") + s[len(install_root):]
+        return s
+
     values = {
         "TZ": "Asia/Shanghai",
         "BASE_DOMAIN": "localhost",
         "HTTP_PORT": str(http_port),
-        "DATA_ROOT": (workdir / "data").as_posix(),
-        "REPO_ROOT": PROFILE.install_root.as_posix(),
-        "COMPONENTS_ROOT": Cfg.COMPONENTS_DIR.as_posix(),
+        "DATA_ROOT": host_path(workdir / "data"),
+        "REPO_ROOT": host_path(PROFILE.install_root),
+        "COMPONENTS_ROOT": host_path(Cfg.COMPONENTS_DIR),
     }
     for comp in closure.values():
         for field in comp["setup"].get("fields") or []:
@@ -132,7 +144,7 @@ def generate_env(closure: dict, workdir: Path, http_port: int) -> Path:
     # jenkins compose 挂载 ${SSH_KEY_PATH}:/run/ssh/id_rsa:ro，文件必须存在；沙箱给个哑文件
     dummy_key = workdir / "dummy-ssh-key"
     dummy_key.write_text("sandbox-placeholder-key\n", encoding="utf-8")
-    values.setdefault("SSH_KEY_PATH", dummy_key.as_posix())
+    values.setdefault("SSH_KEY_PATH", host_path(dummy_key))
 
     env_path = workdir / "sandbox.env"
     env_path.write_text("\n".join(f"{k}={v}" for k, v in sorted(values.items())) + "\n",
@@ -242,12 +254,13 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def probe_once(url: str, http_port: int, expect: set) -> dict:
+def probe_once(url: str, http_port: int, expect: set, probe_host: str = "127.0.0.1") -> dict:
     m = re.match(r"https?://([^/]+)(/.*)?$", url)
     host, path = m.group(1), m.group(2) or "/"
     if not host.endswith(".localhost"):
         return {"ok": False, "detail": f"非本机域名，无法经沙箱入口探测：{host}"}
-    req = urllib.request.Request(f"http://127.0.0.1:{http_port}{path}", headers={"Host": host})
+    # probe_host：本机直跑用 127.0.0.1；CI agent 容器内用 host.docker.internal（指宿主 dockerd）
+    req = urllib.request.Request(f"http://{probe_host}:{http_port}{path}", headers={"Host": host})
     try:
         resp = urllib.request.build_opener(_NoRedirect).open(req, timeout=8)
         code, loc = resp.status, ""
@@ -261,7 +274,8 @@ def probe_once(url: str, http_port: int, expect: set) -> dict:
             + ("" if ok else f"（期望 {sorted(expect)}）"), "code": code}
 
 
-def probe_all(targets: list[dict], http_port: int, deadline: float) -> list[dict]:
+def probe_all(targets: list[dict], http_port: int, deadline: float,
+              probe_host: str = "127.0.0.1") -> list[dict]:
     """整体重试：慢启动组件（如 mkdocs 运行时装依赖）在预算内反复探测"""
     results = {t["name"]: {"name": t["name"], "url": t["url"], "ok": False,
                            "detail": "未探测"} for t in targets}
@@ -269,7 +283,7 @@ def probe_all(targets: list[dict], http_port: int, deadline: float) -> list[dict
     while pending and time.time() < deadline:
         for name, t in list(pending.items()):
             expect = set(t["probe"].get("expect") or DEFAULT_OK_CODES)
-            r = probe_once(t["url"], http_port, expect)
+            r = probe_once(t["url"], http_port, expect, probe_host)
             if r["ok"]:
                 results[name].update(r)
                 del pending[name]
@@ -369,7 +383,7 @@ def run_sandbox(args) -> int:
     results = None
     error = None
     try:
-        env_path = generate_env(closure, workdir, args.http_port)
+        env_path = generate_env(closure, workdir, args.http_port, args.host_root)
         files = [transform_compose(comp, compose_dir) for comp in closure.values()]
         scrub = BASE_ENV_KEYS | set()
         for comp in closure.values():
@@ -397,7 +411,8 @@ def run_sandbox(args) -> int:
                                        f"最近日志：{compose.logs[-1] if compose.logs else '(无)'}")
 
         print("[sandbox] 探测组件入口...")
-        results = probe_all(targets, args.http_port, time.time() + args.probe_timeout)
+        results = probe_all(targets, args.http_port, time.time() + args.probe_timeout,
+                            args.probe_host)
     except (RuntimeError, subprocess.TimeoutExpired) as e:
         error = str(e)
     finally:
@@ -446,6 +461,10 @@ def main(argv: list[str] | None = None):
     p.add_argument("--timeout", type=int, default=600, help="单组件就绪/单步 compose 超时秒数")
     p.add_argument("--probe-timeout", type=int, default=300, help="全部探针的整体重试预算秒数")
     p.add_argument("--workdir", help="沙箱工作目录（默认系统临时目录；CI 中应指向 workspace 内）")
+    p.add_argument("--host-root", default="",
+                   help="工作区在宿主 dockerd 视角的真实路径前缀（CI docker.sock 场景必传）")
+    p.add_argument("--probe-host", default="127.0.0.1",
+                   help="探针目标主机（CI agent 容器内用 host.docker.internal）")
     p.add_argument("--keep", action="store_true", help="测完不销毁（调试用）")
     p.add_argument("--skip-pull", action="store_true", help="跳过 docker compose pull")
     p.add_argument("--junit", help="JUnit XML 报告输出路径")

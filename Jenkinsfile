@@ -40,9 +40,21 @@ pipeline {
     stage('沙箱可达性测试') {
       when { expression { return params.SANDBOX_TESTS } }
       steps {
-        // 同一 dockerd 上与部署操作互斥；workdir 置于 workspace 内（docker.sock 挂载下临时目录须宿主可见）
+        // 同一 dockerd 上与部署操作互斥；agent 容器经 docker.sock 操作宿主 dockerd，
+        // 卷挂载源必须翻译成宿主视角路径（/var/jenkins_home 是 Jenkins 容器内路径）
         lock('docker-sandbox') {
-          sh 'python -m chronicler sandbox --workdir .sandbox --junit sandbox-report.xml --timeout 900 --probe-timeout 600'
+          timeout(time: 40, unit: 'MINUTES') {
+            sh '''
+              set -e
+              JC=$(docker ps --filter label=com.docker.compose.service=jenkins --format '{{.Names}}' | head -n1)
+              JH=$(docker inspect "$JC" --format '{{range .Mounts}}{{if eq .Destination "/var/jenkins_home"}}{{.Source}}{{end}}{{end}}' | tr '\\' '/')
+              HOST_WORKSPACE="$JH/workspace/$(basename "$WORKSPACE")"
+              echo "宿主视角 workspace: $HOST_WORKSPACE"
+              python -m chronicler sandbox --workdir .sandbox --junit sandbox-report.xml \
+                --timeout 900 --probe-timeout 600 \
+                --host-root "$HOST_WORKSPACE" --probe-host host.docker.internal
+            '''
+          }
         }
       }
       post {

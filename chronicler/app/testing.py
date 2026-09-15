@@ -54,7 +54,7 @@ def deploy_test(tool: dict, timeout: int = 300) -> dict:
     args = sandbox.argparse.Namespace(
         components=[tool["name"]], include_disabled=True, http_port=0,
         timeout=timeout, probe_timeout=min(timeout, 300), workdir=None,
-        keep=False, skip_pull=True, junit=None)
+        keep=False, skip_pull=True, junit=None, host_root="", probe_host="127.0.0.1")
     return {"ok": sandbox.run_sandbox(args) == 0}
 
 
