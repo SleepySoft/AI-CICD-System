@@ -109,7 +109,7 @@
         <!-- ============ 工程 ============ -->
         <el-tab-pane label="工程" name="projects">
           <div style="margin-bottom: 8px">
-            <el-button size="small" @click="loadProjects" :loading="loadingProjects">刷新</el-button>
+            <el-button size="small" @click="loadProjects(); loadTasks()" :loading="loadingProjects">刷新</el-button>
             <el-button v-if="isAdmin" size="small" type="primary" @click="showNewProject = true">新建工程</el-button>
           </div>
           <el-table :data="projects" size="small" style="width:100%">

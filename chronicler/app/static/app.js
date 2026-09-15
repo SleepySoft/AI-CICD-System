@@ -234,7 +234,7 @@ const app = createApp({
         await api("/api/projects", { method: "POST", body: JSON.stringify(body) });
         toast.ok("工程已创建"); showNewProject.value = false;
         newProject.value = { name: "", git_url: "", ci_url: "", description: "", overrides: "{}" };
-        loadProjects();
+        loadProjects(); loadTasks();
       } catch (e) { toast.err(e); }
       finally { acting.value = false; }
     }
