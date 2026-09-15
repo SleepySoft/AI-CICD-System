@@ -46,6 +46,9 @@ ENV_VAR_ALL = re.compile(r"\$\{([A-Z][A-Z0-9_]*)[}:?\-]")
 # 沙箱固定提供的底座变量（即使 compose 未引用也不能从进程环境泄漏进去）
 BASE_ENV_KEYS = {"TZ", "BASE_DOMAIN", "HTTP_PORT", "DATA_ROOT", "REPO_ROOT", "COMPONENTS_ROOT",
                  "SSH_KEY_PATH", "HTTP_PROXY", "HTTPS_PROXY"}
+# docker CLI 自身的干扰变量：CI agent 镜像可能残留 TLS 配置（指向不存在的证书），
+# 与挂载的 unix sock 冲突导致 CLI 直接报错（实测 aisystem/ci-agent 踩中）
+DOCKER_ENV_KEYS = {"DOCKER_TLS_VERIFY", "DOCKER_TLS", "DOCKER_CERT_PATH", "DOCKER_HOST"}
 
 
 # ---------------------------------------------------------------- 组件解析
@@ -385,7 +388,7 @@ def run_sandbox(args) -> int:
     try:
         env_path = generate_env(closure, workdir, args.http_port, args.host_root)
         files = [transform_compose(comp, compose_dir) for comp in closure.values()]
-        scrub = BASE_ENV_KEYS | set()
+        scrub = BASE_ENV_KEYS | DOCKER_ENV_KEYS
         for comp in closure.values():
             scrub |= set(ENV_VAR_ALL.findall(comp["compose"].read_text(encoding="utf-8")))
         compose = Compose(files, env_path, scrub)
