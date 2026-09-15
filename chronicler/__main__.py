@@ -6,6 +6,7 @@
   python -m chronicler env render [输出文件]   从秘密库渲染完整 env（默认 stdout；ADR-0045）
     python -m chronicler setup-recover       本机显式重开初始化引导（危险操作）
   python -m chronicler test [--component X] [--deploy] [--timeout N]   组件自检（FR-MGR-023）
+  python -m chronicler sandbox [选项]     隔离沙箱组件入口可达性测试（现拉现建现测现毁，FR-ENV-003）
 """
 import sys
 
@@ -56,6 +57,9 @@ def main():
                 failed += 1
         print(f"\n{len(results) - failed}/{len(results)} 通过")
         sys.exit(1 if failed else 0)
+    elif cmd == "sandbox":
+        from .app.sandbox import main as sandbox_main
+        sandbox_main(sys.argv[2:])
     elif cmd == "backup":
         from pathlib import Path
         from .app.backup import backup

@@ -59,6 +59,8 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
   依赖闭包自述字段（糊化 VAULT: 引用由秘密库解析）+ 容器名变量；脚本以 stdout 末行 JSON 汇报结果。
   现有能力：`users.py`（身份组件：重置密码）、`repos.py`（git 托管组件：幂等建仓）、
   `ci.py`（CI 组件：last-build 查询）、`oidc.py`（身份组件：幂等注册/更新 OIDC 客户端，ADR-0047）。核心禁止出现组件名/字段名硬编码。
+- plugin.yaml 可选测试自述（沙箱可达性测试消费）：`probe.expect: [状态码]`（入口期望码，默认
+  200/301/302/303/307/308/401/403）、`sandbox.env: {VAR: value}`（沙箱专用环境覆盖，如兑上游镜像坑）。
 - **Chronicler 归 Chronicler，组件归组件**：核心初始化代码只实现通用 schema、校验、渲染、计划和执行，
   不得包含任何组件名、组件字段、端口、默认值或接线知识；这些信息全部由组件自己的 `plugin.yaml`、
   `setup.yaml`、资源和 hook 提供。秘密字段必须自述类型、生成长度、轮换风险和用途。跨组件配置由能力
@@ -77,6 +79,17 @@ python -m chronicler serve        # 无 .env 时进入受限 /setup 向导，批
 
 底座编排：无根 docker-compose.yml（已废除，ADR-0027）；组件部署定义和初始化声明在各组件目录，
 由 Web 初始化或 supervisor 按需拉起。`scripts/up.sh` 暂作存量环境过渡路径。
+
+组件入口可达性测试（FR-ENV-003 自动化，sandbox 机制）：
+
+```bash
+python -m chronicler sandbox [--components a b] [--include-disabled] [--junit report.xml]
+```
+
+现拉、现部署、现测、现毁；与生产五通道隔离（独立 compose 项目 chronicle-sandbox /
+程序化改写 compose 去除 external 网络与宿主端口 / 临时数据目录 / 按 setup.yaml 字段声明
+现场生成一次性秘密，不读正式 .env 与秘密库）。Jenkins：SANDBOX_TESTS 参数 + junit 归档。
+调试加 --keep --workdir <目录>，环境变量 SANDBOX_DEBUG=1 打印 compose config 渲染。
 
 supervisor（产品本体，跟随 dockerd 同环境）：
 
@@ -131,6 +144,17 @@ chronicler\.venv-win\Scripts\python.exe -m chronicler serve   # 主入口；首�
   HTTP_PROXY/HTTPS_PROXY → curl/pip/git/codex 等直连被墙（developers.openai.com 403）。
   处置见 docs/runbooks/proxy-clash.md；设代理 env 时 NO_PROXY 必须含内网段
   （10.*、192.168.*、172.16-31.*、*.localhost）。
+- **openproject:15 首次 seed 禁 zh-CN**（2026-09-15 实测 + 上游已知）：`OPENPROJECT_DEFAULT__LANGUAGE=zh-CN`
+  时空库首启 seed 必炸 `RecordInvalid 名称重复`后容器退出；生产库是早前用英文 seed 的存量，不踩此路径。
+  沙箱测试经 plugin.yaml `sandbox.env` 覆盖为 en 兑过（组件自述，核心零硬编码）。
+- **compose down 在 Docker Desktop Windows 上经常删不净**（2026-09-15 实测：14 容器剩 8）：
+  原因未完全定位（疑似逐个 stop 的宽限耗时/WSL 后端偶发挂起），沙箱销毁 = down（600s）+
+  按 `com.docker.compose.project` 标签强制兑底清理，双保险，实测零残留。
+- **import 即泄漏生产 .env**（2026-09-15 沙箱实测）：`app/config.py` 的 `_load_dotenv()` 在 import 时
+  把仓库根 `.env` 全量 `os.environ.setdefault` 进进程环境，而 docker compose 插值优先级是
+  「进程环境 > --env-file」——沙箱子进程若不清洗，生产值（如 HTTP_PORT=80）静默覆盖沙箱 env，
+  容器直接绑到生产端口。沙箱 Compose 类已将 compose 引用的变量从子进程环境剔除；
+  任何新代码从 chronicler 进程拉起 docker compose 都必须同样处理。
 - 前端资源已本地化（chronicler/app/static/vendor/，vue/element-plus/icons 版本钉死）：
   勿改回 CDN 引用（公司网络/代理下 unpkg 加载不稳，曾实测登录页渲染原始 {{ }}、
   图标按钮不可见但可点，2026-09-01）。图标按钮依赖 app.js 全局注册 ElementPlusIconsVue。

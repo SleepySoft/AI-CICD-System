@@ -10,6 +10,7 @@ pipeline {
   }
   parameters {
     booleanParam(name: 'DEPLOY_TESTS', defaultValue: false, description: '同时跑隔离沙箱部署测试（慢，需拉镜像）')
+    booleanParam(name: 'SANDBOX_TESTS', defaultValue: true, description: '沙箱组件入口可达性测试（现拉现建现测现毁，与生产五通道隔离）')
   }
   triggers {
     // 分支轮询兑底（webhook 不可达时 5 分钟内也能发现新提交）
@@ -34,6 +35,18 @@ pipeline {
       when { expression { return params.DEPLOY_TESTS } }
       steps {
         sh 'python -m chronicler test --deploy --timeout 600'
+      }
+    }
+    stage('沙箱可达性测试') {
+      when { expression { return params.SANDBOX_TESTS } }
+      steps {
+        // 同一 dockerd 上与部署操作互斥；workdir 置于 workspace 内（docker.sock 挂载下临时目录须宿主可见）
+        lock('docker-sandbox') {
+          sh 'python -m chronicler sandbox --workdir .sandbox --junit sandbox-report.xml --timeout 900 --probe-timeout 600'
+        }
+      }
+      post {
+        always { junit 'sandbox-report.xml' }
       }
     }
   }

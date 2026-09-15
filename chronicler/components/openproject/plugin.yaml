@@ -13,3 +13,8 @@ enabled: false
 note: 任务管理（工作包）；未启用时任务来源降级为文本/直接指令
 data:
   private: true
+# 上游已知问题：openproject:15 镜像首次 seed 在 zh-CN 下必失败（RecordInvalid 名称重复后退出，
+# 实测 2026-09-15；生产库已 seed 完毕无此路径）。沙箱首启用英文 seed 兑过，不影响入口可达性验证。
+sandbox:
+  env:
+    OPENPROJECT_DEFAULT__LANGUAGE: en

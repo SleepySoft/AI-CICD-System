@@ -39,3 +39,7 @@ chronicler/app/_sealed_profile.py
 # 秘密库主密钥与敏感文件（ADR-0041：明文永不入库；age 密文快照可入库）
 secrets/*
 !secrets/*.age
+
+# 沙箱可达性测试工作目录与报告（python -m chronicler sandbox --workdir/.sandbox*）
+/.sandbox*/
+/sandbox-report.xml
