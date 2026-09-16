@@ -11,3 +11,8 @@ critical: false
 driver: docker
 data:
   private: true
+# 认证自述：bearer=API 令牌直验
+auth:
+  - kind: bearer
+    secret_field: ATR_API_TOKEN
+    verify: /health

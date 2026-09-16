@@ -14,3 +14,9 @@ note: CI 构建结果查询（只读）
 data:
   private: true
   public_write: ci
+# 认证自述（巡检 verify-auth.py / 沙箱认证探针消费）
+auth:
+  - kind: basic
+    user_field: JENKINS_ADMIN_ID
+    secret_field: JENKINS_ADMIN_PASSWORD
+    verify: /api/json

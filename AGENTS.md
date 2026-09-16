@@ -59,8 +59,12 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
   依赖闭包自述字段（糊化 VAULT: 引用由秘密库解析）+ 容器名变量；脚本以 stdout 末行 JSON 汇报结果。
   现有能力：`users.py`（身份组件：重置密码）、`repos.py`（git 托管组件：幂等建仓）、
   `ci.py`（CI 组件：last-build 查询）、`oidc.py`（身份组件：幂等注册/更新 OIDC 客户端，ADR-0047）。核心禁止出现组件名/字段名硬编码。
-- plugin.yaml 可选测试自述（沙箱可达性测试消费）：`probe.expect: [状态码]`（入口期望码，默认
-  200/301/302/303/307/308/401/403）、`sandbox.env: {VAR: value}`（沙箱专用环境覆盖，如兑上游镜像坑）。
+- plugin.yaml 可选测试自述（沙箱可达性测试与生产巡检消费）：`probe.expect: [状态码]`（入口期望码，默认
+  200/301/302/303/307/308/401/403）、`sandbox.env: {VAR: value}`（沙箱专用环境覆盖，如兑上游镜像坑）、
+  `auth: [{kind, ...}]`（可登录性自述：basic/bearer/token-grant 沙箱用现场生成秘密真验；
+  sso 与 needs_hook 条目沙箱跳过，由生产巡检 scripts/verify-auth.py 用 realm 测试账号 dev 真登录）。
+- 生产认证巡检：`python scripts/verify-auth.py`（可达+可登录全链路）；秘密漂移审计：
+  `python scripts/audit-secret-drift.py`（容器 env vs 秘密库，只读哈希对比，漂移退出码 1）。
 - **Chronicler 归 Chronicler，组件归组件**：核心初始化代码只实现通用 schema、校验、渲染、计划和执行，
   不得包含任何组件名、组件字段、端口、默认值或接线知识；这些信息全部由组件自己的 `plugin.yaml`、
   `setup.yaml`、资源和 hook 提供。秘密字段必须自述类型、生成长度、轮换风险和用途。跨组件配置由能力
@@ -150,6 +154,24 @@ chronicler\.venv-win\Scripts\python.exe -m chronicler serve   # 主入口；首�
 - **compose down 在 Docker Desktop Windows 上经常删不净**（2026-09-15 实测：14 容器剩 8）：
   原因未完全定位（疑似逐个 stop 的宽限耗时/WSL 后端偶发挂起），沙箱销毁 = down（600s）+
   按 `com.docker.compose.project` 标签强制兑底清理，双保险，实测零残留。
+- **认证链实测四坑**（2026-09-16 全链路排障实录）：
+  ① httpx `trust_env=True` 会读 Windows 系统代理（Clash）注册表设置，127.0.0.1 请求被代理劫持返 502
+  且 caddy 无日志——Python HTTP 客户端一律 `trust_env=False`（同 curl --noproxy '*' 军规）；
+  ② keycloak 在 http 下也打 Secure 会话 Cookie（AUTH_SESSION_ID/KC_RESTART），浏览器因 localhost
+  可信特例照常工作，脚本严格按 RFC 拒发 → “Cookie not found” 400，测试侧需手动重栽 cookie；
+  ③ gitea `DISABLE_REGISTRATION=true` 会连 OIDC 新用户自动注册一起关，需
+  `ALLOW_ONLY_EXTERNAL_REGISTRATION=true` + `oauth2_client.ENABLE_AUTO_REGISTRATION=true`
+  + `ACCOUNT_LINKING=auto` 三连，否则 SSO 首登静默跳回登录页/卡 link_account；
+  ④ keycloak realm 用户模板 temporary:true + KC26 默认 VERIFY_PROFILE 必填动作都会中断 SSO 首登，
+  realm 模板已改 temporary:false 并禁用 VERIFY_PROFILE。
+- **秘密漂移事故**（2026-09-16）：vault 与运行容器大面积漂移（postgres/sshwifty 为占位或旧值、
+  outline 容器 OIDC 秘密 29 位 vs keycloak 客户端 40 位、.env POSTGRES_USER=admin vs 实际 aisys、
+  gitea 认证源残留占位秘密 `gitea-oidc-secret-change-me`）→ outline SSO 直接坏、gitea SSO 回调静默失败。
+  处置：vault 回填容器真值（postgres/sshwifty）、outline/gitea 按 vault 渲染重建、gitea 认证源
+  update-oauth 对齐 + initialize 钩子加漂移自愈、.env POSTGRES_USER 改回 aisys。
+  遗留债：postgres 真实密码仍是占位值 `aisys_pg_change_me`（轮换需协调全部依赖组件，未执行）；
+  keycloak 容器 env KEYCLOAK_ADMIN_PASSWORD 与 vault 不一致但无害（仅首建 admin 时用，重建自愈）。
+  防线：scripts/audit-secret-drift.py + verify-auth.py；initialize 钩子必须幂等且覆盖更新（ADR-0047）。
 - **import 即泄漏生产 .env**（2026-09-15 沙箱实测）：`app/config.py` 的 `_load_dotenv()` 在 import 时
   把仓库根 `.env` 全量 `os.environ.setdefault` 进进程环境，而 docker compose 插值优先级是
   「进程环境 > --env-file」——沙箱子进程若不清洗，生产值（如 HTTP_PORT=80）静默覆盖沙箱 env，

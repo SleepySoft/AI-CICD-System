@@ -9,8 +9,14 @@
   "bruteForceProtected": false,
   "sslRequired": "none",
   "groups": [
-    { "name": "dev", "path": "/dev" },
-    { "name": "boss", "path": "/boss" }
+    {
+      "name": "dev",
+      "path": "/dev"
+    },
+    {
+      "name": "boss",
+      "path": "/boss"
+    }
   ],
   "users": [
     {
@@ -19,9 +25,15 @@
       "email": "boss@aisystem.local",
       "emailVerified": true,
       "firstName": "Boss",
-      "groups": ["/boss"],
+      "groups": [
+        "/boss"
+      ],
       "credentials": [
-        { "type": "password", "value": "boss123", "temporary": true }
+        {
+          "type": "password",
+          "value": "boss123",
+          "temporary": false
+        }
       ]
     },
     {
@@ -30,9 +42,15 @@
       "email": "dev@aisystem.local",
       "emailVerified": true,
       "firstName": "Developer",
-      "groups": ["/dev"],
+      "groups": [
+        "/dev"
+      ],
       "credentials": [
-        { "type": "password", "value": "dev123", "temporary": true }
+        {
+          "type": "password",
+          "value": "dev123",
+          "temporary": false
+        }
       ]
     }
   ],
@@ -108,6 +126,23 @@
     }
   ],
   "defaultDefaultClientScopes": [
-    "role_list", "profile", "email", "roles", "web-origins", "acr", "groups"
+    "role_list",
+    "profile",
+    "email",
+    "roles",
+    "web-origins",
+    "acr",
+    "groups"
+  ],
+  "requiredActions": [
+    {
+      "alias": "VERIFY_PROFILE",
+      "name": "Verify Profile",
+      "providerId": "VERIFY_PROFILE",
+      "enabled": false,
+      "defaultAction": false,
+      "priority": 50,
+      "config": {}
+    }
   ]
 }

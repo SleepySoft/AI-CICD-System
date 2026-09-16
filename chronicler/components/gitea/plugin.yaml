@@ -14,3 +14,14 @@ note: 代码托管 API（仓库/提交/issue 查询）
 data:
   private: true
   public_write: exchange
+# 认证自述（巡检 verify-auth.py / 沙箱认证探针消费）：
+# basic=本地账密（字段为 setup.yaml env 键）；sso=OIDC 全链路（巡检用 realm 测试账号 dev 真登录）
+auth:
+  - kind: basic
+    user_field: GITEA_ADMIN_USER
+    secret_field: GITEA_ADMIN_PASSWORD
+    verify: /api/v1/user
+    needs_hook: true   # 管理员账号由 initialize 钩子创建，沙箱（不跑钩子）跳过此项
+  - kind: sso
+    oidc_path: /user/oauth2/keycloak
+    verify: /user/settings   # 已登录 200，未登录跳回 /user/login

@@ -25,6 +25,7 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from xml.sax.saxutils import escape as xml_escape
@@ -72,6 +73,7 @@ def load_components() -> dict:
             "driver": plugin.get("driver", "docker"),
             "probe": plugin.get("probe") or {},
             "sandbox_env": (plugin.get("sandbox") or {}).get("env") or {},
+            "auth": plugin.get("auth") or [],
             "setup": setups.get(name, {"depends_on": [], "fields": [], "readiness": {}}),
         }
     return result
@@ -159,7 +161,7 @@ def generate_env(closure: dict, workdir: Path, http_port: int, host_root: str = 
     missing = required_vars(closure) - set(values)
     if missing:
         raise SystemExit(f"以下必需变量未被 setup.yaml 字段覆盖，无法生成沙箱 env：{sorted(missing)}")
-    return env_path
+    return env_path, values
 
 
 def required_vars(closure: dict) -> set:
@@ -313,6 +315,59 @@ def force_cleanup():
                    capture_output=True, encoding="utf-8", errors="replace")
 
 
+# ---------------------------------------------------------------- 认证探针（可登录性）
+
+def auth_probe(comp: dict, values: dict, http_port: int, probe_host: str) -> list[dict]:
+    """沙箱内认证验证：basic/bearer/token-grant 用沙箱生成的秘密真登录；
+    sso 跳过（沙箱不跑初始化钩子，OIDC 客户端/认证源未注册——生产 SSO 全链路由 scripts/verify-auth.py 覆盖）。
+    needs_hook: true 的条目同样跳过（账号由初始化钩子创建，沙箱未执行钩子）。"""
+    import base64
+    out = []
+    for a in comp["auth"]:
+        kind = a.get("kind")
+        label = f"{comp['name']}:{kind}"
+        if kind == "sso":
+            out.append({"name": label, "ok": True, "skip": True,
+                        "detail": "沙箱无 OIDC 客户端注册，SSO 链路归生产巡检 verify-auth.py"})
+            continue
+        if a.get("needs_hook"):
+            out.append({"name": label, "ok": True, "skip": True,
+                        "detail": "账号由初始化钩子创建，沙箱未执行钩子"})
+            continue
+        host = re.match(r"https?://([^/]+)", comp["url"]).group(1)
+        secret = values.get(a.get("secret_field", ""), "")
+        user = values.get(a.get("user_field", ""), "")
+        try:
+            if kind == "basic":
+                token = base64.b64encode(f"{user}:{secret}".encode()).decode()
+                req = urllib.request.Request(f"http://{probe_host}:{http_port}{a['verify']}",
+                                             headers={"Host": host, "Authorization": f"Basic {token}"})
+                code = urllib.request.build_opener(_NoRedirect).open(req, timeout=10).status
+            elif kind == "bearer":
+                req = urllib.request.Request(f"http://{probe_host}:{http_port}{a['verify']}",
+                                             headers={"Host": host, "Authorization": f"Bearer {secret}"})
+                code = urllib.request.build_opener(_NoRedirect).open(req, timeout=10).status
+            elif kind == "token-grant":
+                realm = a.get("realm", "master")
+                data = urllib.parse.urlencode(
+                    {"grant_type": "password", "client_id": "admin-cli",
+                     "username": user, "password": secret}).encode()
+                req = urllib.request.Request(
+                    f"http://{probe_host}:{http_port}/realms/{realm}/protocol/openid-connect/token",
+                    headers={"Host": host}, data=data)
+                code = urllib.request.build_opener(_NoRedirect).open(req, timeout=10).status
+            else:
+                out.append({"name": label, "ok": True, "skip": True, "detail": f"未知 kind={kind}"})
+                continue
+            ok = code == 200
+            out.append({"name": label, "ok": ok, "detail": f"{a.get('verify', kind)} -> {code}"})
+        except urllib.error.HTTPError as e:
+            out.append({"name": label, "ok": False, "detail": f"认证失败：HTTP {e.code}"})
+        except Exception as e:
+            out.append({"name": label, "ok": False, "detail": f"{type(e).__name__}: {e}"})
+    return out
+
+
 # ---------------------------------------------------------------- JUnit 报告
 
 def write_junit(path: Path, results: list[dict], skipped: list[dict], elapsed: float):
@@ -386,7 +441,7 @@ def run_sandbox(args) -> int:
     results = None
     error = None
     try:
-        env_path = generate_env(closure, workdir, args.http_port, args.host_root)
+        env_path, env_values = generate_env(closure, workdir, args.http_port, args.host_root)
         files = [transform_compose(comp, compose_dir) for comp in closure.values()]
         scrub = BASE_ENV_KEYS | DOCKER_ENV_KEYS
         for comp in closure.values():
@@ -416,6 +471,14 @@ def run_sandbox(args) -> int:
         print("[sandbox] 探测组件入口...")
         results = probe_all(targets, args.http_port, time.time() + args.probe_timeout,
                             args.probe_host)
+        # 认证探针：用沙箱生成的秘密验证可登录性（sso/needs_hook 条目记 skip）
+        for t in targets:
+            for ar in auth_probe(t, env_values, args.http_port, args.probe_host):
+                if ar.pop("skip", False):
+                    skipped.append({"name": ar["name"], "reason": ar["detail"]})
+                else:
+                    ar.setdefault("url", t["url"])
+                    results.append(ar)
     except (RuntimeError, subprocess.TimeoutExpired) as e:
         error = str(e)
     finally:

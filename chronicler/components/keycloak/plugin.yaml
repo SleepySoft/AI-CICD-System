@@ -11,3 +11,9 @@ critical: true
 driver: docker
 data:
   private: false
+# 认证自述：token-grant=密码授权打 token 端点验证管理账号（不打开 admin 页面）
+auth:
+  - kind: token-grant
+    user_field: KEYCLOAK_ADMIN
+    secret_field: KEYCLOAK_ADMIN_PASSWORD
+    realm: master

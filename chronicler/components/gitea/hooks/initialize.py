@@ -1,6 +1,7 @@
-"""幂等创建 Gitea 管理员、身份服务客户端和认证源。"""
+"""幂等创建 Gitea 管理员、身份服务客户端和认证源（含漂移自愈）。"""
 import json
 import os
+import re
 import sys
 
 import docker
@@ -63,11 +64,18 @@ def check():
 
 def apply():
     configure_oidc_client()
-    if "keycloak" not in exec_(["admin", "auth", "list"], check=False):
+    auth = exec_(["admin", "auth", "list"], check=False)
+    if "keycloak" not in auth:
         exec_(["admin", "auth", "add-oauth", "--name", "keycloak", "--provider", "openidConnect",
                "--key", "gitea", "--secret", os.environ["OIDC_GITEA_SECRET"],
                "--auto-discover-url", "http://keycloak:8080/realms/aisystem/.well-known/openid-configuration",
                "--group-claim-name", "groups", "--admin-group", "boss"])
+    else:
+        # 漂移自愈：认证源已存在时以本次注入的秘密为准覆盖（历史事故：占位秘密残留导致 SSO 回调失败）
+        m = re.search(r"(?m)^\s*(\d+)\s+keycloak\b", auth)
+        if m:
+            exec_(["admin", "auth", "update-oauth", "--id", m.group(1),
+                   "--secret", os.environ["OIDC_GITEA_SECRET"]])
     username = os.environ.get("GITEA_ADMIN_USER", "gitea_admin")
     if username not in exec_(["admin", "user", "list", "--admin"], check=False):
         exec_(["admin", "user", "create", "--admin", "--username", username,

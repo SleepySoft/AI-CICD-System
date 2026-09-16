@@ -13,3 +13,8 @@ enabled: false
 note: 知识库 Wiki
 data:
   private: true
+# 认证自述：sso=OIDC 全链路（巡检用 realm 测试账号 dev 真登录；沙箱无 OIDC 客户端注册，跳过）
+auth:
+  - kind: sso
+    oidc_path: /auth/oidc
+    verify: POST /api/auth.info   # outline API 全 POST；已登录 200 返回用户 JSON，未登录 401
