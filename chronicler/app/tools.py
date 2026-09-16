@@ -192,55 +192,54 @@ def deploy_component(tool: dict) -> str:
 
 
 def ensure_running(tool: dict, raise_on_error: bool = False) -> str:
-    """确保组件运行：running→跳过；stopped→docker start；absent→compose up -d 现场创建
-    返回动作：skip/start/compose-up/error"""
+    """确保组件运行：running→跳过；stopped/absent→compose up（现场从 vault 重渲染 env，
+    配置哈希变化时自动重建容器）。返回动作：skip/deploy-hook/compose-up/error
+
+    stopped 不直接 docker start：那会带着旧 env 起来，vault 轮换后秘密仍是旧值
+    （2026-09-16 漂移事故教训）。"""
     import subprocess
     from .db import audit
     name, container = tool["name"], tool.get("container")
     if tool["driver"] != "docker" or not container:
         return "skip"
     try:
-        c = _client().containers.get(container)
-        if c.status == "running":
+        if _client().containers.get(container).status == "running":
             return "skip"
-        c.start()
-        audit("supervisor", "tool.autostart", name)
-        return "start"
     except docker.errors.NotFound:
-        # 组件自带部署钩子则优先（ADR-0027）；否则回落 docker compose
-        hook = Path(tool["_dir"]) / "hooks" / "deploy.py" if tool.get("_dir") else None
-        if hook and hook.is_file():
-            r = subprocess.run([component_python(), str(hook), "up"],
-                               cwd=str(PROFILE.install_root), capture_output=True,
-                               encoding="utf-8", errors="replace", timeout=600)
-            if r.returncode == 0:
-                audit("supervisor", "tool.deploy_hook", name)
-                return "deploy-hook"
-            detail = (r.stderr or r.stdout or "组件部署 hook 失败").strip()
-            audit("supervisor", "tool.autostart_failed", name, detail[:200])
-            if raise_on_error:
-                raise RuntimeError(detail[-2000:])
-            return "error"
-        service = tool.get("compose_service") or name
-        try:
-            r = _compose_up(tool)
-            if r.returncode == 0:
-                audit("supervisor", "tool.autostart_compose", name)
-                return "compose-up"
-            detail = (r.stderr or r.stdout or f"Compose 退出码 {r.returncode}").strip()
-            audit("supervisor", "tool.autostart_failed", name, detail[:200])
-            if raise_on_error:
-                raise RuntimeError(detail[-2000:])
-        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-            audit("supervisor", "tool.autostart_failed", name, str(e)[:200])
-            if raise_on_error:
-                raise RuntimeError(str(e)) from e
-        return "error"
+        pass
     except docker.errors.DockerException as e:
         audit("supervisor", "tool.autostart_failed", name, str(e)[:200])
         if raise_on_error:
             raise RuntimeError(str(e)) from e
         return "error"
+    # 组件自带部署钩子则优先（ADR-0027）；否则回落 docker compose
+    hook = Path(tool["_dir"]) / "hooks" / "deploy.py" if tool.get("_dir") else None
+    if hook and hook.is_file():
+        r = subprocess.run([component_python(), str(hook), "up"],
+                           cwd=str(PROFILE.install_root), capture_output=True,
+                           encoding="utf-8", errors="replace", timeout=600)
+        if r.returncode == 0:
+            audit("supervisor", "tool.deploy_hook", name)
+            return "deploy-hook"
+        detail = (r.stderr or r.stdout or "组件部署 hook 失败").strip()
+        audit("supervisor", "tool.autostart_failed", name, detail[:200])
+        if raise_on_error:
+            raise RuntimeError(detail[-2000:])
+        return "error"
+    try:
+        r = _compose_up(tool)
+        if r.returncode == 0:
+            audit("supervisor", "tool.autostart_compose", name)
+            return "compose-up"
+        detail = (r.stderr or r.stdout or f"Compose 退出码 {r.returncode}").strip()
+        audit("supervisor", "tool.autostart_failed", name, detail[:200])
+        if raise_on_error:
+            raise RuntimeError(detail[-2000:])
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        audit("supervisor", "tool.autostart_failed", name, str(e)[:200])
+        if raise_on_error:
+            raise RuntimeError(str(e)) from e
+    return "error"
 
 
 def autostart_boot(max_wait_sec: int = 600, interval: int = 20):

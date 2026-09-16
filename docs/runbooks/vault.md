@@ -1,6 +1,6 @@
 # 秘密库操作手册
 
-> 版本：v1.2 · 日期：2026-09-05 · 状态：生效
+> 版本：v1.3 · 日期：2026-09-16 · 状态：生效
 > 定位：秘密库（vault）的日常操作、导出验证与灾难恢复；设计依据 ADR-0041~0044
 > （多接收者密钥体系为二期，本文仅覆盖已实现的 admin 一期形态）
 
@@ -48,8 +48,12 @@ Web 界面「秘密库」tab（仅 admin 可见），API 前缀 `/api/vault/*`�
   秘密库页「下载」单条后手工组 env）；
 - **自动快照（强制）**：每次 vault 变更自动重写 `secrets/secrets.age`（密文，可入 git）——
   .env 不再是灾难兜底，快照 + 主密钥是唯一恢复链；
-- **轮转**：只能在 vault 改值（唯一写入点）；传播 = hook 对齐组件 + 容器重建 + 快照重写；
-- **漂移检测**：列表「同步」列显示 已同步/漂移/env缺失（启动迁移后正常应全为“已同步”或 env缺失）。
+- **轮转**：只能在 vault 改值（唯一写入点）；**传播是被动的——轮换后必须重新部署相关组件才生效**
+  （工具面板「部署」按钮，或组件停止后下次 autostart 的 compose up；compose 按配置哈希自动重建容器）；
+  组件内部凭据（如 gitea 的 OIDC 认证源）由 initialize 钩子幂等覆盖对齐；快照自动重写；
+- **验证轮换生效**：`python scripts/verify-auth.py`（逐组件可达+可登录巡检）；
+- **漂移检测**：两个层面——秘密库列表「同步」列（.env ↔ vault）；**容器 ↔ vault** 用
+  `python scripts/audit-secret-drift.py`（只读哈希对比，漂移退出码 1，适合进巡检/CI）。
 
 ## 日常操作
 
@@ -92,11 +96,25 @@ python scripts/vault-inspect.py extract vault-export-*.tar --key secrets/master.
 1. 新机器/全新部署：重跑初始化前，先在「秘密库」页用旧主密钥**解锁**（空库时解锁即收养该密钥），
    再点「从导出包恢复」上传最近的 `vault-export-*.tar`——全部秘密（文本+文件+元数据）逐条校验
    后回到库中；同名同值跳过，同名不同值默认不覆盖，确认后以导出包为准。
-2. `.env` 重建：程序不改写 `.env`——用恢复出的值在初始化向导重填，或手工放置 `.env` 后重启，
-   组件 hook 以 .env 为准收敛（ADR-0039）。
+2. `.env` 重建：恢复出的值在初始化向导重填，或手工放置明文 `.env` 后重启——启动迁移会
+   自动导入 vault 并重新糊化（ADR-0045）；组件 hook 以 vault 值为准收敛（ADR-0039）。
 3. 导出包可疑损坏：`verify` 不带密钥先验包完整性（payload 摘要），带密钥逐条验明文摘要。
 4. 主密钥泄漏：生成新主密钥（删除 `secrets/master.key` 后任意操作触发重建），逐条轮换全部
    秘密值（新密文用新密钥），含 `critical` 标记的按轮换风险提示处置。
+
+## 组件登录故障排查（2026-09-16 事故后新增）
+
+现象：某组件页面能打开但登不上（SSO 跳回登录页 / 账密被拒）。按序排查：
+
+1. `python scripts/verify-auth.py`——全组件「可达+可登录」一键巡检，直接指出断在哪一环
+   （SSO 重定向链 / keycloak 认证 / 组件回调 / 会话建立 / 本地账密）；
+2. `python scripts/audit-secret-drift.py`——容器 env 与 vault 哈希对比；有漂移 → 重新部署该组件
+   （工具面板「部署」），组件内部凭据（gitea 认证源等）重跑对应 initialize 钩子对齐；
+3. 仍失败查 AGENTS.md「认证链实测四坑」（系统代理劫持 httpx / keycloak Secure Cookie /
+   gitea 注册三开关 / realm 首登动作）——浏览器侧注意系统代理对 *.localhost 的劫持。
+
+已知未决债：postgres 数据库真实密码仍为初始化时代占位值（aisys_pg_change_me 形态），
+轮换需协调全部依赖组件（gitea/keycloak/outline/openproject 同窗口重建），单独排期执行。
 
 ## 二期预告（未实现）
 

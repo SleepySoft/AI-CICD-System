@@ -16,10 +16,10 @@
 |------|------|------|---------|
 | Chronicler（supervisor） | http://app.localhost（`http://localhost` 同义别名） | 主入口 `python -m chronicler serve`（缺 .env 提示退出，ADR-0029） | 本地账密（create-admin）或 Keycloak OIDC |
 | Caddy 统一入口 | -（反代） | autostart | - |
-| Gitea | http://git.localhost | autostart | `scripts/wire-sso.sh` 创建管理员 |
-| Jenkins | http://ci.localhost | autostart | `.env` 的 `JENKINS_ADMIN_ID/PASSWORD` |
-| Keycloak | http://sso.localhost/admin | autostart | `.env` 的 `KEYCLOAK_ADMIN/PASSWORD` |
-| PostgreSQL / Redis | -（内部） | autostart | `.env` 的 `POSTGRES_USER/PASSWORD` |
+| Gitea | http://git.localhost | autostart | 初始化钩子创建管理员（秘密库 `gitea/GITEA_ADMIN_*`） |
+| Jenkins | http://ci.localhost | autostart | 秘密库 `jenkins/JENKINS_ADMIN_*`（ADR-0045，.env 仅存 VAULT: 引用） |
+| Keycloak | http://sso.localhost/admin | autostart | 秘密库 `keycloak/KEYCLOAK_ADMIN*` |
+| PostgreSQL / Redis | -（内部） | autostart | 秘密库 `postgres/POSTGRES_*` |
 | Outline 知识库 | http://kb.localhost | 按需部署 | Keycloak 登录（预置 boss/dev） |
 | MkDocs 文档站 | http://docs.localhost | 按需部署 | - |
 | OpenProject | http://req.localhost | 按需部署 | 首启创建管理员 |
@@ -28,7 +28,7 @@
 | Ollama | http://llm.localhost | 按需部署 | - |
 | noVNC 浏览器 | http://browser.localhost | 按需部署 | - |
 | terminal-runtime (ATR) | http://term.localhost/ui | 按需部署（可选沙箱，ADR-0021） | - |
-| SSHwifty Web 终端 | http://ssh.localhost | 按需部署（P0，ADR-0030） | `.env` 的 `SSHWIFTY_SHAREDKEY` |
+| SSHwifty Web 终端 | http://ssh.localhost | 按需部署（P0，ADR-0030） | 秘密库 `sshwifty/SSHWIFTY_SHAREDKEY` |
 
 > `*.localhost` 在现代浏览器自动解析到 127.0.0.1；不生效时写 hosts。
 
