@@ -43,6 +43,10 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
   CHRONICLER_SECRETS_DIR 可覆盖）。变更自动重写密文快照 `secrets/secrets.age`（可入 git）。
   对接规则（docs/how/secrets-vault.md）：库非空而主密钥缺失/不匹配时锁定，须解锁密钥收养，
   程序不做任何清理操作。
+  **待传播横幅**：vault 任何写变更（增/改/删）按 scope 标记「待传播」（`propagation_pending`，
+  存量收养路径豁免），全部页面顶部悬挂 JIRA 式警告横幅（admin 可见，移动端 /m 同步显示）；
+  组件重新部署成功或 users/oidc 能力成功自动消除，也可人工 dismiss（写审计）。
+  API：`GET /api/vault/propagation`、`POST /api/vault/propagation/{scope}/dismiss`。
 - **数据显式落宿主**（NFR-008/009，ADR-0012/0026）：三层——`data/public/`（组件交换区，挂所有容器）、
   `data/private/<组件>/`（仅挂载声明者）、`data/workspace/`（工作区，工程克隆等可由 git 重建，不进备份）；
   机密永不落 data。禁止命名卷存业务数据；`data/` 已入 .gitignore。

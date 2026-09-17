@@ -81,6 +81,7 @@ const app = createApp({
     const triggerForm = ref({ project_id: null, task_type: "", extra_prompt: "" });
 
     const tasks = ref([]);
+    const pendingProp = ref([]);  // 秘密库待传播项（维护横幅）
     const loadingTasks = ref(false);
     const showNewTask = ref(false);
     const newTaskForm = ref({ project_id: null, name: "", task_type: "", harness: "", cwd: "",
@@ -570,7 +571,7 @@ const app = createApp({
       if (action === "deploy") toast.ok(`${t.name} 部署中（首次需拉取镜像，可能数分钟）…`);
       try {
         await api(`/api/tools/${t.name}/${action}`, { method: "POST" });
-        toast.ok(`${t.name} ${action} 已执行`); setTimeout(loadTools, 1500);
+        toast.ok(`${t.name} ${action} 已执行`); setTimeout(loadTools, 1500); loadPendingProp();
       } catch (e) { toast.err(e); }
     }
     async function toggleAutostart(t, val) {
@@ -616,7 +617,7 @@ const app = createApp({
         const r = await api(`/api/tools/${deployName.value}/deploy-log`);
         deployState.value = r.state; deployLines.value = r.lines;
         if (r.state === "running") deployTimer = setTimeout(pollDeploy, 1500);
-        else { loadTools(); if (r.state === "done") toast.ok(`${deployName.value} 部署完成`); }
+        else { loadTools(); loadPendingProp(); if (r.state === "done") toast.ok(`${deployName.value} 部署完成`); }
       } catch (e) { /* 轮询失败下轮再试 */ deployTimer = setTimeout(pollDeploy, 3000); }
     }
     function closeDeploy() { showDeploy.value = false; if (deployTimer) clearTimeout(deployTimer); loadTools(); }
@@ -722,6 +723,7 @@ const app = createApp({
         vaultAudit.value = auditRows;
         vaultStatus.value = st;
         vaultEnv.value = env;
+        loadPendingProp();  // vault 操作后刷新待传播横幅
       } catch (e) { toast.err(e); }
       finally { loadingVault.value = false; }
     }
@@ -902,7 +904,19 @@ const app = createApp({
 
     function loadAll() {
       loadProjects(); loadRuns(); loadTasks(); loadConfig(); loadTools();
-      if (isAdmin.value) loadUsers();
+      if (isAdmin.value) { loadUsers(); loadPendingProp(); }
+    }
+    // 秘密库变更待传播横幅（JIRA 式维护通知）：vault 改值后组件未重建/未对齐时悬挂
+    async function loadPendingProp() {
+      if (!isAdmin.value) return;
+      try { pendingProp.value = (await api("/api/vault/propagation")).pending || []; }
+      catch (_) { pendingProp.value = []; }
+    }
+    async function dismissProp(scope) {
+      try {
+        await api(`/api/vault/propagation/${scope}/dismiss`, { method: "POST" });
+        toast.ok(`已消除 ${scope} 的待传播标记`); loadPendingProp();
+      } catch (e) { toast.err(e); }
     }
     function onTabChange(name) {
       if (location.hash.slice(1) !== name) history.replaceState(null, "", "#" + name);
@@ -926,6 +940,7 @@ const app = createApp({
 
     return {
       user, loading, acting, loginError, loginForm, authBackend, ssoLogin, showLocalLogin, tab, isAdmin,
+      pendingProp, loadPendingProp, dismissProp,
       projects, loadingProjects, runs, loadingRuns, runFilter,
       harnesses, components, componentList, prompts, taskTypes,
       defaultHarness, defaultPublishPolicy, showHarnessForm, editingHarnessName, harnessForm,

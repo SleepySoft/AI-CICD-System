@@ -108,6 +108,8 @@ python scripts/vault-inspect.py extract vault-export-*.tar --key secrets/master.
 
 1. `python scripts/verify-auth.py`——全组件「可达+可登录」一键巡检，直接指出断在哪一环
    （SSO 重定向链 / keycloak 认证 / 组件回调 / 会话建立 / 本地账密）；
+   另：vault 里改了秘密后，页面顶部会出现黄色「待传播」横幅，列出受影响组件与建议操作
+   （重新部署 / 重置密码能力直写），处理完点「已处理，消除」或部署后自动消失；
 2. `python scripts/audit-secret-drift.py`——容器 env 与 vault 哈希对比；有漂移 → 重新部署该组件
    （工具面板「部署」），组件内部凭据（gitea 认证源等）重跑对应 initialize 钩子对齐；
 3. 仍失败查 AGENTS.md「认证链实测四坑」（系统代理劫持 httpx / keycloak Secure Cookie /

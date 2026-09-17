@@ -165,6 +165,23 @@ class VaultTest(unittest.TestCase):
         assert self.admin.delete(f"/api/vault/{sid}").status_code == 200
         assert self.admin.get("/api/vault").json() == []
 
+    def test_propagation_pending_banner(self):
+        """vault 变更 → 待传播标记 → 横幅数据源 → dismiss 消除（维护横幅机制）"""
+        sid = self._create_text(name="VAULT_TEST_KEY", scope="gitea")
+        p = self.admin.get("/api/vault/propagation").json()["pending"]
+        assert any(i["scope"] == "gitea" and "VAULT_TEST_KEY" in i["keys"] for i in p), p
+        # 轮换追加同一 scope 的标记
+        self.admin.post(f"/api/vault/{sid}/value", json={"value": "rotated"})
+        p = self.admin.get("/api/vault/propagation").json()["pending"]
+        entry = next(i for i in p if i["scope"] == "gitea")
+        assert "hint" in entry and entry["at"] > 0
+        # dismiss 消除 + 审计
+        assert self.admin.post("/api/vault/propagation/gitea/dismiss").status_code == 200
+        p = self.admin.get("/api/vault/propagation").json()["pending"]
+        assert not any(i["scope"] == "gitea" for i in p)
+        # 非 admin 不可见（整 router admin）
+        assert self.dev.get("/api/vault/propagation").status_code == 403
+
     # ---------- persist 双写 / 导入 / 漂移 ----------
 
     COMPONENTS = {"gitea": {"component": {"fields": [

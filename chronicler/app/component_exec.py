@@ -52,6 +52,13 @@ def run_capability(script: str, args: list[str], timeout: int = 120) -> dict | N
         result.setdefault("error", (proc.stderr or "").strip()[-300:] or f"exit {proc.returncode}")
     else:
         result.setdefault("ok", True)
+        # 账号/客户端类能力成功 = 该组件秘密已直写对齐，消除「待传播」横幅标记
+        if script in ("users.py", "oidc.py"):
+            try:
+                from .vault import store as vault_store
+                vault_store.clear_pending(name, actor="capability")
+            except Exception:
+                pass
     return result
 
 

@@ -71,6 +71,17 @@
       </span>
     </div>
     <div class="main">
+      <!-- 秘密库变更待传播横幅（JIRA 式维护通知，admin 可见；全部页面顶部悬挂） -->
+      <el-alert v-if="pendingProp.length" type="warning" show-icon :closable="false" style="margin-bottom: 10px">
+        <template #title>
+          <b>秘密库变更尚未生效：</b>
+          <span v-for="p in pendingProp" :key="p.scope" style="margin-right: 14px">
+            <el-tag size="small" type="warning" effect="plain">{{ p.scope }}</el-tag>
+            {{ p.hint }}
+            <el-button size="small" text type="primary" @click="dismissProp(p.scope)">已处理，消除</el-button>
+          </span>
+        </template>
+      </el-alert>
       <el-tabs v-model="tab" @tab-change="onTabChange">
         <!-- ============ 首页（统一门户导航，吸收原 homepage 职责） ============ -->
         <el-tab-pane label="首页" name="home">

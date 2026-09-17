@@ -165,6 +165,15 @@ def _ensure_network():
         _client().networks.create("aisystem", driver="bridge")
 
 
+def _clear_pending_quietly(name: str):
+    """部署/拉起成功后消除该组件的「待传播」标记（vault 变更横幅数据源；vault 异常不阻断部署）"""
+    try:
+        from .vault import store as vault_store
+        vault_store.clear_pending(name, actor="supervisor")
+    except Exception:
+        pass
+
+
 def deploy_component(tool: dict) -> str:
     """部署组件（初始化执行用）：有部署钩子走钩子，否则无条件 compose up
     （compose 按配置哈希自行决定是否重建容器，确保秘密/配置漂移能落到已存在容器）。"""
@@ -180,6 +189,7 @@ def deploy_component(tool: dict) -> str:
                            encoding="utf-8", errors="replace", timeout=600)
         if r.returncode == 0:
             audit("supervisor", "tool.deploy_hook", name)
+            _clear_pending_quietly(name)
             return "deploy-hook"
         raise RuntimeError((r.stderr or r.stdout or "组件部署 hook 失败").strip()[-2000:])
     if not (Path(tool["_dir"]) / "compose.yml").is_file():
@@ -187,6 +197,7 @@ def deploy_component(tool: dict) -> str:
     r = _compose_up(tool)
     if r.returncode == 0:
         audit("supervisor", "tool.deploy", name)
+        _clear_pending_quietly(name)
         return "compose-up"
     raise RuntimeError((r.stderr or r.stdout or f"Compose 退出码 {r.returncode}").strip()[-2000:])
 
@@ -220,6 +231,7 @@ def ensure_running(tool: dict, raise_on_error: bool = False) -> str:
                            encoding="utf-8", errors="replace", timeout=600)
         if r.returncode == 0:
             audit("supervisor", "tool.deploy_hook", name)
+            _clear_pending_quietly(name)
             return "deploy-hook"
         detail = (r.stderr or r.stdout or "组件部署 hook 失败").strip()
         audit("supervisor", "tool.autostart_failed", name, detail[:200])
@@ -230,6 +242,7 @@ def ensure_running(tool: dict, raise_on_error: bool = False) -> str:
         r = _compose_up(tool)
         if r.returncode == 0:
             audit("supervisor", "tool.autostart_compose", name)
+            _clear_pending_quietly(name)
             return "compose-up"
         detail = (r.stderr or r.stdout or f"Compose 退出码 {r.returncode}").strip()
         audit("supervisor", "tool.autostart_failed", name, detail[:200])

@@ -262,6 +262,47 @@ def rotate_value(sid: int, body: ValueBody, user: dict = Depends(require_admin))
     return {"ok": True}
 
 
+@router.get("/propagation")
+def propagation_pending():
+    """待传播清单：vault 变更尚未落到组件的秘密（维护横幅数据源）。
+    hint 按秘密类型与组件能力生成：账号型→重置密码能力直写；client-secret→重部署+OIDC 对齐；
+    其余注入型→重新部署（compose 配置哈希收敛，仅变化的容器重建）。"""
+    from pathlib import Path
+
+    from ..initialization import catalog
+    comps = {name: entry["component"] for name, entry in catalog.load().items()
+             if not entry.get("error")}
+    items = []
+    for scope, entry in sorted(store.pending_propagation().items(), key=lambda kv: -kv[1]["at"]):
+        items.append({"scope": scope, "keys": entry["keys"], "at": entry["at"],
+                      "hint": _propagation_hint(scope, entry["keys"], comps.get(scope))})
+    return {"pending": items}
+
+
+def _propagation_hint(scope: str, keys: list, comp: dict | None) -> str:
+    from pathlib import Path
+    if scope == "infra":
+        return "Chronicler 自身秘密：重启 supervisor 生效"
+    if not comp:
+        return "组件未注册；若为已移除组件可消除标记"
+    fields = {f.get("key"): f for f in comp.get("fields") or []}
+    types = {fields[k].get("secret_type") for k in keys if k in fields}
+    comp_dir = Path(comp.get("_dir", ""))
+    has_users_hook = (comp_dir / "hooks" / "users.py").is_file()
+    if types & {"client-secret"}:
+        return "重新部署该组件，并重跑身份组件「OIDC 客户端注册」能力对齐两端"
+    if types and types <= {"password", "access-key"} and has_users_hook:
+        return "账号型秘密：用组件「重置密码」能力直写组件，无需重启"
+    return "重新部署组件生效（工具面板「部署」；仅配置变化的容器会重建）"
+
+
+@router.post("/propagation/{scope}/dismiss")
+def propagation_dismiss(scope: str, user: dict = Depends(require_admin)):
+    """人工确认已对齐（如手工在组件侧改好）后消除标记；写审计。"""
+    store.clear_pending(scope, actor=user["username"])
+    return {"ok": True}
+
+
 @router.delete("/{sid:int}")
 def delete_secret(sid: int, user: dict = Depends(require_admin)):
     row = store.delete(sid)

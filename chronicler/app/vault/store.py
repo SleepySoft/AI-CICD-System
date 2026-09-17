@@ -7,6 +7,7 @@
 一切写入/解密拒绝并抛 VaultLocked——绝不静默生成新密钥让旧数据变砖。
 """
 import hashlib
+import json
 import re
 import time
 
@@ -161,7 +162,7 @@ def find(scope: str, name: str) -> dict | None:
 def create(kind: str, name: str, scope: str, plain: bytes, actor: str,
            secret_type: str = "password", rotation_risk: str = "coordinated",
            summary: str = "", owner: str = "", expires_at: float | None = None,
-           filename: str = "") -> int:
+           filename: str = "", mark_pending: bool = True) -> int:
     validate_meta(name, scope, kind, secret_type, rotation_risk)
     if not plain:
         raise ValueError("值不能为空")
@@ -176,20 +177,25 @@ def create(kind: str, name: str, scope: str, plain: bytes, actor: str,
         " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (name, scope, kind, secret_type, rotation_risk, summary, owner, expires_at, filename,
          len(plain), digest, crypto.encrypt(plain, identity), actor, now, now))
+    if mark_pending:
+        _mark_pending(scope, name)
     _auto_snapshot()
     return sid
 
 
-def upsert(kind: str, name: str, scope: str, plain: bytes, actor: str, **meta) -> str:
-    """双写/导入用：不存在则建，值同则跳过，值异则轮换。返回 created|updated|unchanged。"""
+def upsert(kind: str, name: str, scope: str, plain: bytes, actor: str,
+           mark_pending: bool = True, **meta) -> str:
+    """双写/导入用：不存在则建，值同则跳过，值异则轮换。返回 created|updated|unchanged。
+    mark_pending=False 用于存量收养路径（启动迁移 / import-env）：值本來就是运行事实，无需提示传播。"""
     row = find(scope, name)
     digest = hashlib.sha256(plain).hexdigest()
     if row and row["sha256"] == digest:
         return "unchanged"
     if row:
-        replace_value(row["id"], plain)
+        replace_value(row["id"], plain, mark_pending=mark_pending)
         return "updated"
-    create(kind=kind, name=name, scope=scope, plain=plain, actor=actor, **meta)
+    create(kind=kind, name=name, scope=scope, plain=plain, actor=actor,
+           mark_pending=mark_pending, **meta)
     return "created"
 
 
@@ -212,14 +218,17 @@ def update_meta(sid: int, fields: dict) -> bool:
     return True
 
 
-def replace_value(sid: int, plain: bytes) -> None:
+def replace_value(sid: int, plain: bytes, mark_pending: bool = True) -> None:
     """轮换值：旧值随密文覆盖不可恢复（recover 语义见 ADR-0040）。"""
     if not plain:
         raise ValueError("值不能为空")
     identity = _identity_verified()
+    row = get_meta(sid)
     execute("UPDATE vault_secrets SET ciphertext=?, size=?, sha256=?, updated_at=? WHERE id=?",
             (crypto.encrypt(plain, identity), len(plain),
              hashlib.sha256(plain).hexdigest(), time.time(), sid))
+    if mark_pending and row:
+        _mark_pending(row["scope"], row["name"])
     _auto_snapshot()
 
 
@@ -228,9 +237,43 @@ def decrypt_value(row: dict) -> bytes:
     return crypto.decrypt(row["ciphertext"], identity)
 
 
-def delete(sid: int) -> dict | None:
+def delete(sid: int, mark_pending: bool = True) -> dict | None:
     row = get_meta(sid)
     if row:
         execute("DELETE FROM vault_secrets WHERE id=?", (sid,))
+        if mark_pending:
+            _mark_pending(row["scope"], row["name"])
         _auto_snapshot()
     return row
+
+
+# ---------------------------------------------------------------- 待传播标记（维护横幅）
+
+PENDING_META_KEY = "propagation_pending"
+
+
+def _mark_pending(scope: str, name: str):
+    """vault 写变更后标记「待传播」：该秘密的组件需重新部署/对齐后才生效。
+    存量收养路径（启动迁移/import-env，mark_pending=False）不标记——值本来就是运行事实。"""
+    pending = json.loads(meta_get(PENDING_META_KEY) or "{}")
+    entry = pending.setdefault(scope, {"keys": [], "at": 0})
+    if name not in entry["keys"]:
+        entry["keys"].append(name)
+    entry["at"] = time.time()
+    meta_set(PENDING_META_KEY, json.dumps(pending, ensure_ascii=False))
+
+
+def pending_propagation() -> dict:
+    """{scope: {keys: [...], at: ts}}——供横幅/组件面板展示"""
+    return json.loads(meta_get(PENDING_META_KEY) or "{}")
+
+
+def clear_pending(scope: str, actor: str = ""):
+    """传播完成（重新部署/能力对齐/人工确认）后消除标记"""
+    pending = pending_propagation()
+    if scope in pending:
+        del pending[scope]
+        meta_set(PENDING_META_KEY, json.dumps(pending, ensure_ascii=False))
+        if actor:
+            from ..db import audit
+            audit(actor, "vault.propagation_done", scope)

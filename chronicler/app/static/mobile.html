@@ -94,6 +94,7 @@
   </span>
 </header>
 
+<div id="propBanner" class="hidden" style="background:#e6a23c;color:#fff;padding:8px 12px;font-size:13px"></div>
 <div id="view"></div>
 
 <nav id="nav" class="hidden">
@@ -113,6 +114,20 @@ const view = $("#view");
 let user = null, tab = "projects", pollTimer = null;
 let detailRun = null;  // 正在查看的 run（日志/报告）
 let chatUrl = "";       // ATR 对话页地址（探测到 terminal-runtime 组件才有）
+
+// 秘密库待传播横幅（admin 限定 API，非 admin/无待办时静默隐藏）
+async function loadPropBanner() {
+  try {
+    const r = await fetch("/api/vault/propagation");
+    if (!r.ok) return;
+    const items = (await r.json()).pending || [];
+    const el = document.getElementById("propBanner");
+    if (items.length) {
+      el.textContent = "⚠️ 秘密库变更未生效：" + items.map(p => p.scope + "（" + p.hint + "）").join("；") + "。请到桌面端处理。";
+      el.classList.remove("hidden");
+    } else el.classList.add("hidden");
+  } catch (_) {}
+}
 
 async function api(path, opts = {}) {
   const resp = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
@@ -348,7 +363,7 @@ window.addEventListener("pageshow", e => { if (e.persisted && user) render(); })
 (async function init() {
   try { authBackend = (await api("/api/auth/method")).backend; } catch (_) {}
   try { user = await api("/api/auth/me"); } catch (_) { user = null; }
-  if (user) await detectChatUrl();
+  if (user) { await detectChatUrl(); loadPropBanner(); }
   render();
   startPoll();
 })();

@@ -53,6 +53,7 @@ def sync_env_secrets(values: dict, components: dict, actor: str = "setup") -> in
         for key, value in sorted(targets.items()):
             outcome = store.upsert(kind="text", name=key, scope=fmap[key]["scope"],
                                    plain=str(value).encode("utf-8"), actor=actor,
+                                   mark_pending=False,  # 存量收养：值本来就是运行事实
                                    secret_type=fmap[key]["secret_type"],
                                    rotation_risk=fmap[key]["rotation_risk"],
                                    summary=fmap[key]["summary"], owner=fmap[key]["scope"])
@@ -99,7 +100,7 @@ def import_env(components: dict, actor: str, force: bool = False) -> dict:
             conflicts.append(key)
             continue
         store.upsert(kind="text", name=key, scope=meta["scope"], plain=value.encode("utf-8"),
-                     actor=actor, secret_type=meta["secret_type"],
+                     actor=actor, mark_pending=False, secret_type=meta["secret_type"],
                      rotation_risk=meta["rotation_risk"], summary=meta["summary"],
                      owner=meta["scope"])
         imported += 1
