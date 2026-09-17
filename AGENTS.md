@@ -98,6 +98,7 @@ python -m chronicler sandbox [--components a b] [--include-disabled] [--junit re
 程序化改写 compose 去除 external 网络与宿主端口 / 临时数据目录 / 按 setup.yaml 字段声明
 现场生成一次性秘密，不读正式 .env 与秘密库）。Jenkins：SANDBOX_TESTS 参数 + junit 归档。
 调试加 --keep --workdir <目录>，环境变量 SANDBOX_DEBUG=1 打印 compose config 渲染。
+设计原理：docs/adr/0048 + docs/how/sandbox-testing.md；操作：docs/runbooks/testing.md。
 
 supervisor（产品本体，跟随 dockerd 同环境）：
 

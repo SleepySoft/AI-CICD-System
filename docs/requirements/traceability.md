@@ -9,7 +9,7 @@
 |---------|------|---------|---------|------|
 | FR-ENV-001 | Compose 统一编排 | what/environment.md §服务清单 | chronicler/components/*/compose.yml（组件化部署定义，ADR-0027；无根 compose） | `python -m chronicler test` |
 | FR-ENV-002 | 统一域名入口 | what/environment.md §域名契约 | chronicler/components/caddy/Caddyfile | scripts/verify.sh |
-| FR-ENV-003 | 统一门户导航 | what/environment.md §服务清单 | chronicler 首页（tools.yaml 注册表驱动，Homepage 已退役） | 人工：登录 Chronicler 首页看入口与状态 |
+| FR-ENV-003 | 统一门户导航 | what/environment.md §服务清单 | chronicler 首页（tools.yaml 注册表驱动，Homepage 已退役） | CI 沙箱（python -m chronicler sandbox，可达+认证探针）+ 人工抽查 |
 | FR-ENV-004 | 状态监控 | what/environment.md §服务清单 | chronicler/components/uptime-kuma/ | 人工：Uptime Kuma 面板 |
 | FR-ENV-005 | SSO 统一认证 | what/environment.md §SSO 契约 | chronicler/components/keycloak/realm/ | scripts/check-kc.sh |
 | FR-CI-001 | push 自动触发流水线 | how/images-toolchain.md | chronicler/components/jenkins/（chronicler-selftest 流水线，GitHub SSH 直拉 + pollSCM 兜底） | 人工：push 后观察 Jenkins 新构建 |

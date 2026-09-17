@@ -37,6 +37,7 @@
 | 工具链镜像机制 | how/images-toolchain.md | how | 生效 |
 | SSO 接线机制 | how/sso-wiring.md | how | 生效 |
 | 秘密库与组件密钥对接设计 | how/secrets-vault.md | how | 生效 |
+| 沙箱测试机制（环境级隔离原理） | how/sandbox-testing.md | how | 生效 |
 | ADR-0001 Gitea | adr/0001-gitea-as-git-platform.md | adr | 已接受 |
 | ADR-0002 Jenkins | adr/0002-jenkins-for-cicd.md | adr | 已接受 |
 | ADR-0003 Miniforge | adr/0003-miniforge-replaces-anaconda.md | adr | 已接受 |
@@ -84,6 +85,7 @@
 | ADR-0045 vault 为唯一静态事实源：糊化 .env、使用时渲染、轮转单点写入 | adr/0045-vault-single-source-masked-env.md | adr | 已接受 |
 | ADR-0046 工程常驻会话：任务与对话复用同一 ATR 会话 | adr/0046-project-session-harness.md | adr | 已接受 |
 | ADR-0047 OIDC 客户端注册收归 Keycloak 组件 oidc 能力 | adr/0047-keycloak-oidc-client-capability.md | adr | 已接受 |
+| ADR-0048 组件测试沙箱：环境级五通道隔离与现拉现建现测现毁 | adr/0048-sandbox-isolated-testing.md | adr | 已接受 |
 | 部署与初始化 | runbooks/deploy.md | runbooks | 生效 |
 | 备份与恢复 | runbooks/backup-restore.md | runbooks | 生效 |
 | 接入新 Agent | runbooks/agent-onboarding.md | runbooks | 生效 |
@@ -93,6 +95,7 @@
 | 构建与安装 sealed Chronicler | runbooks/build-sealed-chronicler.md | runbooks | 生效 |
 | Clash Verge 代理排查 | runbooks/proxy-clash.md | runbooks | 生效 |
 | 秘密库操作手册 | runbooks/vault.md | runbooks | 生效 |
+| 组件测试（沙箱/巡检/漂移审计） | runbooks/testing.md | runbooks | 生效 |
 | 旧-需求分析与选型 | 01-需求分析与选型.md | 历史 | 过时（已拆分至本结构） |
 | 旧-Manager 设计 | 02-管理服务设计.md | 历史 | 过时（已拆分至本结构） |
 
