@@ -103,6 +103,7 @@ def build(version: str, output_root: Path, bundle_only: bool = False) -> Path:
         _verify_bundle(resources / "prompts.bundle", key, len(definitions))
         shutil.copytree(ROOT / "chronicler" / "app" / "static", resources / "static")
         shutil.copytree(ROOT / "chronicler" / "config", resources / "config")
+        shutil.copytree(ROOT / "chronicler" / "assets", resources / "assets")
         shutil.copy2(ROOT / ".env.example", release / ".env.example")
         shutil.copy2(ROOT / "LICENSE", release / "LICENSE")
         shutil.copy2(ROOT / "scripts" / "install-chronicler.ps1", release / "install.ps1")

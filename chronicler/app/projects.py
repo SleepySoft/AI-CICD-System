@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from fastapi import HTTPException
 
 from .config import Cfg
 from .db import execute, loads, q, q1
+from .runtime import PROFILE
 
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 SHADOW_MAIN_BRANCH = "main"
@@ -180,7 +182,8 @@ def shadow_dir(pid: int) -> Path:
 
 def ensure_shadow_repo(pid: int) -> Path:
     """建立或获取 shadow 库：指定 shadow_repo 则 clone；未指定则尝试 Gitea 自动建仓
-    <工程名>-shadow（幂等）；Gitea 不可达时纯本地仓。返回 git 仓路径。"""
+    <工程名>-shadow（幂等）；Gitea 不可达时纯本地仓。新空仓使用内置 Cognitive Shadow
+    模板初始化；已有仓不覆盖。返回 git 仓路径。"""
     p = get_project(pid)
     dest = shadow_dir(pid)
     if (dest / ".git").is_dir():
@@ -189,18 +192,53 @@ def ensure_shadow_repo(pid: int) -> Path:
     if not url:
         url = _auto_shadow_repo(p) or ""  # 建仓成功会回写 project.shadow_repo
     dest.parent.mkdir(parents=True, exist_ok=True)
+    seed_template = not url
     if url:
         r = _git(["clone", url, str(dest)], timeout=300)
         if r.returncode != 0:
             # clone 失败（如空仓 404）则本地初始化，推送时建仓
             dest.mkdir(parents=True, exist_ok=True)
-            _git(["-C", str(dest), "init"])
-            _git(["-C", str(dest), "commit", "--allow-empty", "-m", "init shadow repo"])
+            _git(["-C", str(dest), "init", "-b", SHADOW_MAIN_BRANCH])
+        else:
+            head = _git(["-C", str(dest), "rev-parse", "--verify", "HEAD"])
+            seed_template = head.returncode != 0
     else:
         dest.mkdir(parents=True, exist_ok=True)
-        _git(["-C", str(dest), "init"])
-        _git(["-C", str(dest), "commit", "--allow-empty", "-m", "init shadow repo"])
+        _git(["-C", str(dest), "init", "-b", SHADOW_MAIN_BRANCH])
+
+    if seed_template:
+        _initialize_shadow_project(dest, p)
     return dest
+
+
+def _initialize_shadow_project(dest: Path, project: dict) -> None:
+    """将内置 Cognitive Shadow 模板复制到空 Shadow 仓，并生成初始提交。"""
+    template = PROFILE.resource_root / "assets" / "shadow-project"
+    if not template.is_dir():
+        raise RuntimeError(f"Shadow 初始化模板不存在：{template}")
+    for source in template.rglob("*"):
+        target = dest / source.relative_to(template)
+        if source.is_dir():
+            target.mkdir(parents=True, exist_ok=True)
+            continue
+        if target.exists():
+            raise RuntimeError(f"Shadow 初始化模板与现有文件冲突：{target}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+
+    state_path = dest / ".cognitive-state.yaml"
+    state = state_path.read_text(encoding="utf-8")
+    repository = project.get("name", "")
+    branch = project.get("default_branch") or ""
+    state = state.replace('repository: ""', f'repository: {json.dumps(repository, ensure_ascii=False)}')
+    state = state.replace('branch: ""', f'branch: {json.dumps(branch, ensure_ascii=False)}')
+    state_path.write_text(state, encoding="utf-8", newline="\n")
+
+    _git(["-C", str(dest), "symbolic-ref", "HEAD", f"refs/heads/{SHADOW_MAIN_BRANCH}"])
+    _git(["-C", str(dest), "add", "-A"])
+    _git(["-C", str(dest), "-c", "user.name=chronicler", "-c",
+          "user.email=chronicler@localhost", "commit", "--allow-empty",
+          "-m", "init cognitive shadow"])
 
 
 def prepare_shadow_direct(pid: int) -> Path:
