@@ -41,12 +41,39 @@ class PromptRegistryTest(unittest.TestCase):
         prompts = asyncio.run(config.prompts({"username": "test"}))
 
         self.assertEqual(5, len(task_types))
-        self.assertEqual(5, len(prompts))
+        self.assertEqual(6, len(prompts))
         self.assertTrue(all("prompt" in item and "mode" in item for item in task_types))
         self.assertEqual({"documentation-update", "knowledge-capture",
                           "periodic-report", "project-analysis",
-                          "project_cognitive_maintainer"},
+                          "project_cognitive_maintainer", "operational_reporter"},
                          {item["name"] for item in prompts})
+
+    def test_operational_reporter_prompt_renders_required_context(self):
+        project = {"id": 7, "name": "sample"}
+        values = {
+            "extra": "关注本周失败构建",
+            "report_file": "C:/runs/7/report.md",
+            "prompt_file": "C:/runs/7/prompt.md",
+            "repo_head": "abc123",
+            "ci_context": "{}",
+            "report_delivery": "输出完整 Markdown。",
+            "change_context": "- 状态：有增量",
+            "baseline_commit": "base123",
+            "target_commit": "target456",
+            "period_start": "2026-09-14",
+            "period_end": "2026-09-20",
+            "report_mode": "daily",
+        }
+
+        with patch.object(runner.projects, "repo_dir", return_value=Path("C:/repos/7")), \
+                patch.object(runner.projects, "ensure_shadow_repo", return_value=Path("C:/shadow/7")), \
+                patch.object(registry, "injectable_components", return_value=[]):
+            template, _ = registry.load_prompt("operational_reporter")
+            rendered = runner._render_prompt(template, project, values)
+
+        self.assertIsNone(re.search(r"\{\{[a-z_]+\}\}", rendered))
+        self.assertIn(values["baseline_commit"], rendered)
+        self.assertIn(values["target_commit"], rendered)
 
     def test_all_new_task_prompts_render_without_unknown_placeholders(self):
         project = {"id": 7, "name": "sample"}

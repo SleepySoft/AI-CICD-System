@@ -28,7 +28,7 @@ class PromptCatalogTest(unittest.TestCase):
 
         items = catalog.list()
 
-        self.assertEqual(5, len(items))
+        self.assertEqual(6, len(items))
         self.assertTrue(all(item.version == "1.0.0" for item in items))
         self.assertTrue(all(item.content_hash.startswith("sha256:") for item in items))
         self.assertTrue(all(catalog.content_for_display(item.name) for item in items))
@@ -43,7 +43,7 @@ class PromptCatalogTest(unittest.TestCase):
         self.assertIn("# 任务：维护项目认知资产", item.content)
         self.assertNotIn("content:", metadata)
         self.assertIn("content_file: project_cognitive_maintainer.md", metadata)
-        self.assertEqual({"project_cognitive_maintainer.md"},
+        self.assertEqual({"project_cognitive_maintainer.md", "operational_reporter.md"},
                          {path.name for path in self.old_asset_prompts.glob("*.md")})
 
     def test_sealed_bundle_discloses_only_metadata_and_accepts_visible_override(self):
@@ -60,7 +60,7 @@ class PromptCatalogTest(unittest.TestCase):
                                      "metadata-only", False, key)
             with patch("chronicler.app.prompt_catalog.PROFILE", profile):
                 catalog = PromptCatalog()
-                self.assertEqual(5, len(catalog.list()))
+                self.assertEqual(6, len(catalog.list()))
                 item = catalog.resolve("project-analysis")
                 self.assertEqual("1.0.0", item.version)
                 self.assertIsNone(catalog.content_for_display(item.name))
