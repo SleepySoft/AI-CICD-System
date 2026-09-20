@@ -13,7 +13,7 @@ from fastapi import HTTPException
 from .config import Cfg
 from .runtime import PROFILE
 
-_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 _VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$")
 BUNDLE_AAD = b"chronicler-prompt-bundle-v1"
 
@@ -59,7 +59,8 @@ def _parse(data: dict, *, builtin: bool, overridden: bool, source: str) -> Promp
         raise RuntimeError(f"Prompt version 必须是 SemVer：{source}")
     if not title or not content:
         raise RuntimeError(f"Prompt title/content 不能为空：{source}")
-    if int(data.get("schema_version", 0)) != 1:
+    schema_version = int(data.get("schema_version", 0))
+    if schema_version not in (1, 2):
         raise RuntimeError(f"不支持的 Prompt schema_version：{source}")
     if not isinstance(variables, list) or not all(isinstance(item, str) for item in variables):
         raise RuntimeError(f"Prompt variables 必须是字符串数组：{source}")
@@ -67,25 +68,47 @@ def _parse(data: dict, *, builtin: bool, overridden: bool, source: str) -> Promp
     used = set(re.findall(r"\{\{([a-z_]+)\}\}", content))
     if used != declared:
         raise RuntimeError(f"Prompt variables 与正文不一致：{source} declared={sorted(declared)} used={sorted(used)}")
-    return PromptDefinition(name=name, version=version, title=title, schema_version=1,
+    return PromptDefinition(name=name, version=version, title=title, schema_version=schema_version,
                             variables=tuple(variables), output_kind=str(output.get("kind", "report")),
                             content=content, content_hash=_content_hash(content),
                             builtin=builtin, overridden=overridden)
 
 
 def _load_yaml(path: Path, *, builtin: bool, overridden: bool) -> PromptDefinition:
-    return _parse(yaml.safe_load(path.read_text(encoding="utf-8")), builtin=builtin,
-                  overridden=overridden, source=str(path))
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise RuntimeError(f"Prompt 不是对象：{path}")
+    content_file = data.get("content_file")
+    if content_file:
+        body_path = path.parent / str(content_file)
+        if not body_path.is_file():
+            raise RuntimeError(f"Prompt body 文件不存在：{body_path}")
+        if "content" in data:
+            raise RuntimeError(f"Prompt metadata 不应内嵌 content：{path}")
+        if Path(str(content_file)).name != str(content_file):
+            raise RuntimeError(f"Prompt body 必须与 metadata 同目录：{path}")
+        data["content"] = body_path.read_text(encoding="utf-8")
+    definition = _parse(data, builtin=builtin,
+                        overridden=overridden, source=str(path))
+    if content_file and definition.name != path.stem:
+        raise RuntimeError(f"Prompt name 与 metadata 文件名不一致：{path}")
+    return definition
 
 
-def build_bundle(source_dir: Path, output: Path, key: bytes) -> dict:
+def build_bundle(source_dir: Path, output: Path, key: bytes,
+                 extra_source_dirs: tuple[Path, ...] = ()) -> dict:
     prompts = []
-    for path in sorted(source_dir.glob("*.yaml")):
-        definition = _load_yaml(path, builtin=True, overridden=False)
-        prompts.append({"name": definition.name, "version": definition.version,
-                        "title": definition.title, "schema_version": definition.schema_version,
-                        "variables": list(definition.variables),
-                        "output": {"kind": definition.output_kind}, "content": definition.content})
+    seen: set[str] = set()
+    for source_dir in (source_dir, *extra_source_dirs):
+        for path in sorted(source_dir.glob("*.yaml")):
+            definition = _load_yaml(path, builtin=True, overridden=False)
+            if definition.name in seen:
+                raise RuntimeError(f"Prompt name 重复：{definition.name}")
+            seen.add(definition.name)
+            prompts.append({"name": definition.name, "version": definition.version,
+                            "title": definition.title, "schema_version": definition.schema_version,
+                            "variables": list(definition.variables),
+                            "output": {"kind": definition.output_kind}, "content": definition.content})
     if not prompts:
         raise RuntimeError(f"Prompt 目录为空：{source_dir}")
     plaintext = json.dumps({"schema_version": 1, "prompts": prompts},
@@ -117,7 +140,13 @@ class PromptCatalog:
         else:
             definitions = [_load_yaml(path, builtin=True, overridden=False)
                            for path in sorted(Cfg.PROMPTS_DIR.glob("*.yaml"))]
+            assets_dir = Cfg.asset_prompts_dir()
+            if assets_dir.is_dir():
+                definitions.extend(_load_yaml(path, builtin=True, overridden=False)
+                                   for path in sorted(assets_dir.glob("*.yaml")))
         loaded = {item.name: item for item in definitions}
+        if not PROFILE.sealed and len(loaded) != len(definitions):
+            raise RuntimeError("Prompt name 重复")
         if PROFILE.sealed:
             self._builtins = loaded
         return loaded

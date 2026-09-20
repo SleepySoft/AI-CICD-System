@@ -88,6 +88,10 @@ class Cfg:
         return cls.DATA / "prompts"
 
     @classmethod
+    def asset_prompts_dir(cls) -> Path:
+        return cls.RESOURCE_DIR / "assets" / "prompts"
+
+    @classmethod
     def require_env(cls, command: str = "serve"):
         """主入口前置校验（首要依赖）：仓库根 .env 必须存在，否则提示并退出。
         组件 compose 一律使用 `--env-file <仓库根>/.env`（ADR-0027），缺失会导致

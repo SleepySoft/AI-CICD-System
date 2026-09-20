@@ -16,6 +16,7 @@ class PromptCatalogTest(unittest.TestCase):
         self.old_resource = Cfg.RESOURCE_DIR
         self.old_prompts = Cfg.PROMPTS_DIR
         self.old_data = Cfg.DATA
+        self.old_asset_prompts = Cfg.asset_prompts_dir()
 
     def tearDown(self):
         Cfg.RESOURCE_DIR = self.old_resource
@@ -27,10 +28,23 @@ class PromptCatalogTest(unittest.TestCase):
 
         items = catalog.list()
 
-        self.assertEqual(4, len(items))
+        self.assertEqual(5, len(items))
         self.assertTrue(all(item.version == "1.0.0" for item in items))
         self.assertTrue(all(item.content_hash.startswith("sha256:") for item in items))
         self.assertTrue(all(catalog.content_for_display(item.name) for item in items))
+
+    def test_source_catalog_loads_split_prompt_metadata_and_body(self):
+        item = PromptCatalog().resolve("project_cognitive_maintainer")
+        metadata_path = self.old_asset_prompts / "project_cognitive_maintainer.yaml"
+        metadata = metadata_path.read_text(encoding="utf-8")
+
+        self.assertEqual(2, item.schema_version)
+        self.assertEqual("shadow-maintenance", item.output_kind)
+        self.assertIn("# 任务：维护项目认知资产", item.content)
+        self.assertNotIn("content:", metadata)
+        self.assertIn("content_file: project_cognitive_maintainer.md", metadata)
+        self.assertEqual({"project_cognitive_maintainer.md"},
+                         {path.name for path in self.old_asset_prompts.glob("*.md")})
 
     def test_sealed_bundle_discloses_only_metadata_and_accepts_visible_override(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -40,11 +54,13 @@ class PromptCatalogTest(unittest.TestCase):
             Cfg.PROMPTS_DIR = self.old_prompts
             Cfg.DATA = root / "data"
             key = bytes(range(32))
-            build_bundle(self.old_prompts, resources / "prompts.bundle", key)
+            build_bundle(self.old_prompts, resources / "prompts.bundle", key,
+                         (self.old_asset_prompts,))
             profile = RuntimeProfile("sealed", root, resources, root / "components",
                                      "metadata-only", False, key)
             with patch("chronicler.app.prompt_catalog.PROFILE", profile):
                 catalog = PromptCatalog()
+                self.assertEqual(5, len(catalog.list()))
                 item = catalog.resolve("project-analysis")
                 self.assertEqual("1.0.0", item.version)
                 self.assertIsNone(catalog.content_for_display(item.name))
@@ -82,7 +98,8 @@ class PromptCatalogTest(unittest.TestCase):
             Cfg.RESOURCE_DIR = resources
             Cfg.PROMPTS_DIR = self.old_prompts
             Cfg.DATA = root / "data"
-            build_bundle(self.old_prompts, resources / "prompts.bundle", bytes(range(32)))
+            build_bundle(self.old_prompts, resources / "prompts.bundle", bytes(range(32)),
+                         (self.old_asset_prompts,))
             profile = RuntimeProfile("sealed", root, resources, root / "components",
                                      "metadata-only", False, b"x" * 32)
             with patch("chronicler.app.prompt_catalog.PROFILE", profile):

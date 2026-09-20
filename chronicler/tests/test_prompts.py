@@ -41,10 +41,11 @@ class PromptRegistryTest(unittest.TestCase):
         prompts = asyncio.run(config.prompts({"username": "test"}))
 
         self.assertEqual(5, len(task_types))
-        self.assertEqual(4, len(prompts))
+        self.assertEqual(5, len(prompts))
         self.assertTrue(all("prompt" in item and "mode" in item for item in task_types))
         self.assertEqual({"documentation-update", "knowledge-capture",
-                          "periodic-report", "project-analysis"},
+                          "periodic-report", "project-analysis",
+                          "project_cognitive_maintainer"},
                          {item["name"] for item in prompts})
 
     def test_all_new_task_prompts_render_without_unknown_placeholders(self):
