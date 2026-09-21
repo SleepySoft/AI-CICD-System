@@ -1,13 +1,13 @@
 schema_version: 1
 name: knowledge-capture
-version: 1.0.0
+version: 1.1.0
 title: 项目经验沉淀
 variables:
   - project_name
-  - repo_dir
-  - shadow_dir
-  - repo_head
-  - date
+  - source_repo_dir
+  - shadow_repo_dir
+  - source_head_commit
+  - run_date
   - report_file
   - components
   - extra
@@ -22,11 +22,11 @@ content: |
 
   ## 本次上下文
 
-  - 代码仓库：`{{repo_dir}}`
-  - shadow 仓：`{{shadow_dir}}`
-  - 当前提交：`{{repo_head}}`
-  - 日期：{{date}}
-  - 项目经验目录：`{{shadow_dir}}/know-how/`
+  - 代码仓库：`{{source_repo_dir}}`
+  - shadow 仓：`{{shadow_repo_dir}}`
+  - 当前提交：`{{source_head_commit}}`
+  - 日期：{{run_date}}
+  - 项目经验目录：`{{shadow_repo_dir}}/know-how/`
   - 运行摘要：`{{report_file}}`
 
   ### 可用能力
@@ -54,20 +54,20 @@ content: |
 
   不要沉淀以下内容：项目进度、普通文件说明、显而易见的语法知识、无证据建议、临时路径/账号/密钥、仅适用于单次提交且没有迁移价值的细节。
 
-  本任务只维护项目级 `{{shadow_dir}}/know-how/**`。不得写入全局资产库；项目经验提升到全局由独立人工审核流程完成。
+  本任务只维护项目级 `{{shadow_repo_dir}}/know-how/**`。不得写入全局资产库；项目经验提升到全局由独立人工审核流程完成。
 
   ## 提取规则
 
   1. 优先使用补充指令指定的 Run、提交范围、日志、故障或主题。
   2. 若没有指定来源，只检查最近 10 个提交及对应报告，最多寻找 3 条候选；没有高价值经验时允许零产出。
   3. 每个结论至少有一项可定位证据（代码/配置/测试路径、提交 SHA、Run 或日志位置）。
-  4. 写入前检查 `{{shadow_dir}}/know-how/` 及可用知识检索，避免重复。已有条目部分覆盖时优先增量更新，并保留原有正确内容。
+  4. 写入前检查 `{{shadow_repo_dir}}/know-how/` 及可用知识检索，避免重复。已有条目部分覆盖时优先增量更新，并保留原有正确内容。
   5. 区分“观察到的现象”“确认的根因”“验证过的做法”和“适用边界”；根因未证实时不生成正式经验卡。
   6. 一次最多新增或实质更新 3 张卡片，质量优先于数量。
 
   ## 卡片契约
 
-  每条经验一个 kebab-case 文件名，写入 `{{shadow_dir}}/know-how/<slug>.md`：
+  每条经验一个 kebab-case 文件名，写入 `{{shadow_repo_dir}}/know-how/<slug>.md`：
 
   ```markdown
   ---
@@ -75,7 +75,7 @@ content: |
   scope: project
   origin: ai
   project: {{project_name}}
-  updated: {{date}}
+  updated: {{run_date}}
   tags: [<2-5 个稳定标签>]
   source_commits: [<SHA>]
   source_runs: [<Run ID，没有则空数组>]

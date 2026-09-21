@@ -1,12 +1,12 @@
 schema_version: 1
 name: project-analysis
-version: 1.0.0
+version: 1.1.0
 title: 项目分析
 variables:
   - project_name
-  - repo_dir
-  - repo_head
-  - date
+  - source_repo_dir
+  - source_head_commit
+  - run_date
   - task_mode
   - report_file
   - components
@@ -22,9 +22,9 @@ content: |
 
   ## 本次上下文
 
-  - 代码仓库：`{{repo_dir}}`
-  - 当前提交：`{{repo_head}}`
-  - 分析日期：{{date}}
+  - 代码仓库：`{{source_repo_dir}}`
+  - 当前提交：`{{source_head_commit}}`
+  - 分析日期：{{run_date}}
   - 任务模式：{{task_mode}}
   - 报告文件：`{{report_file}}`
 

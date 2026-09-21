@@ -1,19 +1,19 @@
 schema_version: 2
 name: operational_reporter
-version: 1.0.0
+version: 1.1.0
 title: 生成工程运行报告
 content_file: operational_reporter.md
 variables:
   - project_name
-  - repo_dir
-  - shadow_dir
-  - baseline_commit
-  - target_commit
-  - date
-  - period_start
-  - period_end
+  - source_repo_dir
+  - shadow_repo_dir
+  - baseline_source_commit
+  - source_head_commit
+  - run_date
+  - task_mode
+  - task_period_start
+  - task_period_end
   - report_file
-  - report_mode
   - components
   - extra
 output:

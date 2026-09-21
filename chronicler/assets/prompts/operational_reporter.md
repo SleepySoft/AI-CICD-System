@@ -17,14 +17,14 @@
 
 ## 本次上下文
 
-- 源代码仓：`{{repo_dir}}`
-- Shadow 仓：`{{shadow_dir}}`
-- 报告模式：`{{report_mode}}`
-- 周期起点：`{{period_start}}`
-- 周期终点：`{{period_end}}`
-- 基线提交：`{{baseline_commit}}`
-- 目标提交：`{{target_commit}}`
-- 报告日期：{{date}}
+- 源代码仓：`{{source_repo_dir}}`
+- Shadow 仓：`{{shadow_repo_dir}}`
+- 报告模式：`{{task_mode}}`
+- 周期起点：`{{task_period_start}}`
+- 周期终点：`{{task_period_end}}`
+- 基线提交：`{{baseline_source_commit}}`
+- 目标提交：`{{source_head_commit}}`
+- 报告日期：{{run_date}}
 - 报告文件：`{{report_file}}`
 
 ### 可用组件
@@ -66,7 +66,7 @@
 
 报告应按成果和主题归并信息，避免变成长篇提交清单。
 
-如果 `{{report_mode}}` 不是支持的值，则采用 `comprehensive`，并在报告范围中说明回退。
+如果 `{{task_mode}}` 不是支持的值，则采用 `comprehensive`，并在报告范围中说明回退。
 
 ## 可用组件的使用规则
 
@@ -117,7 +117,7 @@ Operational Reporter 应主动使用与报告相关的注入组件。特别是�
 
 ## 时间与提交范围
 
-报告以 `{{period_start}}` 到 `{{period_end}}` 为主要时间窗口，以 `{{baseline_commit}}` 到 `{{target_commit}}` 为主要提交范围。
+报告以 `{{task_period_start}}` 到 `{{task_period_end}}` 为主要时间窗口，以 `{{baseline_source_commit}}` 到 `{{source_head_commit}}` 为主要提交范围。
 
 必须明确使用统一时区解释周期起止时间。
 

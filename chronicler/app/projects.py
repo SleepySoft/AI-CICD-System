@@ -174,6 +174,12 @@ def repo_dirty(pid: int) -> bool:
     return bool(r.stdout.strip()) if r.returncode == 0 else False
 
 
+def current_branch(pid: int) -> str:
+    """读取源仓当前分支；无法识别时返回空字符串。"""
+    r = _git(["-C", str(repo_dir(pid)), "branch", "--show-current"])
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
 def shadow_dir(pid: int) -> Path:
     """项目影子库目录（FR-MGR-013/ADR-0028）：data/public/shadow/<工程名>-shadow（交换区，容器可读）"""
     p = get_project(pid)
@@ -311,6 +317,13 @@ def push_shadow(pid: int, branch: str = SHADOW_MAIN_BRANCH) -> str | None:
 def head_commit(pid: int) -> str:
     r = _git(["-C", str(repo_dir(pid)), "rev-parse", "HEAD"])
     return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def shadow_dirty(pid: int) -> bool:
+    """读取 Shadow 仓脏状态；仓库不可用时视为非脏。"""
+    dest = ensure_shadow_repo(pid)
+    r = _git(["-C", str(dest), "status", "--porcelain"])
+    return bool(r.stdout.strip()) if r.returncode == 0 else False
 
 
 def recent_log(pid: int, n: int = 30) -> str:

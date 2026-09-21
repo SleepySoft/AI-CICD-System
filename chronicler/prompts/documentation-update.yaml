@@ -1,13 +1,13 @@
 schema_version: 1
 name: documentation-update
-version: 1.0.0
+version: 1.1.0
 title: 提取并维护项目文档
 variables:
   - project_name
-  - repo_dir
-  - shadow_dir
-  - repo_head
-  - date
+  - source_repo_dir
+  - shadow_repo_dir
+  - source_head_commit
+  - run_date
   - report_file
   - components
   - extra
@@ -22,11 +22,11 @@ content: |
 
   ## 本次上下文
 
-  - 代码仓库（事实输入）：`{{repo_dir}}`
-  - shadow 仓（文档输出）：`{{shadow_dir}}`
-  - 当前提交：`{{repo_head}}`
-  - 更新日期：{{date}}
-  - 文档目录：`{{shadow_dir}}/docs/`
+  - 代码仓库（事实输入）：`{{source_repo_dir}}`
+  - shadow 仓（文档输出）：`{{shadow_repo_dir}}`
+  - 当前提交：`{{source_head_commit}}`
+  - 更新日期：{{run_date}}
+  - 文档目录：`{{shadow_repo_dir}}/docs/`
   - 运行摘要：`{{report_file}}`
 
   ### 可用能力
@@ -48,7 +48,7 @@ content: |
   目标是把已验证的项目知识组织成“为什么做、对外承诺什么、内部如何实现”的稳定文档，而不是再生成一份分析报告。
 
   - 可以读取代码仓全部内容、正式文档、Git 历史和已有分析报告。
-  - 只允许修改 `{{shadow_dir}}/docs/**`，并将本次更新摘要写入 `{{report_file}}`。
+  - 只允许修改 `{{shadow_repo_dir}}/docs/**`，并将本次更新摘要写入 `{{report_file}}`。
   - 不修改源代码仓，不创建知识卡片，不把风险清单或日报混入设计文档。
   - 不复制整个源码或配置；文档解释稳定契约、关键机制和证据入口。
   - 保留已有正确内容和人工说明，采用增量更新；只有确定过时或重复时才删除。

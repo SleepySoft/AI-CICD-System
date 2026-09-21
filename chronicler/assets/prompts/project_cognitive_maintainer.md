@@ -10,11 +10,11 @@ Shadow 仓是项目的长期认知镜像。它不是源代码仓的副本，也�
 
 ## 本次上下文
 
-- 源代码仓：`{{repo_dir}}`
-- Shadow 仓：`{{shadow_dir}}`
-- 基线提交：`{{baseline_commit}}`
-- 目标提交：`{{target_commit}}`
-- 执行日期：{{date}}
+- 源代码仓：`{{source_repo_dir}}`
+- Shadow 仓：`{{shadow_repo_dir}}`
+- 基线提交：`{{shadow_source_baseline_commit}}`
+- 目标提交：`{{source_head_commit}}`
+- 执行日期：{{run_date}}
 - 运行摘要：`{{report_file}}`
 
 ### 可用组件
@@ -31,7 +31,7 @@ Shadow 仓是项目的长期认知镜像。它不是源代码仓的副本，也�
 
 开始工作前，必须先读取：
 
-1. `{{shadow_dir}}/SKILL.md`；
+1. `{{shadow_repo_dir}}/SKILL.md`；
 2. Shadow 仓的状态文件、根目录索引和最近一次运行记录；
 3. 源代码仓中的 README、AGENTS.md、CONTRIBUTING.md，以及其它适用于本项目的规范；
 4. 与本次变化相关的现有需求、文档、ADR、演化记录、项目经验和认知审计项。
@@ -63,7 +63,7 @@ Shadow 仓中的 `SKILL.md` 是本项目当前生效的认知资产治理规范�
 
 ## 修改边界
 
-只允许修改 `{{shadow_dir}}` 中由 Shadow SKILL 管理的项目认知资产，以及 `{{report_file}}`。
+只允许修改 `{{shadow_repo_dir}}` 中由 Shadow SKILL 管理的项目认知资产，以及 `{{report_file}}`。
 
 不得：
 
@@ -81,7 +81,7 @@ Shadow 仓中的 `SKILL.md` 是本项目当前生效的认知资产治理规范�
 
 ### 1. Git 用于发现变化
 
-使用 Git 检查 `{{baseline_commit}}` 到 `{{target_commit}}` 之间的：
+使用 Git 检查 `{{shadow_source_baseline_commit}}` 到 `{{source_head_commit}}` 之间的：
 
 - 提交历史；
 - 文件增删改；
@@ -96,7 +96,7 @@ Shadow 仓中的 `SKILL.md` 是本项目当前生效的认知资产治理规范�
 
 ### 2. 当前完整状态用于判断认知
 
-发现候选变化后，必须读取 `{{target_commit}}` 下的相关完整内容，包括必要的调用关系、测试、配置、文档和工程定义。
+发现候选变化后，必须读取 `{{source_head_commit}}` 下的相关完整内容，包括必要的调用关系、测试、配置、文档和工程定义。
 
 不要只解释 diff。代码变化的规模不等于认知变化的重要程度。
 
@@ -138,7 +138,7 @@ Shadow 仓中的 `SKILL.md` 是本项目当前生效的认知资产治理规范�
 
 ### 第一步：确认状态和范围
 
-读取 Shadow 状态，确认其记录的源仓提交与 `{{baseline_commit}}` 是否一致。
+读取 Shadow 状态，确认其记录的源仓提交与 `{{shadow_source_baseline_commit}}` 是否一致。
 
 检查：
 
@@ -287,7 +287,7 @@ Shadow 仓中的 `SKILL.md` 是本项目当前生效的认知资产治理规范�
 
 ## 基线推进
 
-只有在 Shadow SKILL 定义的成功条件全部满足后，才能将 Shadow 状态中的已维护提交推进到 `{{target_commit}}`。
+只有在 Shadow SKILL 定义的成功条件全部满足后，才能将 Shadow 状态中的已维护提交推进到 `{{source_head_commit}}`。
 
 以下情况不得推进基线：
 
@@ -317,47 +317,8 @@ Shadow 仓中的 `SKILL.md` 是本项目当前生效的认知资产治理规范�
 10. 未修改源代码仓、全局资产或 Shadow SKILL；
 11. Shadow 状态与实际维护结果一致。
 
-建议的注册变量
-variables:
-  - project_name
-  - repo_dir
-  - shadow_dir
-  - baseline_commit
-  - target_commit
-  - date
-  - components
-  - extra
-  - report_file
-
-
-如果你现有的执行框架要求输出交付方式由变量控制，也可以保留：
-
-  - report_delivery
-
-
-然后将 Prompt 中的运行摘要部分改为：
+## 交付方式
 
 按照以下方式交付运行摘要：
 
 {{report_delivery}}
-
-这版 Prompt 的关键收敛
-
-不再注入 change_context
- Agent 通过 Git 基线自主发现变化，避免二手摘要造成遗漏、偏置和重复上下文。
-
-没有重复定义 Shadow 文件结构
- 结构、格式、元数据、归档和模板全部由已就位的 SKILL.md 管理。
-
-保留了完整认知流程
- Git 发现、当前事实恢复、交叉验证、资产维护、认知审计、全局候选和基线推进仍然在一次运行中完成。
-
-外部组件按需使用
- Project Cognitive Maintainer 以本地 Git 与项目文件为主，仅在验证需求、CI/CD、部署或运行状态时调用注入组件。
-
-将基线定义为认知覆盖边界
- baseline_commit 表示 Shadow 已经完整维护到的位置，而非简单的上次执行时间或上次看到的提交。
-
-明确部分成功不能推进基线
- 这能防止某次运行漏掉变化后，后续任务永久跨过该区间。
- 

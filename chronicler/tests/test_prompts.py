@@ -1,13 +1,12 @@
 import re
 import asyncio
 import unittest
-from pathlib import Path
-from unittest.mock import patch
 
 from fastapi import HTTPException
 
 from chronicler.app import registry, runner, tasks
 from chronicler.app.routers import config
+from chronicler.app.prompt_context import CONTEXT_FIELDS, render_prompt
 
 
 class PromptRegistryTest(unittest.TestCase):
@@ -49,54 +48,44 @@ class PromptRegistryTest(unittest.TestCase):
                          {item["name"] for item in prompts})
 
     def test_operational_reporter_prompt_renders_required_context(self):
-        project = {"id": 7, "name": "sample"}
-        values = {
+        context = {key: f"[{key}]" for key in CONTEXT_FIELDS}
+        context.update({
             "extra": "关注本周失败构建",
             "report_file": "C:/runs/7/report.md",
             "prompt_file": "C:/runs/7/prompt.md",
-            "repo_head": "abc123",
-            "ci_context": "{}",
+            "source_head_commit": "target456",
             "report_delivery": "输出完整 Markdown。",
             "change_context": "- 状态：有增量",
-            "baseline_commit": "base123",
-            "target_commit": "target456",
-            "period_start": "2026-09-14",
-            "period_end": "2026-09-20",
-            "report_mode": "daily",
-        }
+            "baseline_source_commit": "base123",
+            "task_period_start": "2026-09-14",
+            "task_period_end": "2026-09-20",
+            "harness_report_mode": "daily",
+        })
 
-        with patch.object(runner.projects, "repo_dir", return_value=Path("C:/repos/7")), \
-                patch.object(runner.projects, "ensure_shadow_repo", return_value=Path("C:/shadow/7")), \
-                patch.object(registry, "injectable_components", return_value=[]):
-            template, _ = registry.load_prompt("operational_reporter")
-            rendered = runner._render_prompt(template, project, values)
+        template, _ = registry.load_prompt("operational_reporter")
+        rendered = render_prompt(template, context)
 
         self.assertIsNone(re.search(r"\{\{[a-z_]+\}\}", rendered))
-        self.assertIn(values["baseline_commit"], rendered)
-        self.assertIn(values["target_commit"], rendered)
+        self.assertIn("base123", rendered)
+        self.assertIn("target456", rendered)
 
     def test_all_new_task_prompts_render_without_unknown_placeholders(self):
-        project = {"id": 7, "name": "sample"}
-        values = {
+        context = {key: f"[{key}]" for key in CONTEXT_FIELDS}
+        context.update({
             "extra": "聚焦最近一次变更",
             "report_file": "C:/runs/7/report.md",
             "prompt_file": "C:/runs/7/prompt.md",
-            "repo_head": "abc123",
-            "ci_context": "{}",
+            "source_head_commit": "abc123",
             "report_delivery": "输出完整 Markdown。",
             "change_context": "- 状态：有增量",
-        }
+        })
 
-        with patch.object(runner.projects, "repo_dir", return_value=Path("C:/repos/7")), \
-                patch.object(runner.projects, "ensure_shadow_repo", return_value=Path("C:/shadow/7")), \
-                patch.object(registry, "injectable_components", return_value=[]):
-            for task_type in tasks.PRESET_TASKS:
-                with self.subTest(task_type=task_type):
-                    template, _, spec = registry.load_task_prompt(task_type)
-                    rendered = runner._render_prompt(template, project,
-                                                     {**values, "task_mode": spec["mode"]})
-                    self.assertIsNone(re.search(r"\{\{[a-z_]+\}\}", rendered))
-                    self.assertIn(values["report_file"], rendered)
+        for task_type in tasks.PRESET_TASKS:
+            with self.subTest(task_type=task_type):
+                template, _, spec = registry.load_task_prompt(task_type)
+                rendered = render_prompt(template, {**context, "task_mode": spec["mode"]})
+                self.assertIsNone(re.search(r"\{\{[a-z_]+\}\}", rendered))
+                self.assertIn(context["report_file"], rendered)
 
     def test_report_delivery_matches_harness_contract(self):
         report_file = "C:/runs/7/report.md"

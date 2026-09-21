@@ -1,15 +1,15 @@
 schema_version: 1
 name: periodic-report
-version: 1.0.0
+version: 1.1.0
 title: 周期研发报告
 variables:
   - project_name
-  - repo_dir
-  - shadow_dir
-  - repo_head
-  - date
+  - source_repo_dir
+  - shadow_repo_dir
+  - source_head_commit
+  - run_date
   - task_mode
-  - ci_context
+  - ci_context_json
   - components
   - extra
   - change_context
@@ -24,15 +24,15 @@ content: |
 
   ## 本次上下文
 
-  - 代码仓库：`{{repo_dir}}`
-  - shadow 仓：`{{shadow_dir}}`
-  - 当前提交：`{{repo_head}}`
-  - 报告日期：{{date}}
+  - 代码仓库：`{{source_repo_dir}}`
+  - shadow 仓：`{{shadow_repo_dir}}`
+  - 当前提交：`{{source_head_commit}}`
+  - 报告日期：{{run_date}}
   - 报告模式：`{{task_mode}}`
   - 已采集 CI 上下文：
 
   ```json
-  {{ci_context}}
+  {{ci_context_json}}
   ```
 
   ### 可用能力

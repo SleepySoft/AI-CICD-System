@@ -1,6 +1,6 @@
 # 功能需求：Manager 管理服务（MGR）
 
-> 版本：v1.8 · 日期：2026-09-02 · 状态：生效
+> 版本：v1.9 · 日期：2026-09-21 · 状态：生效
 > 定位：Manager（supervisor/Chronicler，ADR-0020/0022）的功能需求；规格（数据模型/API/权限）见 `../../what/manager.md`，机制见 `../../how/manager-architecture.md`
 
 ### FR-MGR-001 工具总览面板
@@ -152,3 +152,8 @@
 - 状态: 生效 | 上层: BR-009 | 优先级: P2
 - 描述: 每个目标 OS/架构原生构建 Nuitka standalone sealed 发行包，包含编译后的 Chronicler、公开 static/config 和加密 Prompt bundle；组件目录不进入核心发行包，安装后从外置 `<install-root>/components/` 加载。
 - 验收: Windows/Linux/macOS 构建入口同源；发行 manifest 记录版本、平台、source commit 与 Prompt name/version/hash；产物扫描无 `.py`、Prompt YAML 和特征明文；sealed Run 不持久化渲染 Prompt，临时文件执行后删除；安装器拒绝 bundle-only 验证目录并创建外置 components 目录。
+
+### FR-MGR-031 统一 Prompt 运行上下文注入
+- 状态: 生效 | 上层: BR-009, UR-009 | 优先级: P1
+- 描述: 所有任务 Prompt 使用统一的标准运行上下文契约；运行时按契约构建 Run、工程、源仓、Shadow、基线、增量、Harness、组件、CI 和文件字段，并严格替换 Prompt 中的占位符。
+- 验收: Prompt 仅声明正文实际使用的标准字段；未知字段或未填充占位符导致 Run 启动失败；同任务基线与 Shadow 认知基线可区分。

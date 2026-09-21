@@ -23,6 +23,7 @@ from . import change_detection, projects, registry
 from .config import Cfg
 from .db import audit, dumps, execute, q, q1
 from .prompt_catalog import catalog
+from .prompt_context import build_prompt_context, render_prompt
 from .runtime import PROFILE
 
 _harness_locks: dict[str, threading.Lock] = {}
@@ -59,29 +60,6 @@ def _report_delivery(harness: dict, report_file: str) -> str:
         return ("将完整 Markdown 作为最终响应；harness 会自动把最终响应保存到报告文件，"
                 "无需在仓库中另建报告副本。")
     return f"使用文件写入能力将完整 Markdown 写入 `{report_file}`；不要只在最终响应中给摘要。"
-
-
-def _render_prompt(template: str, project: dict, extra: dict) -> str:
-    # ADR-0024/0025：注入 L0 摘要（名称+一句话+SKILL 路径），agent 按需自读 SKILL.md
-    comps = registry.injectable_components()
-    if comps:
-        lines = [f"- {c['name']}: {c['desc']}（能力详情见 SKILL 文件：{c['skill']}，需要时再读）"
-                 for c in comps]
-        components = "\n".join(lines)
-    else:
-        components = "- （未注入任何组件能力；按纯本地仓库分析，缺失维度如实说明）"
-    vars_ = {
-        "project_name": project["name"],
-        "repo_dir": str(projects.repo_dir(project["id"])),
-        "shadow_dir": str(projects.ensure_shadow_repo(project["id"])),
-        "date": time.strftime("%Y-%m-%d"),
-        "components": components,
-        **extra,
-    }
-    out = template
-    for k, v in vars_.items():
-        out = out.replace("{{" + k + "}}", str(v))
-    return out
 
 
 def _decode_bytes(data: bytes) -> str:
@@ -287,25 +265,41 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
         "ci_context": ci_context,
         **change,
     }
+    started_at = time.time()
     run_id = execute(
         "INSERT INTO task_runs(task_id, project_id, task_type, status, trigger, harness, prompt_version,"
         " input_snapshot, created_by, started_at, runner_env)"
         " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (task_id, project_id, task_type, "queued", trigger_kind, harness_name, prompt_version,
-         dumps(snapshot), actor, time.time(), _runner_env()))
+         dumps(snapshot), actor, started_at, _runner_env()))
     # prompt 在 run_id 分配后渲染（需要 {{report_file}}/{{prompt_file}} 等运行路径变量）
     run_dir = Cfg.runs_dir() / str(run_id)
     report_file = str(run_dir / "report.md")
-    prompt = _render_prompt(template, project, {
-        "extra": extra_prompt,
-        "report_file": report_file,
-        "prompt_file": str(run_dir / "prompt.md"),
-        "repo_head": snapshot["repo_head"],
-        "task_mode": task_spec["mode"],
-        "ci_context": json.dumps(ci_context, ensure_ascii=False, indent=2),
-        "report_delivery": _report_delivery(harness, report_file),
-        "change_context": change_detection.format_context(change["change_summary"]),
-    })
+    prompt = render_prompt(template, build_prompt_context(
+        run_id=run_id,
+        project=project,
+        task_type=task_type,
+        task_mode=task_spec["mode"],
+        task_id=task_id,
+        trigger_kind=trigger_kind,
+        actor=actor,
+        started_at=started_at,
+        harness=harness,
+        harness_name=harness_name,
+        cwd=cwd,
+        change={**change, "formatted_context":
+                change_detection.format_context(change["change_summary"])},
+        ci_context=ci_context,
+        prompt_name=prompt_name,
+        prompt_version=prompt_version,
+        prompt_hash=prompt_hash,
+        run_dir=run_dir,
+        report_file=report_file,
+        prompt_file=str(run_dir / "prompt.md"),
+        report_delivery=_report_delivery(harness, report_file),
+        change_policy=change_policy,
+        extra=extra_prompt,
+    ))
     # A 段：渲染后 prompt 全文落库（任务列表可查看；文件副本 runs/<id>/prompt.md 同步保留）
     if PROFILE.persist_rendered_prompt:
         execute("UPDATE task_runs SET prompt_text=? WHERE id=?", (prompt, run_id))

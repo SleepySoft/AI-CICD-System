@@ -27,11 +27,13 @@
 | 风险与对策 | why/risks.md | why | 生效 |
 | 环境规格 | what/environment.md | what | 生效 |
 | Manager 规格 | what/manager.md | what | 生效 |
+| Prompt 注入上下文契约 | what/prompt-context.md | what | 生效 |
 | 知识库规格 | what/knowledge.md | what | 生效 |
 | 需求管理工具链规格 | what/req-mgmt.md | what | 生效 |
 | 任务管理规格 | what/task-mgmt.md | what | 生效 |
 | Web 初始化与环境设置规格 | what/initialization.md | what | 生效 |
 | Manager 架构与执行机制 | how/manager-architecture.md | how | 生效 |
+| Prompt 上下文构建与渲染 | how/prompt-context.md | how | 生效 |
 | Web 初始化模块架构 | how/initialization-architecture.md | how | 生效 |
 | 部署与交付机制 | how/deployment.md | how | 生效 |
 | 工具链镜像机制 | how/images-toolchain.md | how | 生效 |
@@ -86,6 +88,7 @@
 | ADR-0046 工程常驻会话：任务与对话复用同一 ATR 会话 | adr/0046-project-session-harness.md | adr | 已接受 |
 | ADR-0047 OIDC 客户端注册收归 Keycloak 组件 oidc 能力 | adr/0047-keycloak-oidc-client-capability.md | adr | 已接受 |
 | ADR-0048 组件测试沙箱：环境级五通道隔离与现拉现建现测现毁 | adr/0048-sandbox-isolated-testing.md | adr | 已接受 |
+| ADR-0049 统一 Prompt 运行上下文契约 | adr/0049-standard-prompt-context.md | adr | 已接受 |
 | 部署与初始化 | runbooks/deploy.md | runbooks | 生效 |
 | 备份与恢复 | runbooks/backup-restore.md | runbooks | 生效 |
 | 接入新 Agent | runbooks/agent-onboarding.md | runbooks | 生效 |
