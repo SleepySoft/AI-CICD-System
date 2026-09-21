@@ -1,10 +1,58 @@
 import subprocess
+import asyncio
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from chronicler.app import db, tasks
+from chronicler.app.config import Cfg
 from chronicler.app import projects
+
+
+def isolated_db(root: Path):
+    """隔离数据目录并初始化测试数据库。"""
+    patches = [
+        patch.object(Cfg, "DATA", root / "private" / "chronicler"),
+        patch.object(Cfg, "PUBLIC", root / "public"),
+        patch.object(Cfg, "WORKSPACE", root / "workspace"),
+    ]
+    for item in patches:
+        item.start()
+    db.close()
+    db.init()
+    return patches
+
+
+class ProjectCreationBootstrapTest(unittest.TestCase):
+    def test_create_project_adds_two_formal_tasks_and_seedable_shadow(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            patches = isolated_db(root)
+            try:
+                from chronicler.app.routers import projects as projects_router
+                project = asyncio.run(projects_router.create(projects_router.ProjectBody(
+                    name="bootstrap",
+                    git_url="https://example.invalid/source.git",
+                    default_branch="main",
+                ), {"id": 1, "username": "admin", "role": "admin"}))
+                created = tasks.list_tasks(project["id"])
+                self.assertEqual(tasks.PRESET_TASKS,
+                                 [item["task_type"] for item in created])
+                self.assertTrue(all(item["enabled"] for item in created))
+
+                with patch.object(projects, "_auto_shadow_repo", return_value=None):
+                    shadow = projects.ensure_shadow_repo(project["id"])
+                self.assertTrue((shadow / "SKILL.md").is_file())
+                self.assertTrue((shadow / "README.md").is_file())
+                self.assertTrue((shadow / ".cognitive-state.yaml").is_file())
+                self.assertTrue((shadow / "templates" / "requirement.md").is_file())
+                state = (shadow / ".cognitive-state.yaml").read_text(encoding="utf-8")
+                self.assertIn('repository: "bootstrap"', state)
+            finally:
+                db.close()
+                for item in reversed(patches):
+                    item.stop()
 
 
 def git(*args: str) -> subprocess.CompletedProcess:
