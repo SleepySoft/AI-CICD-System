@@ -28,8 +28,10 @@ class PromptCatalogTest(unittest.TestCase):
 
         items = catalog.list()
 
-        self.assertEqual(6, len(items))
+        self.assertEqual(2, len(items))
         self.assertTrue(all(item.version == "1.1.0" for item in items))
+        self.assertEqual({"operational_reporter", "project_cognitive_maintainer"},
+                         {item.name for item in items})
         self.assertTrue(all(item.content_hash.startswith("sha256:") for item in items))
         self.assertTrue(all(catalog.content_for_display(item.name) for item in items))
 
@@ -60,8 +62,8 @@ class PromptCatalogTest(unittest.TestCase):
                                      "metadata-only", False, key)
             with patch("chronicler.app.prompt_catalog.PROFILE", profile):
                 catalog = PromptCatalog()
-                self.assertEqual(6, len(catalog.list()))
-                item = catalog.resolve("project-analysis")
+                self.assertEqual(2, len(catalog.list()))
+                item = catalog.resolve("operational_reporter")
                 self.assertEqual("1.1.0", item.version)
                 self.assertIsNone(catalog.content_for_display(item.name))
                 override = catalog.save_override(item.name, "1.0.1+customer", item.content)
@@ -70,7 +72,7 @@ class PromptCatalogTest(unittest.TestCase):
 
     def test_content_change_requires_version_bump(self):
         catalog = PromptCatalog()
-        item = catalog.resolve("project-analysis")
+        item = catalog.resolve("operational_reporter")
         with tempfile.TemporaryDirectory() as temp:
             Cfg.DATA = Path(temp)
             with self.assertRaises(HTTPException) as raised:
@@ -78,18 +80,18 @@ class PromptCatalogTest(unittest.TestCase):
             self.assertEqual(409, raised.exception.status_code)
 
     def test_source_catalog_migrates_legacy_markdown_override(self):
-        builtin = PromptCatalog().resolve("project-analysis")
+        builtin = PromptCatalog().resolve("operational_reporter")
         with tempfile.TemporaryDirectory() as temp:
             Cfg.DATA = Path(temp)
-            legacy = Cfg.prompts_override_dir() / "project-analysis.md"
+            legacy = Cfg.prompts_override_dir() / "operational_reporter.md"
             legacy.parent.mkdir(parents=True)
             legacy.write_text(builtin.content, encoding="utf-8")
 
-            migrated = PromptCatalog().resolve("project-analysis")
+            migrated = PromptCatalog().resolve("operational_reporter")
 
             self.assertEqual("0.0.0+legacy", migrated.version)
-            self.assertTrue((Cfg.prompts_override_dir() / "project-analysis.yaml").is_file())
-            self.assertTrue((Cfg.prompts_override_dir() / "project-analysis.md.migrated").is_file())
+            self.assertTrue((Cfg.prompts_override_dir() / "operational_reporter.yaml").is_file())
+            self.assertTrue((Cfg.prompts_override_dir() / "operational_reporter.md.migrated").is_file())
 
     def test_sealed_bundle_rejects_wrong_key(self):
         with tempfile.TemporaryDirectory() as temp:

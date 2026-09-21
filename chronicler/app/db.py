@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS task_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     task_id INTEGER REFERENCES task_defs(id) ON DELETE SET NULL, -- 直接触发为空；任务触发关联精确基线
     project_id INTEGER NOT NULL REFERENCES projects(id),
-    task_type TEXT NOT NULL,                     -- project-analysis | daily-report | ...
+    task_type TEXT NOT NULL,                     -- operational_reporter | project_cognitive_maintainer | custom
     status TEXT NOT NULL DEFAULT 'queued',       -- queued|running|success|failed|skipped
     trigger TEXT NOT NULL DEFAULT 'manual',
     harness TEXT NOT NULL,

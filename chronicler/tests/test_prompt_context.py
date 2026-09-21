@@ -54,7 +54,7 @@ class PromptContextTest(unittest.TestCase):
                 context = prompt_context.build_prompt_context(
                     run_id=7,
                     project=project,
-                    task_type="project-analysis",
+                    task_type="operational_reporter",
                     task_mode="standard",
                     task_id=None,
                     trigger_kind="manual",
@@ -65,7 +65,7 @@ class PromptContextTest(unittest.TestCase):
                     cwd="repo",
                     change=change,
                     ci_context={},
-                    prompt_name="project-analysis",
+                    prompt_name="operational_reporter",
                     prompt_version="1.1.0",
                     prompt_hash="sha256:" + "0" * 64,
                     run_dir=Path("C:/runs/7"),

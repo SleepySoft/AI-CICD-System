@@ -18,16 +18,10 @@ _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 PUBLISH_POLICIES = ("direct",)
 
 TASK_TYPES = (
-    {"name": "project-analysis", "prompt": "project-analysis", "mode": "full",
-     "desc": "项目全景分析：架构、需求一致性、工程风险与优先行动"},
-    {"name": "documentation-update", "prompt": "documentation-update", "mode": "incremental",
-     "desc": "从需求与实现中提取并增量维护 WHY/WHAT/HOW 项目文档"},
-    {"name": "daily-report", "prompt": "periodic-report", "mode": "daily",
-     "desc": "聚合最近 24 小时提交、CI、需求与阻塞"},
-    {"name": "comprehensive-report", "prompt": "periodic-report", "mode": "comprehensive",
-     "desc": "聚合阶段进展、质量趋势、风险与下一周期行动"},
-    {"name": "knowledge-capture", "prompt": "knowledge-capture", "mode": "focused",
-     "desc": "从指定 Run、提交或故障中沉淀可验证的项目经验"},
+    {"name": "operational_reporter", "prompt": "operational_reporter", "mode": "comprehensive",
+     "desc": "聚合运行周期内的 Git、CI/CD、需求与发布事实，生成运行报告"},
+    {"name": "project_cognitive_maintainer", "prompt": "project_cognitive_maintainer", "mode": "incremental",
+     "desc": "以源仓增量维护 Shadow 仓中的项目认知资产"},
 )
 
 
@@ -140,7 +134,7 @@ def get_publish_policy(project: dict | None = None) -> str:
 
 
 def get_task_type(task_type: str) -> dict:
-    """解析任务到 Prompt 家族与模式。旧任务类型的兼容映射已按计划清理（ADR-0034 后果项）。"""
+    """解析任务到正式 Prompt 与模式；旧内置类型不再兼容（ADR-0050）。"""
     current = next((dict(item) for item in TASK_TYPES if item["name"] == task_type), None)
     if current:
         return current
@@ -205,7 +199,7 @@ def load_prompt(prompt_name: str) -> tuple[str, str]:
 
 
 def load_task_prompt(task_type: str) -> tuple[str, str, dict]:
-    """按任务类型加载对应 Prompt 家族，返回内容、版本和任务规格。"""
+    """按任务类型加载 Prompt，返回内容、版本和任务规格。"""
     spec = get_task_type(task_type)
     if not spec["prompt"]:
         raise HTTPException(status_code=422, detail="custom 任务必须提供 Prompt 覆盖")

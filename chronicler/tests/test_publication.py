@@ -40,7 +40,7 @@ class PublicationPolicyTest(unittest.TestCase):
                 (work / "docs" / "index.md").write_text("generated\n", encoding="utf-8")
                 (work / "know-how" / "card.md").write_text("knowledge\n", encoding="utf-8")
                 sha, artifacts, publication = runner._commit_shadow(
-                    {"id": 42, "project_id": 1, "task_type": "documentation-update",
+                    {"id": 42, "project_id": 1, "task_type": "project_cognitive_maintainer",
                      "input_snapshot": {"shadow_base_commit": "base"}},
                     "direct")
 

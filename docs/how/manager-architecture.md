@@ -1,8 +1,8 @@
 # Manager 架构与执行机制
 
-> 版本：v1.6 · 日期：2026-09-02 · 状态：生效
+> 版本：v1.7 · 日期：2026-09-21 · 状态：生效
 > 定位：Manager 的内部实现机制（架构、执行管线、CI 集成、部署形态）；规格契约见 ../what/manager.md
-> 关联需求：FR-MGR-003 ~ FR-MGR-030
+> 关联需求：FR-MGR-003 ~ FR-MGR-031
 
 ## 1. WHY / WHAT 摘要
 
@@ -21,7 +21,7 @@ Manager 管"分析与洞察"，消费 CI 结果、不替代 CI（Non-Goal 见 ..
 │ Manager 后端 (FastAPI) —— docker 宿主侧进程（compose 外，ADR-0020）          │
 │ ├─ API 层        /api/repos /agents /prompts /tasks /runs /reports /review  │
 │ ├─ 调度器        APScheduler（cron 定时 + 手动触发 + Webhook 触发）           │
-│ ├─ 任务框架      TaskType 注册表（5 个任务 → 4 个 Prompt 家族 + 自定义）      │
+│ ├─ 任务框架      TaskType 注册表（2 个正式任务 → 2 个正式 Prompt + 自定义）      │
 │ ├─ 执行器        宿主直起 harness 进程（ADR-0021）；本地 Docker API 控栈      │
 │ ├─ CI/CD 集成    Jenkins REST API 轮询/推送 + Gitea Webhook                  │
 │ └─ 鉴权          Keycloak OIDC；boss/dev 角色 → 报告可见性过滤               │
@@ -59,7 +59,7 @@ FastAPI + SQLAlchemy 2 + Alembic（异步、自带 OpenAPI）；APScheduler（As
 
 并发控制：全局信号量（默认 2 个并发 Run）+ 每工程代码仓串行锁 + 每 shadow 仓串行锁。shadow 锁覆盖分支准备、Agent 写入、提交与工作树恢复，避免不同 harness 并发切换同一工作树；harness 自身仍可因全局状态另设串行锁。
 
-任务解析（ADR-0034）：`registry.TASK_TYPES` 是新任务清单，记录 `name/prompt/mode/desc`；runner 在冻结 Run 快照前解析任务，将 `prompt_name`、`task_mode`、`repo_head` 与 `ci_context` 注入模板。配置 API 分别提供 task-types 和 prompts，前端因此显示 5 个可执行任务与 4 个可编辑模板。`LEGACY_TASK_TYPES` 只在执行旧 task_def 时解析，不参与新工程预置。
+任务解析（ADR-0050）：`registry.TASK_TYPES` 只包含 `operational_reporter` 与 `project_cognitive_maintainer`，记录 `name/prompt/mode/desc`；runner 在冻结 Run 快照前解析任务，将 `prompt_name`、`task_mode`、`repo_head` 与 `ci_context` 注入模板。配置 API 分别提供 task-types 和 prompts，前端因此显示 2 个可执行任务与 2 个可编辑模板。启动迁移删除旧内置 task_def（保留 `custom`），并把其历史 Run 的 task_id 置空；触发、预览和调度都会拒绝未知任务类型。历史 Run 的 JSON 档案按 dict/list 安全校验后展示，避免旧数据破坏只读页面。
 
 增量探测（ADR-0035）：`change_detection` 在 Agent 之前运行。它从同一 task_id 最近一次 success Run 读取 source_snapshot，计算 Git 提交/diff，并串行执行配置的 command probes（宿主 shell、工程仓 cwd、默认超时 60 秒）。探测结果写入 input_snapshot 和 Prompt；自动无增量写入 skipped Run，不启动 harness。probe 失败令状态 unknown 并继续运行；同步/其它前置失败则写入脱敏的 failed Run，避免把环境故障误判为无变化或静默漏档。
 
@@ -110,5 +110,5 @@ Gitea 凭据仅由 Chronicler 的 Git publisher/API client 读取。PR 首版由
 | Agent 执行位置 | 用户自装 harness，宿主执行；terminal-runtime 降为可选沙箱（部分推翻 ADR-0017） | ../adr/0021-agent-user-installed-harness.md |
 | v1 形态 | SQLite + 本地账密 + 一次性会话（闭环 ADR-0022 悬置的单机瘦身项） | ../adr/0023-supervisor-v1-form.md |
 | AI 产物 Git 发布 | Agent 只生成内容；Chronicler 统一分支、提交、push、建 PR；全局提升强制二次审核 | ../adr/0033-chronicler-owned-git-publication.md |
-| 任务与 Prompt 分类 | 5 个任务通过 registry 复用 4 个职责明确的 Prompt 家族，旧类型仅兼容 | ../adr/0034-task-prompt-family-registry.md |
+| 任务与 Prompt 分类 | 2 个正式任务与 2 个正式 Prompt 一一对应；旧类型不兼容，历史 Run 只读保留 | ../adr/0050-two-formal-prompt-tasks.md |
 | sealed 运行与发行 | 构建时固化 Profile；结构化 Catalog；AES-GCM bundle；Nuitka standalone；组件外置 | ../adr/0036-sealed-runtime-prompt-catalog.md |

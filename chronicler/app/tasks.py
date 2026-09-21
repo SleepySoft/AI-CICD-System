@@ -10,7 +10,6 @@ import time
 from . import change_detection, projects, registry, runner
 from .db import execute, q, q1
 
-# 五个预置任务复用四个 Prompt 家族；日报/综合报告共享 periodic-report。
 PRESET_TASKS = [item["name"] for item in registry.TASK_TYPES]
 
 
@@ -46,8 +45,15 @@ def create_preset_tasks(project_id: int):
 
 
 def backfill_preset_tasks():
-    """启动钩子：给所有缺预置任务的存量工程补齐（幂等）"""
+    """启动钩子：清理旧内置任务定义，给所有缺预置任务的存量工程补齐（幂等）"""
     from .db import q
+    current_types = set(PRESET_TASKS) | {"custom"}
+    for task in q("SELECT id, task_type FROM task_defs"):
+        if task["task_type"] in current_types:
+            continue
+        # 保留历史 Run；外键语义为 task_id 置空，这里显式处理以便兼容旧库。
+        execute("UPDATE task_runs SET task_id=NULL WHERE task_id=?", (task["id"],))
+        execute("DELETE FROM task_defs WHERE id=?", (task["id"],))
     for p in q("SELECT id FROM projects"):
         create_preset_tasks(p["id"])
 
@@ -104,6 +110,7 @@ def delete_project_tasks(project_id: int):
 
 def trigger_task(tid: int, actor: str, extra_prompt: str = "") -> dict:
     t = get_task(tid)
+    registry.get_task_type(t["task_type"])
     # prompt 覆盖：工程任务自定义 > 全局模板（版本化 hash 由 runner 记录）
     if t.get("prompt_override"):
         return runner.trigger(t["project_id"], t["task_type"], actor, extra_prompt,
@@ -118,6 +125,7 @@ def trigger_task(tid: int, actor: str, extra_prompt: str = "") -> dict:
 
 def preview_task_changes(tid: int) -> dict:
     t = get_task(tid)
+    registry.get_task_type(t["task_type"])
     projects.sync_project(t["project_id"])
     return change_detection.capture(t["project_id"], t["task_type"], t["id"], t["change_probes"])
 
@@ -136,6 +144,8 @@ def scheduler_tick():
         pass  # 悬挂扫描失败不影响调度
     now = time.time()
     for t in q("SELECT * FROM task_defs WHERE enabled=1 AND schedule_cron != ''"):
+        if t["task_type"] not in PRESET_TASKS and t["task_type"] != "custom":
+            continue
         try:
             cron = croniter.croniter(t["schedule_cron"], now - 120)
             prev_fire = cron.get_prev()
@@ -151,7 +161,7 @@ def scheduler_tick():
                                    cwd_override=t.get("cwd", ""), harness_override=t.get("harness", ""),
                                    task_id=t["id"], change_policy=t.get("change_policy") or "always",
                                    change_probes=t.get("change_probes") or "[]", allow_skip=True,
-                                   trigger_kind="cron")
+                                   trigger_kind="cron", prompt_override=t.get("prompt_override") or "")
                 except Exception as exc:  # noqa: BLE001 - 自动触发失败也必须落 Run
                     runner.record_preflight_failure(t, "cron", exc)
         except Exception:

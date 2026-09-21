@@ -113,9 +113,9 @@ class ChangeDetectionTest(unittest.TestCase):
         with patch.object(change_detection, "_baseline", return_value=baseline), \
                 patch.object(projects, "repo_dir", return_value=self.repo), \
                 patch.object(projects, "head_commit", return_value=self.base):
-            changed = change_detection.capture(1, "project-analysis", 2, [{
+            changed = change_detection.capture(1, "operational_reporter", 2, [{
                 "name": "deps", "command": f'{executable} -c "print(456)"'}])
-            unknown = change_detection.capture(1, "project-analysis", 2, [{
+            unknown = change_detection.capture(1, "operational_reporter", 2, [{
                 "name": "deps", "command": f'{executable} -c "import sys;sys.exit(2)"'}])
 
         self.assertEqual("changed", changed["change_summary"]["state"])
@@ -130,7 +130,7 @@ class ChangeDetectionTest(unittest.TestCase):
         with patch.object(change_detection, "_baseline", return_value=baseline), \
                 patch.object(projects, "repo_dir", return_value=self.repo), \
                 patch.object(projects, "head_commit", return_value=self.base):
-            result = change_detection.capture(1, "project-analysis", 2, [])
+            result = change_detection.capture(1, "operational_reporter", 2, [])
 
         self.assertEqual("changed", result["change_summary"]["state"])
         self.assertEqual(["deps（已移除）"], result["change_summary"]["changed_probes"])
@@ -171,7 +171,7 @@ class ChangeDetectionTest(unittest.TestCase):
                 db.init()
                 project = projects.create_project("sample", str(source), default_branch="main",
                                                   shadow_repo=str(shadow_remote))
-                task = tasks.create_task(project["id"], "analysis", "project-analysis",
+                task = tasks.create_task(project["id"], "运行报告", "operational_reporter",
                                          change_policy="repo-changed")
                 projects.sync_project(project["id"])
                 revision = projects.head_commit(project["id"])

@@ -40,7 +40,7 @@
    参照内置记录：aider / kimi / kimi-continue / codex / dummy（dummy 为冒烟假 harness）。
 3. **设置默认 harness**：配置页「全局默认 Harness」选择并保存（admin）；也可在工程页对单个工程
    覆盖，或在任务页对单个任务覆盖（解析顺序：任务级 > 工程级 > 全局默认，FR-MGR-020）。
-4. **页面触发验证**：supervisor 页面 → 用内置任务 daily-report 跑一次，观察 Run 成功
+4. **页面触发验证**：supervisor 页面 → 用内置任务 operational_reporter 跑一次，观察 Run 成功
    （先用 dummy harness 验证模板渲染与报告落盘，再切真实 agent）。
 
 ## 验证
@@ -49,7 +49,7 @@
 bash scripts/verify-chronicler.sh   # supervisor 冒烟（含受保护 API 401 检查）
 ```
 
-预期输出：脚本通过；页面上新 harness 出现在可选项中，daily-report Run 成功且报告可查看。
+预期输出：脚本通过；页面上新 harness 出现在可选项中，operational_reporter Run 成功且报告可查看。
 
 ## 常见问题
 

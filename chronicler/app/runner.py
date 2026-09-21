@@ -8,7 +8,6 @@ harness 命令形式可配置（FR-MGR-019）：prompt 经 {prompt_file} 文件�
 （stdin_prompt）传入；报告经 {report_file} 文件（report_mode=file，如 codex -o）或
 stdout 捕获（report_mode=stdout，如 kimi --print）产出；cwd 可选工程仓库/shadow 库。
 """
-import json
 import hashlib
 import os
 import shlex
@@ -21,7 +20,7 @@ from fastapi import HTTPException
 
 from . import change_detection, projects, registry
 from .config import Cfg
-from .db import audit, dumps, execute, q, q1
+from .db import audit, dumps, execute, loads, q, q1
 from .prompt_catalog import catalog
 from .prompt_context import build_prompt_context, render_prompt
 from .runtime import PROFILE
@@ -30,6 +29,17 @@ _harness_locks: dict[str, threading.Lock] = {}
 _shadow_locks: dict[int, threading.Lock] = {}
 STALE_QUEUE_GRACE_SEC = 600    # queued 超过 10 分钟仍未开始 = 悬挂
 STALE_RUN_GRACE_SEC = 120      # running 超过 harness 超时后再宽限 2 分钟
+
+
+def _json_dict(value) -> dict:
+    """旧 Run 记录可能缺少新字段或 JSON 损坏；读取档案时不得让历史数据炸页面。"""
+    parsed = loads(value, {})
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _json_list(value) -> list:
+    parsed = loads(value, [])
+    return parsed if isinstance(parsed, list) else []
 
 
 def _harness_lock(name: str) -> threading.Lock:
@@ -191,8 +201,11 @@ def sweep_stale_runs(now: float | None = None) -> int:
     marked = 0
     for r in q("SELECT * FROM task_runs WHERE status IN ('queued','running')"):
         started = r.get("started_at") or now
-        snap = json.loads(r.get("input_snapshot") or "{}")
-        timeout = int(snap.get("harness_timeout") or 1800)
+        snap = _json_dict(r.get("input_snapshot"))
+        try:
+            timeout = int(snap.get("harness_timeout") or 1800)
+        except (TypeError, ValueError):
+            timeout = 1800
         if r["status"] == "queued":
             stale = now - started > STALE_QUEUE_GRACE_SEC
         else:
@@ -456,8 +469,8 @@ def _publish(run: dict, report_file) -> dict:
     """报告写入 shadow 仓（ADR-0028）。组织规则（用户定）：状态/周期类按时间序，
     分析/洞察类按结构（稳定文件名原地更新，历史交给 git）。"""
     shadow = projects.ensure_shadow_repo(run["project_id"])
-    if run["task_type"] in ("daily-report",):
-        dest_dir = shadow / "reports" / "daily"
+    if run["task_type"] == "operational_reporter":
+        dest_dir = shadow / "reports" / "operational"
         name = f"{time.strftime('%Y-%m-%d')}.md"
     else:
         dest_dir = shadow / "reports"
@@ -480,9 +493,9 @@ def get_run(run_id: int) -> dict:
            " JOIN projects p ON p.id=t.project_id WHERE t.id=?", (run_id,))
     if not r:
         raise HTTPException(status_code=404, detail="Run 不存在")
-    r["input_snapshot"] = json.loads(r["input_snapshot"] or "{}")
-    r["artifacts"] = json.loads(r.get("artifacts") or "[]")
-    r["publication"] = json.loads(r.get("publication") or "{}")
+    r["input_snapshot"] = _json_dict(r.get("input_snapshot"))
+    r["artifacts"] = _json_list(r.get("artifacts"))
+    r["publication"] = _json_dict(r.get("publication"))
     return r
 
 
@@ -496,10 +509,7 @@ def list_runs(project_id: int | None = None, limit: int = 50) -> list[dict]:
     else:
         rows = q(f"SELECT {cols} FROM task_runs ORDER BY id DESC LIMIT ?", (limit,))
     for row in rows:
-        try:
-            snapshot = json.loads(row.pop("input_snapshot") or "{}")
-        except json.JSONDecodeError:
-            snapshot = {}
+        snapshot = _json_dict(row.pop("input_snapshot"))
         row["baseline_run_id"] = snapshot.get("baseline_run_id")
         row["change_summary"] = snapshot.get("change_summary") or {}
         row["repo_head"] = snapshot.get("repo_head", "")

@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/runs", tags=["runs"])
 
 class TriggerBody(BaseModel):
     project_id: int
-    task_type: str = "daily-report"
+    task_type: str = "operational_reporter"
     extra_prompt: str = ""
 
 

@@ -1,29 +1,38 @@
-import re
 import asyncio
+import tempfile
 import unittest
+from pathlib import Path
+import time
+import re
 
 from fastapi import HTTPException
 
-from chronicler.app import registry, runner, tasks
+from chronicler.app import db, projects, registry, runner, tasks
+from chronicler.app.config import Cfg
 from chronicler.app.routers import config
 from chronicler.app.prompt_context import CONTEXT_FIELDS, render_prompt
 
 
 class PromptRegistryTest(unittest.TestCase):
-    def test_five_tasks_share_four_prompt_families(self):
+    def test_two_tasks_map_to_two_formal_prompts(self):
         task_types = registry.list_task_types()
 
-        self.assertEqual(5, len(task_types))
-        self.assertEqual(4, len({item["prompt"] for item in task_types}))
+        self.assertEqual(2, len(task_types))
+        self.assertEqual(2, len({item["prompt"] for item in task_types}))
         self.assertEqual([item["name"] for item in task_types], tasks.PRESET_TASKS)
-        self.assertEqual("periodic-report", registry.get_task_type("daily-report")["prompt"])
-        self.assertEqual("daily", registry.get_task_type("daily-report")["mode"])
-        self.assertEqual("comprehensive", registry.get_task_type("comprehensive-report")["mode"])
+        self.assertEqual("operational_reporter", registry.get_task_type("operational_reporter")["prompt"])
+        self.assertEqual("comprehensive", registry.get_task_type("operational_reporter")["mode"])
+        self.assertEqual("project_cognitive_maintainer",
+                         registry.get_task_type("project_cognitive_maintainer")["prompt"])
+        self.assertEqual("incremental",
+                         registry.get_task_type("project_cognitive_maintainer")["mode"])
 
     def test_legacy_task_types_are_rejected(self):
-        """旧任务类型的兼容映射已按计划清理（ADR-0034 后果项）：直接拒绝。"""
+        """旧任务类型不再映射；历史 Run 仍可只读展示，但不能触发。"""
         for task_type in ("code-insight", "deviation-analysis", "compliance-check",
-                          "structured-docs", "knowhow-distill"):
+                          "structured-docs", "knowhow-distill", "project-analysis",
+                          "documentation-update", "daily-report", "comprehensive-report",
+                          "knowledge-capture"):
             with self.subTest(task_type=task_type):
                 with self.assertRaises(HTTPException) as raised:
                     registry.load_task_prompt(task_type)
@@ -39,12 +48,10 @@ class PromptRegistryTest(unittest.TestCase):
         task_types = asyncio.run(config.task_types({"username": "test"}))
         prompts = asyncio.run(config.prompts({"username": "test"}))
 
-        self.assertEqual(5, len(task_types))
-        self.assertEqual(6, len(prompts))
+        self.assertEqual(2, len(task_types))
+        self.assertEqual(2, len(prompts))
         self.assertTrue(all("prompt" in item and "mode" in item for item in task_types))
-        self.assertEqual({"documentation-update", "knowledge-capture",
-                          "periodic-report", "project-analysis",
-                          "project_cognitive_maintainer", "operational_reporter"},
+        self.assertEqual({"project_cognitive_maintainer", "operational_reporter"},
                          {item["name"] for item in prompts})
 
     def test_operational_reporter_prompt_renders_required_context(self):
@@ -98,6 +105,53 @@ class PromptRegistryTest(unittest.TestCase):
         self.assertIn("stdout", stdout)
         self.assertIn("自动", automatic)
         self.assertIn(report_file, explicit)
+
+
+class PromptTaskMigrationTest(unittest.TestCase):
+    def test_backfill_replaces_legacy_tasks_and_preserves_history(self):
+        old_paths = Cfg.DATA, Cfg.PUBLIC, Cfg.WORKSPACE
+        old_connection = getattr(db._local, "conn", None)
+        with tempfile.TemporaryDirectory() as temp:
+            try:
+                Cfg.DATA = Path(temp) / "data"
+                Cfg.PUBLIC = Path(temp) / "public"
+                Cfg.WORKSPACE = Path(temp) / "workspace"
+                db._local.conn = None
+                db.init()
+                project = projects.create_project("legacy", "https://example.invalid/repo.git")
+                old_task_id = db.execute(
+                    "INSERT INTO task_defs(project_id, name, task_type, created_at)"
+                    " VALUES (?,?,?,strftime('%s','now'))",
+                    (project["id"], "旧任务", "project-analysis"))
+                custom_task_id = db.execute(
+                    "INSERT INTO task_defs(project_id, name, task_type, prompt_override, created_at)"
+                    " VALUES (?,?,?,?,strftime('%s','now'))",
+                    (project["id"], "自定义任务", "custom", "# 自定义 Prompt"))
+                run_id = db.execute(
+                    "INSERT INTO task_runs(project_id, task_id, task_type, status, trigger,"
+                    " harness, prompt_version, input_snapshot, artifacts, publication,"
+                    " created_by, started_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (project["id"], old_task_id, "project-analysis", "success", "manual",
+                     "dummy", "1.1.0", "not-json", "not-json", "not-json",
+                     "test", time.time()))
+
+                tasks.backfill_preset_tasks()
+
+                self.assertIsNone(runner.get_run(run_id)["task_id"])
+                historical = runner.get_run(run_id)
+                self.assertEqual({}, historical["input_snapshot"])
+                self.assertEqual([], historical["artifacts"])
+                self.assertEqual({}, historical["publication"])
+                task_types = {item["task_type"] for item in tasks.list_tasks(project["id"])}
+                self.assertEqual({"custom", *tasks.PRESET_TASKS}, task_types)
+                self.assertNotIn("project-analysis", task_types)
+                self.assertTrue(tasks.get_task(custom_task_id)["prompt_override"])
+            finally:
+                current = getattr(db._local, "conn", None)
+                if current is not None:
+                    current.close()
+                db._local.conn = old_connection
+                Cfg.DATA, Cfg.PUBLIC, Cfg.WORKSPACE = old_paths
 
 
 if __name__ == "__main__":

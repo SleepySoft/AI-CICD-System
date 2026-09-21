@@ -33,10 +33,10 @@
 - 描述: 运行中的任务经 SSE 流式输出日志。
 - 验收: 任务运行期间前端日志实时滚动，无需刷新。
 
-### FR-MGR-007 内置任务与 Prompt 家族
+### FR-MGR-007 内置任务与正式 Prompt
 - 状态: 生效 | 上层: BR-002, BR-003, BR-004, BR-006 | 优先级: P1
-- 描述: 内置 project-analysis / documentation-update / daily-report / comprehensive-report / knowledge-capture 五类任务，复用 project-analysis / documentation-update / periodic-report / knowledge-capture 四个 Prompt 家族；任务类型通过 registry 绑定 Prompt 与模式，另支持 custom 任务。
-- 验收: 五类任务均可从任务列表选择并以默认模板运行；日报与综合报告使用同一 Prompt 的不同模式；Prompt 库只展示四个家族；历史任务类型可映射到新家族继续运行。
+- 描述: 内置 `operational_reporter` 与 `project_cognitive_maintainer` 两类任务，分别绑定同名 Prompt 与 `comprehensive` / `incremental` 模式；另支持 custom 任务。
+- 验收: 两类任务均可从任务列表选择并以默认模板运行；启动迁移删除旧内置任务定义且保留其历史 Run；旧任务类型不能新建或触发。
 
 ### FR-MGR-008 报告中心与分级可见
 - 状态: 生效 | 上层: UR-004, BR-008 | 优先级: P1
@@ -146,7 +146,7 @@
 ### FR-MGR-029 结构化 Prompt Catalog 与运行 Profile
 - 状态: 生效 | 上层: BR-009, UR-009 | 优先级: P1
 - 描述: Prompt 以含稳定 name、SemVer version、schema_version、变量契约、输出种类、content 和 content_hash 的结构化定义管理；运行 Profile 在构建时固化为 source 或 sealed，统一 Catalog 负责列表、解析、显示和用户覆盖。
-- 验收: source Catalog 校验四个内置 Prompt 的结构和变量后提供完整正文；sealed Catalog 从认证加密 bundle 解析相同 name/version/hash，内置正文 API 不返回内容；用户覆盖在两种 Profile 下均为结构化定义且可查看。
+- 验收: source Catalog 校验两个内置 Prompt 的结构和变量后提供完整正文；sealed Catalog 从认证加密 bundle 解析相同 name/version/hash，内置正文 API 不返回内容；用户覆盖在两种 Profile 下均为结构化定义且可查看。
 
 ### FR-MGR-030 sealed 原生发行与 Prompt 留痕保护
 - 状态: 生效 | 上层: BR-009 | 优先级: P2

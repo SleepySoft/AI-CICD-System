@@ -73,7 +73,7 @@
 | ADR-0031 Web 终端目标选型（宿主 sshd） | adr/0031-web-terminal-target-host-sshd.md | adr | 已接受 |
 | ADR-0032 手动会话注入契约（约定文件+动态 SKILL+chai） | adr/0032-manual-session-skill-injection.md | adr | 已接受 |
 | ADR-0033 AI 产物由 Chronicler 统一 Git 发布与 PR 审核 | adr/0033-chronicler-owned-git-publication.md | adr | 已接受 |
-| ADR-0034 任务类型与 Prompt 家族通过 registry 解耦 | adr/0034-task-prompt-family-registry.md | adr | 已接受 |
+| ADR-0034 任务类型与 Prompt 家族通过 registry 解耦 | adr/0034-task-prompt-family-registry.md | adr | 已接受（任务布局已被 ADR-0050 修订） |
 | ADR-0035 以有效输入快照驱动增量提示与自动任务 | adr/0035-effective-input-change-detection.md | adr | 已接受 |
 | ADR-0036 构建时固化 sealed Profile 与结构化 Prompt Catalog | adr/0036-sealed-runtime-prompt-catalog.md | adr | 已接受 |
 | ADR-0037 初始化收归单一入口（Web 初始化界面，启动脚本回收） | adr/0037-single-entry-web-init.md | adr | 已接受 |
@@ -89,6 +89,7 @@
 | ADR-0047 OIDC 客户端注册收归 Keycloak 组件 oidc 能力 | adr/0047-keycloak-oidc-client-capability.md | adr | 已接受 |
 | ADR-0048 组件测试沙箱：环境级五通道隔离与现拉现建现测现毁 | adr/0048-sandbox-isolated-testing.md | adr | 已接受 |
 | ADR-0049 统一 Prompt 运行上下文契约 | adr/0049-standard-prompt-context.md | adr | 已接受 |
+| ADR-0050 内置任务收敛为两套正式 Prompt | adr/0050-two-formal-prompt-tasks.md | adr | 已接受 |
 | 部署与初始化 | runbooks/deploy.md | runbooks | 生效 |
 | 备份与恢复 | runbooks/backup-restore.md | runbooks | 生效 |
 | 接入新 Agent | runbooks/agent-onboarding.md | runbooks | 生效 |
