@@ -65,8 +65,14 @@ async def reset_password(username: str, body: ResetPasswordBody):
     if not q1("SELECT id FROM users WHERE username=?", (username,)):
         raise HTTPException(status_code=404, detail="用户不存在")
     import asyncio
-    args = ["reset-password", username, body.password] + ([] if body.temporary else ["--permanent"])
-    result = await asyncio.to_thread(component_exec.run_capability, "users.py", args)
+    args = (["reset-password", username, "--password-env", "CHRONICLER_IDENTITY_RESET_PASSWORD"]
+            + ([] if body.temporary else ["--permanent"]))
+    result = await asyncio.to_thread(
+        component_exec.run_capability,
+        "users.py",
+        args,
+        env={"CHRONICLER_IDENTITY_RESET_PASSWORD": body.password},
+    )
     if result is None:
         raise HTTPException(status_code=400, detail="当前部署的身份组件不支持在线重置密码")
     if not result.get("ok"):

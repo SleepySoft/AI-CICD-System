@@ -1,6 +1,7 @@
 """Chronicler CLI：
   python -m chronicler serve              启动 supervisor（默认 0.0.0.0 + [::]:8600 双栈）
   python -m chronicler create-admin       交互创建 admin 账号
+  python -m chronicler passwords          本地密码管理 TUI（创建/重置）
   python -m chronicler backup [目录]       组件化一键备份（ADR-0027）
   python -m chronicler restore <备份目录>  恢复
   python -m chronicler env render [输出文件]   从秘密库渲染完整 env（默认 stdout；ADR-0045）
@@ -117,6 +118,9 @@ def main():
         db.execute("INSERT INTO users(username, password_hash, role, created_at)"
                    " VALUES (?,?,'admin',strftime('%s','now'))", (username, hash_password(password)))
         print(f"admin {username} 已创建")
+    elif cmd == "passwords":
+        from .app.password_tui import main as password_tui_main
+        password_tui_main()
     elif cmd == "setup-recover":
         from .app.config import Cfg
         from .app.initialization import store

@@ -31,14 +31,18 @@ def find_capability(script: str) -> str | None:
     return None
 
 
-def run_capability(script: str, args: list[str], timeout: int = 120) -> dict | None:
+def run_capability(script: str, args: list[str], timeout: int = 120,
+                   env: dict[str, str] | None = None) -> dict | None:
     """执行提供该能力的组件脚本；无提供者返回 None。"""
     name = find_capability(script)
     if not name:
         return None
     path = Cfg.COMPONENTS_DIR / name / "hooks" / script
+    capability_env = _capability_env(name)
+    if env:
+        capability_env.update(env)
     proc = subprocess.run([component_python(), str(path), *args],
-                          cwd=str(path.parent.parent), env=_capability_env(name),
+                          cwd=str(path.parent.parent), env=capability_env,
                           capture_output=True, encoding="utf-8", errors="replace", timeout=timeout)
     lines = (proc.stdout or "").strip().splitlines()
     result = {}

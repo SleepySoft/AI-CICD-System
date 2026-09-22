@@ -47,6 +47,12 @@ class ComponentExecTest(unittest.TestCase):
         self._add_component("whatever")
         assert component_exec.find_capability("echo.py") == "whatever"
 
+    def test_capability_accepts_extra_environment(self):
+        self._add_component("demo")
+        result = component_exec.run_capability(
+            "echo.py", [], env={"DEMO_TOKEN": "secret-value"})
+        assert result is not None and result["ok"] and result["field"] == "secret-value"
+
 
 if __name__ == "__main__":
     unittest.main()
