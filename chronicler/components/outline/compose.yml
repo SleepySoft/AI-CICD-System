@@ -35,6 +35,7 @@ services:
     - ${DATA_ROOT:-./data}/private/outline:/var/lib/outline/data
     - ${DATA_ROOT:-./data}/public:/public
     - ${COMPONENTS_ROOT:-..}/outline/patch-start.sh:/opt/outline/patch-start.sh:ro
+    - ${COMPONENTS_ROOT:-..}/outline/auth-health.js:/opt/outline/auth-health.js:ro
 networks:
   default:
     name: aisystem

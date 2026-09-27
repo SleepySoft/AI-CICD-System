@@ -199,7 +199,21 @@ def upsert(kind: str, name: str, scope: str, plain: bytes, actor: str,
     return "created"
 
 
+def is_protected(row: dict) -> bool:
+    """长期数据加密密钥须经专门的数据迁移，常规秘密操作不能替换或删除。"""
+    return row.get("secret_type") == "encryption-key" and row.get("rotation_risk") == "critical"
+
+
+def validate_replacement(row: dict | None, plain: bytes):
+    if row and is_protected(row) and row["sha256"] != hashlib.sha256(plain).hexdigest():
+        raise ValueError(f"{row['scope']}/{row['name']} 是已初始化的数据加密密钥，不可直接替换；须先备份并迁移加密数据")
+
+
 def update_meta(sid: int, fields: dict) -> bool:
+    row = get_meta(sid)
+    if row and is_protected(row) and any(
+            key in fields and fields[key] != row[key] for key in ("secret_type", "rotation_risk")):
+        raise ValueError("数据加密密钥的类型和风险级别不可降级")
     allowed = {"summary", "owner", "expires_at", "secret_type", "rotation_risk"}
     sets, args = [], []
     for key in allowed & fields.keys():
@@ -222,8 +236,11 @@ def replace_value(sid: int, plain: bytes, mark_pending: bool = True) -> None:
     """轮换值：旧值随密文覆盖不可恢复（recover 语义见 ADR-0040）。"""
     if not plain:
         raise ValueError("值不能为空")
-    identity = _identity_verified()
     row = get_meta(sid)
+    validate_replacement(row, plain)
+    if row and row["sha256"] == hashlib.sha256(plain).hexdigest():
+        return
+    identity = _identity_verified()
     execute("UPDATE vault_secrets SET ciphertext=?, size=?, sha256=?, updated_at=? WHERE id=?",
             (crypto.encrypt(plain, identity), len(plain),
              hashlib.sha256(plain).hexdigest(), time.time(), sid))
@@ -239,6 +256,8 @@ def decrypt_value(row: dict) -> bytes:
 
 def delete(sid: int, mark_pending: bool = True) -> dict | None:
     row = get_meta(sid)
+    if row and is_protected(row):
+        raise ValueError("已初始化的数据加密密钥不可直接删除；须先备份并迁移加密数据")
     if row:
         execute("DELETE FROM vault_secrets WHERE id=?", (sid,))
         if mark_pending:

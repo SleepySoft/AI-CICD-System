@@ -6,6 +6,7 @@ data/chronicler/config/tools.d/*.yaml 为用户目录（同名覆盖内置）。
 docker 控制走本地 socket（ADR-0020：supervisor 与 dockerd 同环境）。
 """
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -125,6 +126,12 @@ def _compose_up_cmd(tool: dict) -> tuple[list, dict, str | None]:
            "REPO_ROOT": str(PROFILE.install_root),
             "COMPONENTS_ROOT": str(Cfg.COMPONENTS_DIR),
            "DATA_ROOT": str(PROFILE.install_root / "data")}
+    referenced = re.findall(r"(?<!\$)\$(?:\{([A-Za-z_][A-Za-z0-9_]*)(?=[}:?+\-])|([A-Za-z_][A-Za-z0-9_]*))",
+                            compose_file.read_text(encoding="utf-8"))
+    for braced, plain in referenced:
+        key = braced or plain
+        if key not in {"REPO_ROOT", "COMPONENTS_ROOT", "DATA_ROOT"}:
+            env.pop(key, None)  # --env-file 是配置事实源，进程残留不能静默覆盖它。
     try:
         system_proxies = urllib.request.getproxies()
         info = _client().info()

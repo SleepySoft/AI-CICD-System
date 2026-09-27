@@ -7,6 +7,12 @@ async function check() {
   try {
     await client.connect();
     await client.query("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    const installed = (await client.query("SELECT to_regclass('public.users') AS users")).rows[0].users;
+    if (!installed && process.argv.includes("--allow-empty-db")) {
+      await client.query("COMMIT");
+      console.log(JSON.stringify({ ok: true, bootstrap: true }));
+      return;
+    }
     const fields = {
       users: ["jwtSecret"],
       authentications: ["token", "refreshToken", "clientSecret"],

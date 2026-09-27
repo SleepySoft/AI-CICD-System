@@ -133,6 +133,11 @@ def restore_export(blob: bytes, actor: str, force: bool = False) -> dict:
             if member.isfile():
                 entries[member.name] = tar.extractfile(member).read()
     imported, skipped, conflicts, corrupted = 0, 0, [], []
+    if force:
+        for item in manifest.get("items", []):
+            data = entries.get(item["path"])
+            if data is not None and hashlib.sha256(data).hexdigest() == item["sha256"]:
+                store.validate_replacement(store.find(item["scope"], item["name"]), data)
     for item in manifest.get("items", []):
         data = entries.get(item["path"])
         if data is None or hashlib.sha256(data).hexdigest() != item["sha256"]:

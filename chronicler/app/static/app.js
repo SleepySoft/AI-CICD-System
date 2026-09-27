@@ -892,6 +892,9 @@ const app = createApp({
       } catch (e) { if (e !== "cancel" && e?.message) toast.err(e); }
       finally { acting.value = false; }
     }
+    function vaultProtected(row) {
+      return row?.secret_type === "encryption-key" && row?.rotation_risk === "critical";
+    }
     async function removeVault(row) {
       try {
         await ElementPlus.ElMessageBox.confirm(
@@ -1017,7 +1020,7 @@ const app = createApp({
       showVaultReveal, vaultRevealName, vaultRevealValue, showVaultEdit, vaultEditRow, vaultEditForm,
       fmtSize, loadVault, openVaultText, createVaultText, openVaultFile, onVaultFileChange,
       onVaultFileRemove, createVaultFile, revealVault, downloadVault, openVaultEdit,
-      saveVaultEdit, removeVault, exportVault, revealMaster,
+      saveVaultEdit, vaultProtected, removeVault, exportVault, revealMaster,
       vaultStatus, vaultEnv, vaultUnlockKey, vaultAckInput, vaultDriftMap,
       unlockVault, ackMaster, importEnv,
       showVaultRestore, openVaultRestore, onVaultRestoreFile, restoreVault,

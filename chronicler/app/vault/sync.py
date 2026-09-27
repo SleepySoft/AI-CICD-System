@@ -13,6 +13,10 @@ from . import store
 
 VAULT_PREFIX = "VAULT:"  # 糊化占位引用（ADR-0045）：KEY=VAULT:<scope>/<KEY>
 
+
+class EnvConflict(ValueError):
+    """存量明文配置与秘密库冲突，不能带着未确认的秘密继续启动。"""
+
 # 全局秘密键（比 config_store.GLOBAL_SECRET_KEYS 多收 OIDC 客户端密钥——它也是秘密）
 GLOBAL_SECRETS = {
     "CHRONICLER_SECRET": {"secret_type": "encryption-key", "rotation_risk": "critical",
@@ -43,17 +47,20 @@ def sync_env_secrets(values: dict, components: dict, actor: str = "setup") -> in
     fmap = secret_field_map(components)
     targets = {key: value for key, value in values.items()
                if (key in fmap and value and not key.startswith("INIT_ADMIN_")
+                   and not str(value).startswith(VAULT_PREFIX)
                    and "change_me" not in str(value).lower())}
     if not targets:
         return 0
     from ..db import close as db_close
     try:
         db_init()  # bootstrap 模式下幂等补表（normal 模式为 no-op）
+        for key, value in sorted(targets.items()):
+            store.validate_replacement(store.find(fmap[key]["scope"], key), str(value).encode("utf-8"))
         changed = 0
         for key, value in sorted(targets.items()):
             outcome = store.upsert(kind="text", name=key, scope=fmap[key]["scope"],
                                    plain=str(value).encode("utf-8"), actor=actor,
-                                   mark_pending=False,  # 存量收养：值本来就是运行事实
+                                   mark_pending=store.find(fmap[key]["scope"], key) is not None,
                                    secret_type=fmap[key]["secret_type"],
                                    rotation_risk=fmap[key]["rotation_risk"],
                                    summary=fmap[key]["summary"], owner=fmap[key]["scope"])
@@ -89,6 +96,9 @@ def import_env(components: dict, actor: str, force: bool = False) -> dict:
     fmap = secret_field_map(components)
     env_values = read_env_secrets(components)
     imported, skipped, conflicts = 0, 0, []
+    if force:
+        for key, value in sorted(env_values.items()):
+            store.validate_replacement(store.find(fmap[key]["scope"], key), value.encode("utf-8"))
     for key, value in sorted(env_values.items()):
         meta = fmap[key]
         existing = store.find(meta["scope"], key)
@@ -100,7 +110,7 @@ def import_env(components: dict, actor: str, force: bool = False) -> dict:
             conflicts.append(key)
             continue
         store.upsert(kind="text", name=key, scope=meta["scope"], plain=value.encode("utf-8"),
-                     actor=actor, mark_pending=False, secret_type=meta["secret_type"],
+                     actor=actor, mark_pending=existing is not None, secret_type=meta["secret_type"],
                      rotation_risk=meta["rotation_risk"], summary=meta["summary"],
                      owner=meta["scope"])
         imported += 1
@@ -184,7 +194,7 @@ def resolve_env_text(text: str) -> str:
 
 
 def migrate_env_to_masked(components: dict, actor: str = "supervisor") -> int:
-    """启动迁移：.env 中仍是明文的秘密先导入 vault（以 .env 现实为准），再糊化该文件。
+    """启动迁移：无冲突的存量明文先导入 vault，再糊化；冲突拒绝启动。
     库锁定时拒绝迁移（绝不把值抹成占位后解不开）。返回迁移条数。"""
     path = PROFILE.install_root / ".env"
     if not path.is_file():
@@ -194,7 +204,10 @@ def migrate_env_to_masked(components: dict, actor: str = "supervisor") -> int:
     if store.lock_state()["locked"]:
         print("[WARN] 秘密库已锁定，跳过 .env 糊化迁移（请先解锁）")
         return 0
-    result = import_env(components, actor=actor, force=True)
+    drift = env_status(components)["drifted"]
+    if drift:
+        raise EnvConflict(".env 与秘密库存在冲突，已阻止启动迁移：" + "、".join(drift))
+    result = import_env(components, actor=actor, force=False)
     masked = mask_env_text(path.read_text(encoding="utf-8"), components)
     tmp = path.with_suffix(".mask.tmp")
     tmp.write_text(masked, encoding="utf-8", newline="\n")

@@ -149,6 +149,17 @@ def persist(values: dict, components: dict) -> Path:
     invalid = [key for key, value in updates.items() if any(char in value for char in ("\r", "\n", "\0"))]
     if invalid:
         raise ValueError("配置值不得包含换行或空字符：" + "、".join(sorted(invalid)))
+    from ..vault import sync as vault_sync
+    fields = vault_sync.secret_field_map(components)
+    if target.is_file():
+        for key, value in updates.items():
+            meta = fields.get(key, {})
+            if (meta.get("secret_type") == "encryption-key" and meta.get("rotation_risk") == "critical"
+                    and key in indexes):
+                previous = lines[indexes[key]].partition("=")[2].strip()
+                if (previous and "change_me" not in previous.lower()
+                        and _resolve_ref(previous) != _resolve_ref(value)):
+                    raise ValueError(f"已配置的数据加密密钥不可直接更换：{key}")
     for key, value in sorted(updates.items()):
         line = f"{key}={value}"
         if key in indexes:
@@ -157,7 +168,10 @@ def persist(values: dict, components: dict) -> Path:
             lines.append(line)
     target.parent.mkdir(parents=True, exist_ok=True)
     # ADR-0045：写盘前糊化秘密字段（VAULT: 引用），真实值只在秘密库
-    from ..vault import sync as vault_sync
+    # 秘密先持久化成功才写引用；锁定或密钥冲突不能留下悬空引用。
+    secret_values = {line.partition("=")[0].strip(): line.partition("=")[2].strip()
+                     for line in lines if "=" in line and not line.lstrip().startswith("#")}
+    vault_sync.sync_env_secrets(secret_values, components)
     masked = vault_sync.mask_env_text("\n".join(lines).rstrip() + "\n", components)
     fd, temp_name = tempfile.mkstemp(prefix=".env.", dir=target.parent)
     try:
@@ -176,11 +190,6 @@ def persist(values: dict, components: dict) -> Path:
     for key, value in updates.items():
         os.environ[key] = value
     load_environment(components)
-    try:  # 双写秘密库（docs/how/secrets-vault.md）；失败不阻断 .env 主流程
-        vault_sync.sync_env_secrets(updates, components)
-    except Exception:  # noqa: BLE001
-        import traceback
-        traceback.print_exc()
     return target
 
 

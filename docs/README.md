@@ -90,6 +90,7 @@
 | ADR-0048 组件测试沙箱：环境级五通道隔离与现拉现建现测现毁 | adr/0048-sandbox-isolated-testing.md | adr | 已接受 |
 | ADR-0049 统一 Prompt 运行上下文契约 | adr/0049-standard-prompt-context.md | adr | 已接受 |
 | ADR-0050 内置任务收敛为两套正式 Prompt | adr/0050-two-formal-prompt-tasks.md | adr | 已接受 |
+| ADR-0051 已初始化的数据加密密钥禁止直接替换 | adr/0051-protect-persistent-encryption-keys.md | adr | 已接受 |
 | 部署与初始化 | runbooks/deploy.md | runbooks | 生效 |
 | 备份与恢复 | runbooks/backup-restore.md | runbooks | 生效 |
 | 接入新 Agent | runbooks/agent-onboarding.md | runbooks | 生效 |

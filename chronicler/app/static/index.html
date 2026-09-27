@@ -474,7 +474,7 @@
                 <el-button v-if="row.kind==='text'" size="small" text type="primary" @click="revealVault(row)">显示</el-button>
                 <el-button size="small" text type="primary" @click="downloadVault(row)">下载</el-button>
                 <el-button size="small" text @click="openVaultEdit(row)">编辑</el-button>
-                <el-button size="small" text type="danger" @click="removeVault(row)">删除</el-button>
+                <el-button size="small" text type="danger" :disabled="vaultProtected(row)" @click="removeVault(row)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -866,7 +866,7 @@
         <el-form-item label="用途说明"><el-input v-model="vaultEditForm.summary"></el-input></el-form-item>
         <el-form-item label="属主"><el-input v-model="vaultEditForm.owner"></el-input></el-form-item>
         <el-form-item label="秘密类型">
-          <el-select v-model="vaultEditForm.secret_type" style="width:100%">
+          <el-select v-model="vaultEditForm.secret_type" :disabled="vaultProtected(vaultEditRow)" style="width:100%">
             <el-option label="口令 password" value="password"></el-option>
             <el-option label="客户端密钥 client-secret" value="client-secret"></el-option>
             <el-option label="加密密钥 encryption-key" value="encryption-key"></el-option>
@@ -876,7 +876,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="轮换风险">
-          <el-radio-group v-model="vaultEditForm.rotation_risk">
+          <el-radio-group v-model="vaultEditForm.rotation_risk" :disabled="vaultProtected(vaultEditRow)">
             <el-radio-button label="low">低</el-radio-button>
             <el-radio-button label="coordinated">需协调</el-radio-button>
             <el-radio-button label="critical">高危</el-radio-button>
@@ -885,7 +885,9 @@
         <el-form-item label="过期时间（可选）">
           <el-date-picker v-model="vaultEditForm.expires_at" type="datetime" value-format="X" style="width:100%"></el-date-picker>
         </el-form-item>
-        <el-form-item v-if="vaultEditRow && vaultEditRow.kind === 'text'" label="新值（留空=保持不变；填入即轮换，旧值不可恢复）">
+        <el-alert v-if="vaultProtected(vaultEditRow)" type="info" :closable="false"
+          title="数据加密密钥已锁定。更换前须备份并迁移既有加密数据。"></el-alert>
+        <el-form-item v-if="vaultEditRow && vaultEditRow.kind === 'text' && !vaultProtected(vaultEditRow)" label="新值（留空=保持不变；填入即轮换，旧值不可恢复）">
           <el-input v-model="vaultEditForm.value" type="textarea" :rows="3" class="mono"></el-input>
         </el-form-item>
       </el-form>

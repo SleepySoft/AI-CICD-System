@@ -1,6 +1,6 @@
 # 秘密库与组件密钥对接设计
 
-> 版本：v2.0 · 日期：2026-09-16 · 状态：生效
+> 版本：v2.1 · 日期：2026-09-27 · 状态：生效
 > 定位：秘密库（vault）与组件密钥体系的对接架构；不含 UI 细节
 > 关联：[ADR-0039](../adr/0039-reinit-recover-over-fresh.md)、[ADR-0040](../adr/0040-secret-reexport-and-reset-policy.md)、
 > [ADR-0041](../adr/0041-secret-snapshot-and-master-key.md)、[ADR-0044](../adr/0044-recipient-key-hierarchy.md)、
@@ -149,6 +149,16 @@ master.key 丢失但 chronicler.db 中仍有秘密 → 秘密库页显示锁定�
 admin 在秘密库改值（唯一写入点）→ 快照自动重写 → **重新部署相关组件**（工具面板「部署」或下次
 autostart 的 compose up）使容器拿到新值 → 组件内部凭据（如 gitea 认证源）由 initialize 钩子覆盖对齐
 → `scripts/verify-auth.py` 验证登录链。界面提示与审计照旧。
+
+### 5.6.1 长期数据加密密钥保护（ADR-0051）
+
+store 对既有 encryption-key + critical 拒绝不同值替换、删除和元数据降级；同值提交幂等。
+sync 与导出包 force 导入在批量写入前检查保护条目；force 不能绕过保护。
+初始化先确认存量密钥不变并持久化秘密库，再写入糊化 .env，失败向上传播。
+启动明文迁移遇到 vault 冲突时拒绝继续启动，避免旧 .env 值经自动部署再次生效。
+Compose 清除进程环境中服务文件引用的插值变量，只保留显式安装与数据路径覆盖，
+确保本次渲染的 env 文件决定秘密值。该约束只覆盖 Chronicler 管理的部署与秘密操作；
+组件可通过自己的启动检查核验既有密文，Outline 的实现见 [排障手册](../runbooks/outline-auth.md)。
 
 ### 5.7 组件新增/移除
 

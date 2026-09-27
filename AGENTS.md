@@ -189,6 +189,8 @@ chronicler\.venv-win\Scripts\python.exe -m chronicler serve   # 主入口；首�
 - **Outline 旧账号密文不匹配**（2026-09-27）：容器与 vault 密钥一致且 dev 登录正常，仍有旧 boss 的
   jwtSecret / accessToken / refreshToken 无法解密，触发 fatal 与页面加载失败。部分账号可解密时禁止
   直接全局回退密钥；先做只读诊断和加密备份，再恢复目标账号认证数据，见 `docs/runbooks/outline-auth.md`。
+  ADR-0051：既有 encryption-key + critical 禁止直接替换/删除/降级；存量 .env 冲突阻止启动迁移；
+  Compose 剔除进程中的同名配置插值变量；Outline 启动前检查既有认证密文。
 - 前端资源已本地化（chronicler/app/static/vendor/，vue/element-plus/icons 版本钉死）：
   勿改回 CDN 引用（公司网络/代理下 unpkg 加载不稳，曾实测登录页渲染原始 {{ }}、
   图标按钮不可见但可点，2026-09-01）。图标按钮依赖 app.js 全局注册 ElementPlusIconsVue。

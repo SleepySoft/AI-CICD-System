@@ -305,7 +305,10 @@ def propagation_dismiss(scope: str, user: dict = Depends(require_admin)):
 
 @router.delete("/{sid:int}")
 def delete_secret(sid: int, user: dict = Depends(require_admin)):
-    row = store.delete(sid)
+    try:
+        row = store.delete(sid)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     if not row:
         raise HTTPException(status_code=404, detail="秘密不存在")
     audit(user["username"], "vault.delete", _target(row))

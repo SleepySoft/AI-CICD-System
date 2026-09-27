@@ -54,13 +54,16 @@ def create_app(mode: str = "normal") -> FastAPI:
     from . import db
     db.init()
 
+    from .vault.sync import EnvConflict
     try:  # ADR-0045：存量明文 .env 自动迁移——导入秘密库后糊化（锁定时跳过）
         from .initialization import catalog as _catalog
         from .vault import sync as _vault_sync
         _vault_sync.migrate_env_to_masked(_catalog.load())
         # 糊化后 Chronicler 自身秘密（会话密钥/OIDC 密钥）从秘密库解析进进程
         _vault_sync.apply_chronicler_secrets()
-    except Exception:  # noqa: BLE001 迁移失败不阻断启动
+    except EnvConflict:
+        raise  # 不允许旧 .env 值随自启部署覆盖秘密库事实源。
+    except Exception:  # noqa: BLE001 锁定仍允许管理员进入解锁页
         import traceback
         traceback.print_exc()
 

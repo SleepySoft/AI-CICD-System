@@ -23,6 +23,9 @@ class VaultTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
+        from types import SimpleNamespace
+        self.sync_profile = patch("chronicler.app.vault.sync.PROFILE", SimpleNamespace(install_root=self.root))
+        self.sync_profile.start()
         self.secrets_dir = self.root / "secrets"
         self.data_patch = patch.object(Cfg, "DATA", self.root / "private" / "chronicler")
         self.data_patch.start()
@@ -54,6 +57,7 @@ class VaultTest(unittest.TestCase):
         self.admin.close()  # 关闭 portal，让 worker 线程退出并释放其线程局部 sqlite 连接
         self.dev.close()
         self.data_patch.stop()
+        self.sync_profile.stop()
         if self._old_env is None:
             os.environ.pop("CHRONICLER_SECRETS_DIR", None)
         else:
@@ -188,6 +192,87 @@ class VaultTest(unittest.TestCase):
         {"key": "GITEA_ADMIN_PASSWORD", "kind": "secret", "secret_type": "password",
          "rotation_risk": "coordinated", "help": "Gitea 管理员密码"},
         {"key": "GITEA_PORT", "kind": "port"}]}}}
+
+    def test_critical_encryption_key_cannot_rotate_delete_or_downgrade(self):
+        response = self.admin.post("/api/vault/text", json={
+            "name": "DATA_KEY", "scope": "storage", "value": "a" * 64,
+            "secret_type": "encryption-key", "rotation_risk": "critical"})
+        self.assertEqual(response.status_code, 200)
+        sid = response.json()["id"]
+        self.assertEqual(self.admin.post(f"/api/vault/{sid}/value", json={"value": "b" * 64}).status_code, 400)
+        self.assertEqual(self.admin.delete(f"/api/vault/{sid}").status_code, 400)
+        self.assertEqual(self.admin.patch(f"/api/vault/{sid}", json={"rotation_risk": "low"}).status_code, 400)
+        self.assertEqual(self.admin.patch(f"/api/vault/{sid}", json={"secret_type": "password"}).status_code, 400)
+        self.assertEqual(self.admin.post(f"/api/vault/{sid}/value", json={"value": "a" * 64}).status_code, 200)
+        self.assertEqual(self.admin.post(f"/api/vault/{sid}/reveal").text, "a" * 64)
+
+    def test_setup_rejects_key_change_before_env_or_other_secrets_are_modified(self):
+        from types import SimpleNamespace
+        from chronicler.app.initialization import config_store
+        from chronicler.app.vault import store
+        components = {"storage": {"component": {"fields": [
+            {"key": "DATA_KEY", "kind": "secret", "secret_type": "encryption-key",
+             "rotation_risk": "critical", "help": "persistent encryption"}]}}}
+        config_store.clear()
+        config_store.set_secrets({"DATA_KEY": "a" * 64})
+        with patch.object(config_store, "PROFILE", SimpleNamespace(install_root=self.root)):
+            config_store.persist({}, components)
+            before = (self.root / ".env").read_bytes()
+            config_store.set_secrets({"DATA_KEY": "b" * 64})
+            with self.assertRaises(ValueError):
+                config_store.persist({"BASE_DOMAIN": "changed.test"}, components)
+            self.assertEqual((self.root / ".env").read_bytes(), before)
+            self.assertEqual(store.decrypt_value(store.find("storage", "DATA_KEY")), b"a" * 64)
+        config_store.clear()
+
+    def test_setup_vault_failure_keeps_env_file_unchanged(self):
+        from types import SimpleNamespace
+        from chronicler.app.initialization import config_store
+        config_store.clear()
+        target = self.root / ".env"
+        target.write_text("BASE_DOMAIN=existing.test\n", encoding="utf-8")
+        config_store.set_secrets({"GITEA_ADMIN_PASSWORD": "new-password"})
+        with patch.object(config_store, "PROFILE", SimpleNamespace(install_root=self.root)), \
+             patch("chronicler.app.vault.sync.sync_env_secrets", side_effect=ValueError("vault locked")):
+            with self.assertRaises(ValueError):
+                config_store.persist({"BASE_DOMAIN": "new.test"}, self.COMPONENTS)
+        self.assertEqual(target.read_text(encoding="utf-8"), "BASE_DOMAIN=existing.test\n")
+        config_store.clear()
+
+    def test_startup_migration_refuses_existing_vault_conflict(self):
+        from types import SimpleNamespace
+        from chronicler.app.vault import sync, store
+        store.upsert("text", "GITEA_ADMIN_PASSWORD", "gitea", b"vault-original", "test")
+        target = self.root / ".env"
+        target.write_text("GITEA_ADMIN_PASSWORD=stale-env-value\n", encoding="utf-8")
+        with patch.object(sync, "PROFILE", SimpleNamespace(install_root=self.root)):
+            with self.assertRaises(ValueError):
+                sync.migrate_env_to_masked(self.COMPONENTS)
+            from chronicler.app.main import create_app
+            with patch("chronicler.app.initialization.catalog.load", return_value=self.COMPONENTS), \
+                 patch("chronicler.app.tasks.start_scheduler") as scheduler:
+                with self.assertRaises(sync.EnvConflict):
+                    create_app("normal")
+                scheduler.assert_not_called()
+        self.assertEqual(target.read_text(encoding="utf-8"), "GITEA_ADMIN_PASSWORD=stale-env-value\n")
+        self.assertEqual(store.decrypt_value(store.find("gitea", "GITEA_ADMIN_PASSWORD")), b"vault-original")
+
+    def test_force_env_import_cannot_replace_critical_key_or_apply_partial_batch(self):
+        from types import SimpleNamespace
+        from chronicler.app.vault import sync, store
+        components = {"storage": {"component": {"fields": [
+            {"key": "ZZ_DATA_KEY", "kind": "secret", "secret_type": "encryption-key",
+             "rotation_risk": "critical", "help": "persistent encryption"},
+            {"key": "AA_PASSWORD", "kind": "secret", "secret_type": "password",
+             "rotation_risk": "low", "help": "password"}]}}}
+        store.upsert("text", "ZZ_DATA_KEY", "storage", b"original-key", "test",
+                     secret_type="encryption-key", rotation_risk="critical")
+        (self.root / ".env").write_text("AA_PASSWORD=new-password\nZZ_DATA_KEY=changed-key\n", encoding="utf-8")
+        with patch.object(sync, "PROFILE", SimpleNamespace(install_root=self.root)):
+            with self.assertRaises(ValueError):
+                sync.import_env(components, "test", force=True)
+        self.assertIsNone(store.find("storage", "AA_PASSWORD"))
+        self.assertEqual(store.decrypt_value(store.find("storage", "ZZ_DATA_KEY")), b"original-key")
 
     def test_persist_double_write(self):
         from types import SimpleNamespace
@@ -444,6 +529,24 @@ class VaultTest(unittest.TestCase):
         r = self._import_export(export)
         assert r.status_code == 400
         assert "解锁" in r.json()["detail"]
+
+    def test_force_export_restore_cannot_replace_critical_key_or_partial_batch(self):
+        self._create_text(name="AA_TOKEN", value="original-token")
+        response = self.admin.post("/api/vault/text", json={
+            "name": "ZZ_KEY", "scope": "storage", "value": "a" * 64,
+            "secret_type": "encryption-key", "rotation_risk": "critical"})
+        self.assertEqual(response.status_code, 200)
+        snapshot = self._export()
+        # 在临时库模拟另一个时代的数据密钥；正常 API 禁止这种替换。
+        db.execute("DELETE FROM vault_secrets WHERE id=?", (response.json()["id"],))
+        current = self.admin.post("/api/vault/text", json={
+            "name": "ZZ_KEY", "scope": "storage", "value": "b" * 64,
+            "secret_type": "encryption-key", "rotation_risk": "critical"}).json()["id"]
+        token = next(x for x in self.admin.get("/api/vault").json() if x["name"] == "AA_TOKEN")
+        self.admin.post(f"/api/vault/{token['id']}/value", json={"value": "new-token"})
+        self.assertEqual(self._import_export(snapshot, force=True).status_code, 400)
+        self.assertEqual(self.admin.post(f"/api/vault/{current}/reveal").text, "b" * 64)
+        self.assertEqual(self.admin.post(f"/api/vault/{token['id']}/reveal").text, "new-token")
 
 
 if __name__ == "__main__":

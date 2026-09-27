@@ -1,6 +1,6 @@
 # Web 初始化与环境设置规格
 
-> 版本：v1.9 · 日期：2026-09-05 · 状态：生效
+> 版本：v1.10 · 日期：2026-09-27 · 状态：生效
 > 定位：独立 initialization 模块对用户、组件和 API 暴露的契约；不规定内部线程、数据库实现或具体组件接线命令。
 > 关联需求：FR-INIT-001 ~ FR-INIT-017、NFR-002、NFR-004、NFR-010
 
@@ -227,7 +227,10 @@ GET    /api/setup/diagnostics            admin 导出脱敏诊断
 - 初始化完成后的秘密管理按 `secret_type` 分级：机器密钥类（`encryption-key`/`client-secret`/
   `api-token`/`access-key`）允许 admin 在环境设置中心经审计再导出（恢复旧环境的前提）；口令类
   （`password`）不提供明文再导出，忘记口令走重置（生成新口令，组件 hook 对齐账号，旧口令失效）。
-  任何秘密可显式重置；`rotation_risk: critical` 的秘密重置列为破坏性动作、默认不选中并二次确认。
+  既有 `encryption-key` 且 `rotation_risk: critical` 的值不可经常规保存、轮换、删除或强制导入更换，
+  类型与风险级别不可降级；相同值的提交保持幂等。更换须先备份并执行组件加密数据迁移。
+  其它 critical 秘密的重置仍列为破坏性动作、默认不选中并二次确认。见
+  [ADR-0051](../adr/0051-protect-persistent-encryption-keys.md)。
   决策见 [ADR-0040](../adr/0040-secret-reexport-and-reset-policy.md)；持久化与导出形态见
   [ADR-0041](../adr/0041-secret-snapshot-and-master-key.md)。
 - 秘密按作用域（scope，默认对齐工程）分权：员工以本人账号在线取用仅被授权作用域的秘密，全部
