@@ -112,6 +112,8 @@
 const $ = s => document.querySelector(s);
 const view = $("#view");
 let user = null, tab = "projects", pollTimer = null;
+let renderVersion = 0, pollVersion = 0;
+const pendingTriggers = new Map(), triggerKeys = new Map();
 let detailRun = null;  // 正在查看的 run（日志/报告）
 let chatUrl = "";       // ATR 对话页地址（探测到 terminal-runtime 组件才有）
 
@@ -130,7 +132,7 @@ async function loadPropBanner() {
 }
 
 async function api(path, opts = {}) {
-  const resp = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  const resp = await fetch(path, { ...opts, headers: { "Content-Type": "application/json", ...(opts.headers || {}) } });
   if (resp.status === 401) { user = null; render(); throw new Error("未登录"); }
   if (!resp.ok) {
     let msg = resp.statusText;
@@ -146,9 +148,11 @@ function netDot(ok) { $("#netDot").style.background = ok ? "#3fb950" : "#f85149"
 
 // ---------- 视图：组件 ----------
 async function viewTools() {
+  const version = ++renderVersion, targetTab = tab;
   let tools = [];
   try { tools = await api("/api/tools"); netDot(true); } catch (e) { netDot(false); }
   const isAdmin = user?.role === "admin";
+  if (version !== renderVersion || targetTab !== tab || !user) return;
   view.innerHTML = "<div class='group-title'>组件状态</div>" + (tools.length ? "" : "<p class='muted'>暂无组件</p>") +
     tools.map(t => `
       <div class="card">
@@ -174,6 +178,7 @@ async function viewTools() {
 
 // ---------- 视图：工程（第一入口：对话与任务触发都在这里） ----------
 async function viewProjects() {
+  const version = ++renderVersion, targetTab = tab;
   const [projects, tasks] = await Promise.all([
     api("/api/projects").catch(() => []),
     api("/api/tasks").catch(() => []),
@@ -199,16 +204,13 @@ async function viewProjects() {
         ${ts.length ? `<details class="taskbox"><summary>任务（${ts.length}）</summary>` + ts.map(t => `
           <div class="row" style="margin:6px 0">
             <span class="grow">${esc(t.name)} ${t.enabled ? "" : "<span class='tag'>停用</span>"}</span>
-            ${isAdmin && t.enabled ? `<button class="btn primary" data-trigger="${t.id}">执行</button>` : ""}
+            ${isAdmin && t.enabled ? `<button class="btn primary" data-trigger="${t.id}" ${t.active_run_id || pendingTriggers.has(String(t.id)) ? "disabled" : ""}>执行</button>` : ""}
           </div>`).join("") + "</details>" : '<div class="muted">无任务定义</div>'}
       </div>`;
   }).join("");
+  if (version !== renderVersion || targetTab !== tab || !user) return;
   view.innerHTML = html;
-  view.querySelectorAll("[data-trigger]").forEach(b => b.addEventListener("click", async () => {
-    b.disabled = true;
-    try { await api(`/api/tasks/${b.dataset.trigger}/trigger`, { method: "POST" }); } catch (e) { alert(e.message); }
-    setTimeout(() => { tab = "runs"; render(); }, 1200);
-  }));
+  bindTaskTriggers();
   view.querySelectorAll("[data-chat]").forEach(b => b.addEventListener("click", async () => {
     b.disabled = true; b.textContent = "打开中…";
     try {
@@ -219,7 +221,24 @@ async function viewProjects() {
   }));
 }
 const STATUS_TEXT = { queued: "排队中", running: "运行中", success: "成功", failed: "失败", skipped: "跳过" };
+function bindTaskTriggers() {
+  view.querySelectorAll("[data-trigger]").forEach(b => b.addEventListener("click", async () => {
+    const id = b.dataset.trigger;
+    if (pendingTriggers.has(id)) return;
+    pendingTriggers.set(id, true); b.disabled = true;
+    if (!triggerKeys.has(id)) triggerKeys.set(id,
+      globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    try {
+      await api(`/api/tasks/${id}/trigger`, { method: "POST", headers: { "Idempotency-Key": triggerKeys.get(id) } });
+      triggerKeys.delete(id);
+      // 用户已切到其它视图时，不由迟到的响应强行跳转。
+      if (tab === "projects" || tab === "runs") { tab = "runs"; detailRun = null; render(); }
+    } catch (e) { alert(e.message); }
+    finally { pendingTriggers.delete(id); b.disabled = false; }
+  }));
+}
 async function viewRuns() {
+  const version = ++renderVersion, targetTab = tab;
   const [tasks, runs, projects] = await Promise.all([
     api("/api/tasks").catch(() => []),
     api("/api/runs").catch(() => []),
@@ -233,7 +252,7 @@ async function viewRuns() {
     html += "<div class='group-title'>触发任务</div>" + tasks.filter(t => t.enabled).map(t => `
       <div class="card"><div class="row">
         <b class="grow">${esc(t.name)}</b><span class="tag">${esc(t.task_type)}</span>
-        <button class="btn primary" data-trigger="${t.id}">执行</button>
+        <button class="btn primary" data-trigger="${t.id}" ${t.active_run_id || pendingTriggers.has(String(t.id)) ? "disabled" : ""}>执行</button>
       </div><div class="muted">${esc(projName(t.project_id))}</div></div>`).join("");
   }
   html += "<div class='group-title'>执行记录</div>";
@@ -243,21 +262,25 @@ async function viewRuns() {
       <div class="row">
         <span class="dot ${esc(r.status)}"></span>
         <b class="grow">#${r.id} ${esc(r.task_type)}</b>
-        <span class="tag">${STATUS_TEXT[r.status] || esc(r.status)}</span>
+        <span class="tag">${r.status === "queued" && r.phase === "preparing" ? "准备中" : STATUS_TEXT[r.status] || esc(r.status)}</span>
       </div>
-      <div class="muted">${esc(projName(r.project_id))} · ${fmtT(r.started_at)}</div>
+      <div class="muted">${esc(projName(r.project_id))} · 接收 ${fmtT(r.queued_at || r.started_at)} · 开始 ${fmtT(r.started_at)}</div>
     </div>`).join("");
+  if (version !== renderVersion || targetTab !== tab || !user || detailRun) return;
   view.innerHTML = html;
+  bindTaskTriggers();
   view.querySelectorAll("[data-run]").forEach(c => c.addEventListener("click", () => viewRunDetail(+c.dataset.run)));
 }
 
 async function viewRunDetail(id) {
+  const version = ++renderVersion;
   detailRun = id;
   view.innerHTML = "<p class='muted'>加载中…</p>";
   try {
     const report = await api(`/api/runs/${id}/report`).catch(() => "");
     const log = await api(`/api/runs/${id}/log`).catch(() => "");
     const reportHtml = report ? DOMPurify.sanitize(marked.parse(report, { async: false })) : "";
+    if (version !== renderVersion || detailRun !== id || !user) return;
     view.innerHTML = `
       <div class="row" style="margin-bottom:10px">
         <button class="btn" id="backBtn">← 返回</button>
@@ -337,18 +360,29 @@ async function detectChatUrl() {
   } catch (_) { chatUrl = ""; }
 }
 function render() {
+  ++renderVersion;
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
   $("#nav").classList.toggle("hidden", !user);
   $("#who").textContent = user ? user.username : "";
   if (!user) { stopPoll(); viewLogin(); return; }
   (VIEWS[tab] || viewTools)();
+  startPoll();
 }
 function startPoll() {
   stopPoll();
-  pollTimer = setInterval(() => {
-    if (document.visibilityState === "visible" && user && !detailRun) (VIEWS[tab] || viewProjects)();
-  }, 8000);
+  const version = pollVersion;
+  pollTimer = setTimeout(async () => {
+    if (document.visibilityState === "visible" && user) {
+      if (detailRun) await viewRunDetail(detailRun);
+      else await (VIEWS[tab] || viewProjects)();
+    }
+    if (version === pollVersion) {
+      pollTimer = null;
+      if (user) startPoll();
+    }
+  }, 3000);
 }
-function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+function stopPoll() { ++pollVersion; if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; } }
 document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => {
   document.querySelectorAll("nav button").forEach(x => x.classList.remove("active"));
   b.classList.add("active");

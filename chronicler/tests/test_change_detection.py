@@ -187,6 +187,12 @@ class ChangeDetectionTest(unittest.TestCase):
                 run = runner.trigger(project["id"], task["task_type"], "cron",
                                      task_id=task["id"], change_policy="repo-changed",
                                      change_probes=[], allow_skip=True, trigger_kind="cron")
+                with runner._workers_guard:
+                    worker = runner._workers.get(run["id"])
+                if worker:
+                    worker.join(10)
+                    self.assertFalse(worker.is_alive())
+                run = runner.get_run(run["id"])
 
                 self.assertEqual("skipped", run["status"])
                 self.assertEqual("cron", run["trigger"])

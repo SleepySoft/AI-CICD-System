@@ -6,6 +6,10 @@ const app = createApp({
     const user = ref(null);
     const loading = ref(false);
     const acting = ref(false);
+    const triggeringTasks = ref({});
+    const triggeringRun = ref(false);
+    const triggerRequests = new Map();
+    let runLoadVersion = 0, taskLoadVersion = 0, logLoadVersion = 0, runPollVersion = 0;
     const loginError = ref("");
     const loginForm = ref({ username: "", password: "" });
     const authBackend = ref("local");
@@ -136,7 +140,7 @@ const app = createApp({
     });
 
     async function api(path, opts = {}) {
-      const resp = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+      const resp = await fetch(path, { ...opts, headers: { "Content-Type": "application/json", ...(opts.headers || {}) } });
       if (resp.status === 401) { user.value = null; throw new Error("未登录"); }
       if (!resp.ok) {
         let msg = resp.statusText;
@@ -291,9 +295,11 @@ const app = createApp({
     }
 
     async function loadTasks() {
+      const version = ++taskLoadVersion;
       loadingTasks.value = true;
-      try { tasks.value = await api("/api/tasks"); } catch (e) { toast.err(e); }
-      finally { loadingTasks.value = false; }
+      try { const rows = await api("/api/tasks"); if (version === taskLoadVersion) tasks.value = rows; }
+      catch (e) { if (version === taskLoadVersion) toast.err(e); }
+      finally { if (version === taskLoadVersion) loadingTasks.value = false; }
     }
     function openNewTask() {
       newTaskForm.value = { project_id: projects.value[0]?.id || null, name: "",
@@ -355,23 +361,39 @@ const app = createApp({
         toast.ok("已删除"); loadTasks();
       } catch (e) { if (e !== "cancel" && e?.message) toast.err(e); }
     }
+    function taskTriggerKey(t) { return `${t.project_id}:${t.task_type}`; }
+    function taskTriggerBusy(t) { return !!triggeringTasks.value[taskTriggerKey(t)] || !!t.active_run_id; }
+    function triggerRequest(path, body) {
+      const fingerprint = path + JSON.stringify(body);
+      if (!triggerRequests.has(fingerprint)) triggerRequests.set(fingerprint,
+        globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      return { fingerprint, key: triggerRequests.get(fingerprint) };
+    }
     async function triggerTask(t) {
-      let change;
-      try { change = await api(`/api/tasks/${t.id}/changes`); }
-      catch (e) { toast.err(e); return; }
+      if (taskTriggerBusy(t)) return;
+      const busyKey = taskTriggerKey(t);
+      const sourceTab = tab.value;
+      triggeringTasks.value[busyKey] = true;  // 预览与确认期间也不能重复进入。
       try {
-        await ElementPlus.ElMessageBox.confirm(
-          changeConfirmText(change),
-          "触发任务", { type: "warning", confirmButtonText: "确认触发", cancelButtonText: "取消" });
-      } catch (_) { return; }  // 取消
-      acting.value = true;
-      try {
-        await api(`/api/tasks/${t.id}/trigger`, { method: "POST" });
-        toast.ok(`已触发：${t.name}，开始执行`);
-        await loadRuns();
+        const path = `/api/tasks/${t.id}/trigger`;
+        const request = triggerRequest(path, {});
+        if (!triggerRequests.has(`retry:${request.fingerprint}`)) {
+          const change = await api(`/api/tasks/${t.id}/changes`);
+          await ElementPlus.ElMessageBox.confirm(changeConfirmText(change),
+            "触发任务", { type: "warning", confirmButtonText: "确认触发", cancelButtonText: "取消" });
+        }
+        triggerRequests.set(`retry:${request.fingerprint}`, true);
+        const run = await api(path, { method: "POST", headers: { "Idempotency-Key": request.key } });
+        triggerRequests.delete(request.fingerprint); triggerRequests.delete(`retry:${request.fingerprint}`);
+        toast.ok(`已接收：${t.name}，Run #${run.id}`);
+        if (tab.value === sourceTab) {
+          tab.value = "runs";
+          runFilter.value = t.project_id;
+        }
+        await Promise.all([loadRuns(), loadTasks()]);
         startRunPolling();
-      } catch (e) { toast.err(e); }
-      finally { acting.value = false; }
+      } catch (e) { if (e !== "cancel" && e !== "close") toast.err(e); }
+      finally { delete triggeringTasks.value[busyKey]; }
     }
     async function openPrompt(p) {
       promptView.value = { ...p, content: "加载中…" };
@@ -408,63 +430,88 @@ const app = createApp({
     }
 
     async function loadRuns() {
+      const version = ++runLoadVersion, filter = runFilter.value;
       loadingRuns.value = true;
       try {
-        const q = runFilter.value ? `?project_id=${runFilter.value}` : "";
-        runs.value = await api("/api/runs" + q);
-        // 有排队/运行中任务则持续轮询刷新（进度反应），全部结束即停
-        if (runs.value.some(r => r.status === "running" || r.status === "queued")) startRunPolling();
-        else stopRunPolling();
-      } catch (e) { toast.err(e); }
-      finally { loadingRuns.value = false; }
+        const q = filter ? `?project_id=${filter}` : "";
+        const rows = await api("/api/runs" + q);
+        if (version === runLoadVersion && filter === runFilter.value) runs.value = rows;
+      } catch (e) { if (version === runLoadVersion) toast.err(e); }
+      finally { if (version === runLoadVersion) loadingRuns.value = false; }
     }
     function runRowClass({ row }) {
       return (row.status === "running" || row.status === "queued") ? "run-row-active" : "";
     }
     function startRunPolling() {
       if (runPollTimer) return;
-      runPollTimer = setInterval(loadRuns, 3000);
+      const version = runPollVersion;
+      runPollTimer = setTimeout(async () => {
+        if (user.value && !document.hidden && ["runs", "projects"].includes(tab.value))
+          await Promise.all([loadRuns(), loadTasks()]);
+        if (version === runPollVersion) {
+          runPollTimer = null;
+          if (user.value) startRunPolling();
+        }
+      }, 3000);
     }
     function stopRunPolling() {
-      if (runPollTimer) { clearInterval(runPollTimer); runPollTimer = null; }
+      ++runPollVersion;
+      if (runPollTimer) { clearTimeout(runPollTimer); runPollTimer = null; }
     }
     function openTrigger() {
+      if (triggeringRun.value) return;
       triggerForm.value = { project_id: runFilter.value || projects.value[0]?.id || null, task_type: taskTypes.value[0]?.name || "", extra_prompt: "" };
       showTrigger.value = true;
     }
     async function triggerRun() {
+      if (triggeringRun.value) return;
       if (!triggerForm.value.project_id || !triggerForm.value.task_type) { ElementPlus.ElMessage.warning("请选择工程与任务类型"); return; }
+      const body = { ...triggerForm.value };
+      const sourceTab = tab.value, sourceFilter = runFilter.value;
+      const request = triggerRequest("/api/runs/trigger", body);
+      triggeringRun.value = true;
       try {
-        const query = new URLSearchParams({ project_id: triggerForm.value.project_id,
-                                            task_type: triggerForm.value.task_type });
+        if (!triggerRequests.has(`retry:${request.fingerprint}`)) {
+        const query = new URLSearchParams({ project_id: body.project_id, task_type: body.task_type });
         const change = await api(`/api/runs/change-preview?${query}`);
         await ElementPlus.ElMessageBox.confirm(changeConfirmText(change), "触发任务",
           { type: change.change_summary?.state === "unchanged" ? "warning" : "info",
             confirmButtonText: "确认触发", cancelButtonText: "取消" });
-      } catch (e) {
-        if (e === "cancel" || e === "close") return;
-        toast.err(e); return;
-      }
-      acting.value = true;
-      try {
-        await api("/api/runs/trigger", { method: "POST", body: JSON.stringify(triggerForm.value) });
-        toast.ok("任务已触发，开始执行"); showTrigger.value = false;
-        await loadRuns();
+        }
+        triggerRequests.set(`retry:${request.fingerprint}`, true);
+        const run = await api("/api/runs/trigger", { method: "POST", body: JSON.stringify(body),
+          headers: { "Idempotency-Key": request.key } });
+        triggerRequests.delete(request.fingerprint); triggerRequests.delete(`retry:${request.fingerprint}`);
+        toast.ok(`已接收：Run #${run.id}`); showTrigger.value = false;
+        if (tab.value === sourceTab && runFilter.value === sourceFilter) runFilter.value = body.project_id;
+        await Promise.all([loadRuns(), loadTasks()]);
         startRunPolling();
-      } catch (e) { toast.err(e); }
-      finally { acting.value = false; }
+      } catch (e) { if (e !== "cancel" && e !== "close") toast.err(e); }
+      finally { triggeringRun.value = false; }
     }
     async function fetchLog() {
-      if (!logRunId.value) return;
-      try { logText.value = await api(`/api/runs/${logRunId.value}/log`); }
-      catch (e) { logText.value = `（获取失败: ${e.message}）`; stopLogPoll(); }
+      const id = logRunId.value, version = ++logLoadVersion;
+      if (!id) return false;
+      try {
+        const [text, run] = await Promise.all([api(`/api/runs/${id}/log`), api(`/api/runs/${id}`)]);
+        if (version !== logLoadVersion || id !== logRunId.value || !showLog.value) return false;
+        logText.value = text;
+        return run.status === "queued" || run.status === "running";
+      } catch (e) {
+        if (version === logLoadVersion && id === logRunId.value) logText.value = `（获取失败: ${e.message}）`;
+        return false;
+      }
     }
-    function stopLogPoll() { if (logTimer) { clearInterval(logTimer); logTimer = null; } }
+    function stopLogPoll() { ++logLoadVersion; if (logTimer) { clearTimeout(logTimer); logTimer = null; } }
+    function scheduleLogPoll() {
+      logTimer = setTimeout(async () => {
+        if (await fetchLog()) scheduleLogPoll();
+      }, 2000);
+    }
     async function openLog(run) {
-      logRunId.value = run.id; logText.value = ""; showLog.value = true;
-      await fetchLog();
       stopLogPoll();
-      if (run.status === "running" || run.status === "queued") logTimer = setInterval(fetchLog, 2000);
+      logRunId.value = run.id; logText.value = ""; showLog.value = true;
+      if (await fetchLog()) scheduleLogPoll();
     }
     async function openReport(run) {
       reportRunId.value = run.id; reportText.value = "加载中…"; showReport.value = true;
@@ -904,6 +951,7 @@ const app = createApp({
 
     function loadAll() {
       loadProjects(); loadRuns(); loadTasks(); loadConfig(); loadTools();
+      startRunPolling();
       if (isAdmin.value) { loadUsers(); loadPendingProp(); }
     }
     // 秘密库变更待传播横幅（JIRA 式维护通知）：vault 改值后组件未重建/未对齐时悬挂
@@ -939,7 +987,7 @@ const app = createApp({
     onUnmounted(() => { stopLogPoll(); stopRunPolling(); });
 
     return {
-      user, loading, acting, loginError, loginForm, authBackend, ssoLogin, showLocalLogin, tab, isAdmin,
+      user, loading, acting, triggeringTasks, triggeringRun, taskTriggerBusy, loginError, loginForm, authBackend, ssoLogin, showLocalLogin, tab, isAdmin,
       pendingProp, loadPendingProp, dismissProp,
       projects, loadingProjects, runs, loadingRuns, runFilter,
       harnesses, components, componentList, prompts, taskTypes,

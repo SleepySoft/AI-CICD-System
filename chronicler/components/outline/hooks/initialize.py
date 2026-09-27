@@ -41,6 +41,7 @@ def apply():
     domain = os.environ.get("BASE_DOMAIN", "localhost")
     root = f"http://kb.{domain}"
     values = {"clientId": "outline", "enabled": True, "protocol": "openid-connect",
+              "rootUrl": root + "/", "baseUrl": root + "/",
               "publicClient": False, "standardFlowEnabled": True, "directAccessGrantsEnabled": False,
               "secret": os.environ["OIDC_OUTLINE_SECRET"],
               "redirectUris": [root + "/auth/oidc.callback", root + "/*"],

@@ -56,7 +56,7 @@ async def update(pid: int, body: ProjectPatch, user: dict = Depends(require_admi
 
 
 @router.post("/{pid}/reset-clone")
-async def reset_clone(pid: int, user: dict = Depends(require_admin)):
+def reset_clone(pid: int, user: dict = Depends(require_admin)):
     result = projects.reset_clone(pid)
     audit(user["username"], "project.reset_clone", projects.get_project(pid)["name"])
     return result
@@ -77,7 +77,7 @@ async def delete(pid: int, user: dict = Depends(require_admin)):
 
 
 @router.post("/{pid}/sync")
-async def sync(pid: int, user: dict = Depends(require_admin)):
+def sync(pid: int, user: dict = Depends(require_admin)):
     result = projects.sync_project(pid)
     audit(user["username"], "project.sync", projects.get_project(pid)["name"])
     return result

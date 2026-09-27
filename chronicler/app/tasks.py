@@ -73,9 +73,15 @@ def list_tasks(project_id: int | None = None) -> list[dict]:
         rows = q("SELECT * FROM task_defs WHERE project_id=? ORDER BY id", (project_id,))
     else:
         rows = q("SELECT * FROM task_defs ORDER BY project_id, id")
+    active = {(r["project_id"], r["task_type"]): r for r in
+              q("SELECT id, project_id, task_type, status FROM task_runs"
+                " WHERE status IN ('queued','running') ORDER BY id")}
     for row in rows:
         row["change_probes"] = change_detection.normalize_probes(row.get("change_probes"))
         row["change_policy"] = row.get("change_policy") or "always"
+        run = active.get((row["project_id"], row["task_type"]))
+        row["active_run_id"] = run["id"] if run else None
+        row["active_run_status"] = run["status"] if run else None
     return rows
 
 
@@ -108,7 +114,7 @@ def delete_project_tasks(project_id: int):
     execute("DELETE FROM task_defs WHERE project_id=?", (project_id,))
 
 
-def trigger_task(tid: int, actor: str, extra_prompt: str = "") -> dict:
+def trigger_task(tid: int, actor: str, extra_prompt: str = "", request_key: str = "") -> dict:
     t = get_task(tid)
     registry.get_task_type(t["task_type"])
     # prompt 覆盖：工程任务自定义 > 全局模板（版本化 hash 由 runner 记录）
@@ -116,18 +122,18 @@ def trigger_task(tid: int, actor: str, extra_prompt: str = "") -> dict:
         return runner.trigger(t["project_id"], t["task_type"], actor, extra_prompt,
                               prompt_override=t["prompt_override"], cwd_override=t.get("cwd", ""),
                               harness_override=t.get("harness", ""), task_id=t["id"],
-                              change_policy=t["change_policy"], change_probes=t["change_probes"])
+                              change_policy=t["change_policy"], change_probes=t["change_probes"],
+                              request_key=request_key)
     return runner.trigger(t["project_id"], t["task_type"], actor, extra_prompt,
                           cwd_override=t.get("cwd", ""), harness_override=t.get("harness", ""),
                           task_id=t["id"], change_policy=t["change_policy"],
-                          change_probes=t["change_probes"])
+                          change_probes=t["change_probes"], request_key=request_key)
 
 
 def preview_task_changes(tid: int) -> dict:
     t = get_task(tid)
     registry.get_task_type(t["task_type"])
-    projects.sync_project(t["project_id"])
-    return change_detection.capture(t["project_id"], t["task_type"], t["id"], t["change_probes"])
+    return runner.preview_changes(t["project_id"], t["task_type"], t["id"], t["change_probes"])
 
 
 # ---------- cron 调度（简单轮询，每分钟） ----------
@@ -147,22 +153,21 @@ def scheduler_tick():
         if t["task_type"] not in PRESET_TASKS and t["task_type"] != "custom":
             continue
         try:
-            cron = croniter.croniter(t["schedule_cron"], now - 120)
+            cron = croniter.croniter(t["schedule_cron"], now + 0.001)
             prev_fire = cron.get_prev()
             # 上次应触发时刻在 90 秒内 → 触发（容忍调度抖动）
             if prev_fire and now - prev_fire < 90:
-                last = q1("SELECT MAX(started_at) AS last FROM task_runs"
-                          " WHERE project_id=? AND task_type=? AND trigger='cron'",
-                          (t["project_id"], t["task_type"]))
-                if last and last["last"] and now - last["last"] < 90:
-                    continue  # 刚跑过
                 try:
                     runner.trigger(t["project_id"], t["task_type"], "cron",
                                    cwd_override=t.get("cwd", ""), harness_override=t.get("harness", ""),
                                    task_id=t["id"], change_policy=t.get("change_policy") or "always",
                                    change_probes=t.get("change_probes") or "[]", allow_skip=True,
-                                   trigger_kind="cron", prompt_override=t.get("prompt_override") or "")
+                                   trigger_kind="cron", prompt_override=t.get("prompt_override") or "",
+                                   request_key=f"cron:{t['id']}:{int(prev_fire)}")
                 except Exception as exc:  # noqa: BLE001 - 自动触发失败也必须落 Run
+                    from fastapi import HTTPException
+                    if isinstance(exc, HTTPException) and exc.status_code == 409:
+                        continue  # 已有活动 Run，不产生虚假的前置失败记录。
                     runner.record_preflight_failure(t, "cron", exc)
         except Exception:
             continue  # cron 表达式非法/调度计算失败，尚未形成一次有效触发

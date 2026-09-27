@@ -64,6 +64,8 @@ CREATE TABLE IF NOT EXISTS task_runs (
     publication TEXT DEFAULT '{}',               -- C 段：发布策略/分支/push 状态（FR-MGR-026）
     prompt_text TEXT DEFAULT '',                 -- A 段：仅 source Profile 保存渲染全文；sealed 为空
     created_by TEXT DEFAULT '',
+    request_key TEXT DEFAULT '', request_hash TEXT DEFAULT '',
+    queued_at REAL,
     started_at REAL, finished_at REAL
 );
 CREATE TABLE IF NOT EXISTS audit_log (
@@ -128,6 +130,9 @@ def _migrate():
         ("runner_env", "TEXT DEFAULT ''"),
         ("artifacts", "TEXT DEFAULT '[]'"),
         ("publication", "TEXT DEFAULT '{}'"),
+        ("request_key", "TEXT DEFAULT ''"),
+        ("request_hash", "TEXT DEFAULT ''"),
+        ("queued_at", "REAL"),
     ):
         if col not in {r["name"] for r in q("PRAGMA table_info(task_runs)")}:
             db().execute(f"ALTER TABLE task_runs ADD COLUMN {col} {ddl}")
@@ -152,6 +157,8 @@ def _migrate():
                      " REFERENCES task_defs(id) ON DELETE SET NULL")
     if "prompt_text" not in {r["name"] for r in q("PRAGMA table_info(task_runs)")}:
         db().execute("ALTER TABLE task_runs ADD COLUMN prompt_text TEXT DEFAULT ''")
+    db().execute("CREATE UNIQUE INDEX IF NOT EXISTS run_request_key"
+                 " ON task_runs(created_by, request_key) WHERE request_key != ''")
     db().commit()
 
 

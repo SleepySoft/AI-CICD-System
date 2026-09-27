@@ -1,6 +1,6 @@
 # Runbook: 组件测试（沙箱 / 巡检 / 漂移审计）
 
-> 版本：v1.0 · 日期：2026-09-16 · 状态：生效
+> 版本：v1.1 · 日期：2026-09-27 · 状态：生效
 > 适用：Windows 或 WSL，dockerd 可用；生产巡检要求栈已部署
 > 关联：机制原理 [how/sandbox-testing.md](../how/sandbox-testing.md)；决策 [ADR-0048](../adr/0048-sandbox-isolated-testing.md)；
 > 脚本：scripts/verify-auth.py、scripts/audit-secret-drift.py、scripts/verify-pages.py
@@ -36,6 +36,22 @@
   `docker ps -a --filter name=chronicle-sandbox` 应为空。
 - 生产无损确认：沙箱运行期间 `docker ps --format "{{.Names}} {{.Status}}" | findstr aisystem`
   的生产容器状态与启动时间不变。
+
+## 任务链路回归
+
+使用临时 SQLite 与工作区运行接收、重复请求、慢请求、排队与锁保护测试，不启动真实 agent：
+
+```powershell
+chronicler\.venv-win\Scripts\python.exe -m unittest chronicler.tests.test_task_lifecycle chronicler.tests.test_change_detection chronicler.tests.test_runtime_profile chronicler.tests.test_projects_sync chronicler.tests.test_oidc_navigation -v
+```
+
+前端异步回归脚本为 `chronicler/tests/frontend_lifecycle.js`，可用 Node 执行：
+
+```powershell
+node -e "require('./chronicler/tests/frontend_lifecycle.js')(require('fs').readFileSync('chronicler/app/static/app.js','utf8')).then(console.log).catch(e=>{console.error(e);process.exitCode=1})"
+```
+
+生产巡检的 Docker 状态查询失败属于检查失败；不能将权限不足当成「组件未运行」而跳过。
 
 ## 常见问题
 

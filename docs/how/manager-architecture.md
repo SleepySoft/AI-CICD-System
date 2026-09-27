@@ -1,6 +1,6 @@
 # Manager 架构与执行机制
 
-> 版本：v1.7 · 日期：2026-09-21 · 状态：生效
+> 版本：v1.8 · 日期：2026-09-27 · 状态：生效
 > 定位：Manager 的内部实现机制（架构、执行管线、CI 集成、部署形态）；规格契约见 ../what/manager.md
 > 关联需求：FR-MGR-003 ~ FR-MGR-031
 
@@ -41,23 +41,30 @@ FastAPI + SQLAlchemy 2 + Alembic（异步、自带 OpenAPI）；APScheduler（As
 
 ```
 触发(cron/手动/webhook)
-  → 同步代码：每次 trigger 前 fetch/checkout/reset 到配置分支；首次 clone
+  → 原子登记 queued Run 并返回 Run ID（接收时间 queued_at）；重复请求复用原 Run
+  → 等待 harness / 工程仓 / shadow 仓锁，阶段为 waiting
+  → 阶段 preparing：同步代码 fetch/checkout/reset 到配置分支；首次 clone
   → 执行 Git + command probes，生成有效输入快照并与上次成功 Run 比较
-  → 自动触发按 change_policy 决定 queued 或 skipped；手动触发只提示不跳过
-  → 创建 Run，冻结基线/增量、prompt 版本、CI 上下文
+  → 自动触发按 change_policy 决定继续或将同一 Run 标记 skipped；手动触发只提示不跳过
+  → 更新同一 Run，冻结基线/增量、prompt 版本、CI 上下文
   → collector 采集上下文（diff/文档/需求/CI 结果），超限自动摘要分片
   → 渲染 prompt（模板变量替换 + 已配置资源能力(skill)的访问途径注入，FR-MGR-015）
   → 宿主直起 harness 进程（ADR-0021：命令 + 参数模板来自 agent_profile；
        LLM_API_KEY 等经环境变量注入；仓库为宿主真实路径，无挂载翻译；
        不可信/CI 任务可选 terminal-runtime 沙箱执行）
-  → 流式回传日志(SSE)；超时/异常 → Run(failed) + 错误归因(网络/配额/解析失败)
+  → 拉起进程前写入 running 与 started_at；前端定时读取日志，超时终止进程树
+  → 超时/异常 → 同一 Run(failed) + 错误归因(网络/配额/解析失败)
   → output_parser 解析（约定产出为 frontmatter+Markdown，或 JSON 指令块）
   → persister：报告/文档/知识候选写入 project_shadow 工作树并登记产物
   → Git publisher：当前由 Chronicler 以 direct 提交并推送 main；review/local 后续扩展
   → 通知：门户角标 + 可选 webhook（企业微信/邮件，后置）
 ```
 
-并发控制：全局信号量（默认 2 个并发 Run）+ 每工程代码仓串行锁 + 每 shadow 仓串行锁。shadow 锁覆盖分支准备、Agent 写入、提交与工作树恢复，避免不同 harness 并发切换同一工作树；harness 自身仍可因全局状态另设串行锁。
+当前并发控制：按 harness → 工程仓 → shadow 仓的固定顺序取得进程内锁，从前置检查持有到发布结束。同 harness 或同工程串行执行，不同工程与不同 harness 可并行；当前没有全局并发上限。工程同步和重置遇到其它线程占用工作树时返回 409。锁与活跃 worker 注册表仅覆盖单个 supervisor 进程，部署须保持单实例。
+
+接收时在 SQLite 短事务中检查请求标识与活动 Run。同用户的相同 Idempotency-Key 与参数复用原记录（即使已结束）；同标识不同参数返回 409。同工程、同任务类型已有 queued/running 时，其它新请求返回 409。cron 请求标识使用任务 ID 与应触发时刻，重复扫描同一调度时刻不会重复执行。前置失败更新已接收的记录；过期清扫跳过仍有活跃 worker 的等待或执行任务。预览及 Git 路由使用 FastAPI 线程池，避免阻塞事件循环和执行记录查询。
+
+桌面与移动端在提交期间禁用重复操作，网络重试复用请求标识。列表与日志按请求版本丢弃迟到响应，轮询等待上轮结束再启动下一轮。操作说明见 [手动启动与调试](../runbooks/dev-debug.md#任务触发与执行记录)。
 
 任务解析（ADR-0050）：`registry.TASK_TYPES` 只包含 `operational_reporter` 与 `project_cognitive_maintainer`，记录 `name/prompt/mode/desc`；runner 在冻结 Run 快照前解析任务，将 `prompt_name`、`task_mode`、`repo_head` 与 `ci_context` 注入模板。配置 API 分别提供 task-types 和 prompts，前端因此显示 2 个可执行任务与 2 个可编辑模板。启动迁移删除旧内置 task_def（保留 `custom`），并把其历史 Run 的 task_id 置空；触发、预览和调度都会拒绝未知任务类型。历史 Run 的 JSON 档案按 dict/list 安全校验后展示，避免旧数据破坏只读页面。
 

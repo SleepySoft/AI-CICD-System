@@ -5,6 +5,8 @@ import re
 import shutil
 import stat
 import subprocess
+import threading
+from functools import wraps
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -15,6 +17,27 @@ from .runtime import PROFILE
 
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 SHADOW_MAIN_BRANCH = "main"
+_repo_locks = {}
+_repo_locks_guard = threading.Lock()
+
+
+def repo_lock(project_id: int):
+    """执行、预览、同步与重置共享同一工程锁，保护正在使用的工作树。"""
+    with _repo_locks_guard:
+        return _repo_locks.setdefault(project_id, threading.RLock())
+
+
+def _serialize_repo(function):
+    @wraps(function)
+    def wrapped(pid, *args, **kwargs):
+        lock = repo_lock(pid)
+        if not lock.acquire(blocking=False):
+            raise HTTPException(status_code=409, detail="工程工作区正在使用，请待任务结束后重试")
+        try:
+            return function(pid, *args, **kwargs)
+        finally:
+            lock.release()
+    return wrapped
 
 
 def repo_dir(project_id: int):
@@ -70,6 +93,7 @@ def update_project(pid: int, fields: dict) -> dict:
     return get_project(pid)
 
 
+@_serialize_repo
 def sync_project(pid: int) -> dict:
     """clone 或 fetch；本地路径/文件协议同样支持（git_url 可为 /path 或 file://）
     成功记录 last_synced_at 并清空 last_sync_error；失败记录错误后抛给 API（工程视图展示同步问题）"""
@@ -161,6 +185,7 @@ def _last_commit(pid: int) -> str | None:
     return {"hash": parts[0], "date": parts[1], "subject": parts[2]}
 
 
+@_serialize_repo
 def reset_clone(pid: int) -> dict:
     """删除工作空间克隆并重新拉取（克隆损坏/远端 force push/工程换址场景）"""
     get_project(pid)

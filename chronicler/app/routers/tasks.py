@@ -1,5 +1,5 @@
 """任务定义路由：CRUD + 触发 + 启停（FR-MGR-004 前置形态）"""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel, Field
 
 from .. import tasks
@@ -53,7 +53,7 @@ async def detail(tid: int, user: dict = Depends(current_user)):
 
 
 @router.get("/{tid}/changes")
-async def changes(tid: int, user: dict = Depends(require_admin)):
+def changes(tid: int, user: dict = Depends(require_admin)):
     return tasks.preview_task_changes(tid)
 
 
@@ -72,7 +72,9 @@ async def delete(tid: int, user: dict = Depends(require_admin)):
 
 
 @router.post("/{tid}/trigger")
-async def trigger(tid: int, user: dict = Depends(require_admin)):
-    run = tasks.trigger_task(tid, user["username"])
-    audit(user["username"], "task.trigger", f"task#{tid}->run#{run['id']}")
+def trigger(tid: int, user: dict = Depends(require_admin),
+            request_key: str = Header(default="", alias="Idempotency-Key", max_length=128)):
+    run = tasks.trigger_task(tid, user["username"], request_key=request_key)
+    if not run.get("reused"):
+        audit(user["username"], "task.trigger", f"task#{tid}->run#{run['id']}")
     return run

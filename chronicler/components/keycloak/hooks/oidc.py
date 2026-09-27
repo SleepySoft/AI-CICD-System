@@ -83,6 +83,7 @@ def _upsert_client(client_id: str, secret: str, base_url: str, callback_path: st
     if not callback_path.startswith("/"):
         callback_path = "/" + callback_path
     values = {"clientId": client_id, "enabled": True, "protocol": "openid-connect",
+              "rootUrl": base + "/", "baseUrl": base + "/",
               "publicClient": False, "standardFlowEnabled": True,
               "directAccessGrantsEnabled": False, "secret": secret,
               "redirectUris": [base + callback_path, base + "/*"],

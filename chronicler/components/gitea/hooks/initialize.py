@@ -35,6 +35,7 @@ def configure_oidc_client():
     domain = os.environ.get("BASE_DOMAIN", "localhost")
     root = f"http://git.{domain}"
     values = {"clientId": "gitea", "enabled": True, "protocol": "openid-connect",
+              "rootUrl": root + "/", "baseUrl": root + "/",
               "publicClient": False, "standardFlowEnabled": True, "directAccessGrantsEnabled": False,
               "secret": os.environ["OIDC_GITEA_SECRET"],
               "redirectUris": [root + "/user/oauth2/keycloak/callback", root + "/*"],

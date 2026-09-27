@@ -122,7 +122,10 @@ def main():
         import subprocess
         st = subprocess.run(["docker", "inspect", "-f", "{{.State.Status}}",
                              plugin.get("container", "")],
-                            capture_output=True, text=True)
+                            capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if st.returncode != 0:
+            report(name, False, "无法读取容器状态，请检查 Docker 权限与连接")
+            continue
         if st.stdout.strip() != "running":
             report(f"{name}", True, "容器未运行（autostart 外/未部署）", skip=True)
             continue

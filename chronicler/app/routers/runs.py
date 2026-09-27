@@ -1,7 +1,7 @@
 """任务/Run 路由：触发仅 admin；查询与日志全员可读（FR-MGR-005）"""
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
@@ -26,22 +26,24 @@ async def list_runs(project_id: int | None = None, user: dict = Depends(current_
 
 
 @router.post("/trigger")
-async def trigger(body: TriggerBody, user: dict = Depends(require_admin)):
+def trigger(body: TriggerBody, user: dict = Depends(require_admin),
+            request_key: str = Header(default="", alias="Idempotency-Key", max_length=128)):
     try:
-        run = runner.trigger(body.project_id, body.task_type, user["username"], body.extra_prompt)
+        run = runner.trigger(body.project_id, body.task_type, user["username"], body.extra_prompt,
+                             request_key=request_key)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
-    audit(user["username"], "run.trigger", f"run#{run['id']}", body.task_type)
+    if not run.get("reused"):
+        audit(user["username"], "run.trigger", f"run#{run['id']}", body.task_type)
     return run
 
 
 @router.get("/change-preview")
-async def change_preview(project_id: int, task_type: str,
+def change_preview(project_id: int, task_type: str,
                          user: dict = Depends(require_admin)):
-    from .. import change_detection, projects, registry
-    registry.get_task_type(task_type)
-    projects.sync_project(project_id)
-    return change_detection.capture(project_id, task_type)
+    return runner.preview_changes(project_id, task_type)
 
 
 @router.get("/{run_id}")

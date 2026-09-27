@@ -1,7 +1,6 @@
 import asyncio
 import subprocess
 import tempfile
-import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -41,12 +40,16 @@ class RuntimeProfileTest(unittest.TestCase):
                     db.init()
                 project = projects.create_project("sealed", str(source), default_branch="main",
                                                   shadow_repo=str(shadow))
-                no_start_threading = types.SimpleNamespace(
-                    Thread=lambda *args, **kwargs: types.SimpleNamespace(start=lambda: None))
                 with patch.object(runner, "PROFILE", sealed), \
-                    patch.object(runner, "threading", no_start_threading):
+                    patch.object(runner, "_run"):
                     run = runner.trigger(project["id"], "operational_reporter", "test",
                                          harness_override="dummy")
+                    with runner._workers_guard:
+                        worker = runner._workers.get(run["id"])
+                    if worker:
+                        worker.join(10)
+                        self.assertFalse(worker.is_alive())
+                    run = runner.get_run(run["id"])
                 stored = db.q1("SELECT prompt_text FROM task_runs WHERE id=?", (run["id"],))
                 snapshot = run["input_snapshot"]
                 self.assertEqual("", stored["prompt_text"])
@@ -55,8 +58,14 @@ class RuntimeProfileTest(unittest.TestCase):
                 self.assertTrue(snapshot["prompt_hash"].startswith("sha256:"))
 
                 harness = registry.get_harness("dummy")
+                def execute_started(*args):
+                    active = runner.get_run(run["id"])
+                    self.assertEqual(active["status"], "running")
+                    self.assertIsNotNone(active["started_at"])
+                    self.assertGreaterEqual(active["started_at"], active["queued_at"])
+                    return 1, ""
                 with patch.object(runner, "PROFILE", sealed), \
-                        patch.object(runner, "_exec", return_value=(1, "")):
+                        patch.object(runner, "_exec", side_effect=execute_started):
                     runner._run(run["id"], harness, "TOPSECRET")
                 self.assertFalse((Cfg.runs_dir() / str(run["id"]) / "prompt.md").exists())
 

@@ -1,6 +1,6 @@
 # Runbook: Keycloak 用户与权限管理
 
-> 版本：v1.1 · 日期：2026-09-27 · 状态：生效
+> 版本：v1.2 · 日期：2026-09-27 · 状态：生效
 > 适用：可选底座已起（keycloak 组件运行中）；操作者为 Keycloak 管理员（`.env` 的 `KEYCLOAK_ADMIN/KEYCLOAK_ADMIN_PASSWORD`）
 > 关联：chronicler/components/keycloak/、scripts/wire-sso.sh、docs/how/sso-wiring.md；需求 FR-ENV-005、UR-006、FR-MGR-017
 
@@ -29,6 +29,24 @@
 操作步骤、临时密码与永久密码的区别见 [账号密码重置](password-reset.md)。
 
 ## 验证
+
+### 登录成功却停在提示页
+
+1. 记录停留页的域名、路径与提示文字；分享截图或地址时遮住 code、state、session_code 等参数。
+   从应用登录入口重新开始，避免刷新或收藏带认证参数的旧页面。
+2. 在 Keycloak 管理台选择 `aisystem` → Clients → 目标客户端 → Settings。
+   检查 Home URL 指向应用首页：Gitea 默认 `http://git.localhost/`，
+   Outline 默认 `http://kb.localhost/`；自定义部署填写实际入口地址。
+   Root URL 同样填写应用入口，回调白名单保留原配置。
+3. 更新后的组件初始化 hook 会幂等补齐 Root URL / Home URL；存量部署需要重新执行对应组件的
+   初始化配置，或按第 2 步直接修正客户端。仅重启容器不会自动改写存量客户端记录。
+4. 使用新标签页从 Gitea 登录入口开始，正常认证应回到 Gitea；部分 Keycloak 信息或错误页
+   应能显示「返回应用」链接。Home URL 修正只能补齐返回入口，不能替代应用的 OIDC 回调和会话校验。
+5. 若仍只有「关闭窗口」提示，保留第 1 步现场继续排查认证会话是否已完成或过期。
+   用 [生产登录巡检](testing.md) 验证会话；检查失败或全部 SKIP 不代表登录链路验证成功。
+
+返回链接依据 Keycloak 的 [默认信息页模板](https://github.com/keycloak/keycloak/blob/26.0.0/themes/src/main/resources/theme/base/login/info.ftl)；
+缺少客户端上下文或页面主动隐藏链接时，填写 Home URL 也不会显示返回入口。
 
 - 新用户能登录 Keycloak 接入的系统（Gitea/Outline 等，见 ../what/environment.md）。
 - Chronicler 侧：仅 OIDC 后端时，新用户首次「通过 Keycloak 统一登录」自动建档并按组映射角色（boss→admin、其余→user）；local 后端下 Chronicler 本地账号独立管理（`python -m chronicler create-admin`），与 Keycloak 用户无关。

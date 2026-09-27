@@ -9,8 +9,10 @@ harness 命令形式可配置（FR-MGR-019）：prompt 经 {prompt_file} 文件�
 stdout 捕获（report_mode=stdout，如 kimi --print）产出；cwd 可选工程仓库/shadow 库。
 """
 import hashlib
+import json
 import os
 import shlex
+import signal
 import subprocess
 import threading
 import time
@@ -20,6 +22,7 @@ from fastapi import HTTPException
 
 from . import change_detection, projects, registry
 from .config import Cfg
+from . import db as database
 from .db import audit, dumps, execute, loads, q, q1
 from .prompt_catalog import catalog
 from .prompt_context import build_prompt_context, render_prompt
@@ -27,6 +30,9 @@ from .runtime import PROFILE
 
 _harness_locks: dict[str, threading.Lock] = {}
 _shadow_locks: dict[int, threading.Lock] = {}
+_locks_guard = threading.Lock()
+_workers_guard = threading.Lock()
+_workers: dict[int, threading.Thread] = {}
 STALE_QUEUE_GRACE_SEC = 600    # queued 超过 10 分钟仍未开始 = 悬挂
 STALE_RUN_GRACE_SEC = 120      # running 超过 harness 超时后再宽限 2 分钟
 
@@ -44,16 +50,14 @@ def _json_list(value) -> list:
 
 def _harness_lock(name: str) -> threading.Lock:
     """同 harness 串行锁：kimi 等 CLI 有全局日志文件锁，并发实例会互抢（实测 WinError 32）"""
-    if name not in _harness_locks:
-        _harness_locks[name] = threading.Lock()
-    return _harness_locks[name]
+    with _locks_guard:
+        return _harness_locks.setdefault(name, threading.RLock())
 
 
 def _shadow_lock(project_id: int) -> threading.Lock:
     """同一 project_shadow 串行，锁覆盖 Agent 写入、提交和发布。"""
-    if project_id not in _shadow_locks:
-        _shadow_locks[project_id] = threading.Lock()
-    return _shadow_locks[project_id]
+    with _locks_guard:
+        return _shadow_locks.setdefault(project_id, threading.RLock())
 
 
 def _q(path: str) -> str:
@@ -97,7 +101,9 @@ def _exec(command: str, cwd: str, env: dict, stdin_data: str | None,
     env.setdefault("PYTHONIOENCODING", "utf-8")
     proc = subprocess.Popen(command, shell=True, cwd=cwd, env=env,
                             stdin=subprocess.PIPE if stdin_data is not None else None,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            start_new_session=os.name != "nt",
+                            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0)
     captured: list[str] = []
 
     def _drain():
@@ -110,21 +116,49 @@ def _exec(command: str, cwd: str, env: dict, stdin_data: str | None,
 
     reader = threading.Thread(target=_drain, daemon=True)
     reader.start()
-    if stdin_data is not None:
+    def _write_input():
         try:
             proc.stdin.write(stdin_data.encode("utf-8"))
-        except (BrokenPipeError, ValueError):
+        except (BrokenPipeError, OSError, ValueError):
             pass
         finally:
-            proc.stdin.close()
+            try:
+                proc.stdin.close()
+            except (BrokenPipeError, OSError, ValueError):
+                pass
+    writer = None
+    if stdin_data is not None:
+        writer = threading.Thread(target=_write_input, daemon=True)
+        writer.start()
     try:
         proc.wait(timeout=timeout_sec)
     except subprocess.TimeoutExpired:
-        proc.kill()
+        # shell=True 的 proc.kill() 仅杀 shell；残留 CLI 会继续改工作树。
+        if os.name == "nt":
+            try:
+                stopped = subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                                         capture_output=True, timeout=30)
+                if stopped.returncode != 0 and proc.poll() is None:
+                    with open(log_file, "a", encoding="utf-8") as log:
+                        log.write("\n终止进程树失败，继续保护工作区并等待进程退出。\n")
+            except (OSError, subprocess.TimeoutExpired):
+                # 无法确认终止时保留 worker 与工作树锁，等待实际退出。
+                pass
+        else:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
         proc.wait()
-        reader.join(timeout=10)
+        reader.join()  # 后代仍持有 stdout 时不能提前释放工程锁。
+        if writer:
+            writer.join(timeout=10)
+        proc.stdout.close()
         raise
-    reader.join(timeout=10)
+    reader.join()
+    if writer:
+        writer.join(timeout=10)
+    proc.stdout.close()
     return proc.returncode, "".join(captured)
 
 
@@ -200,7 +234,11 @@ def sweep_stale_runs(now: float | None = None) -> int:
     now = time.time() if now is None else now
     marked = 0
     for r in q("SELECT * FROM task_runs WHERE status IN ('queued','running')"):
-        started = r.get("started_at") or now
+        with _workers_guard:
+            worker = _workers.get(r["id"])
+            if worker and worker.is_alive():
+                continue  # 锁等待/前置检查/执行线程仍存活，不能把它误判为悬挂。
+        started = r.get("started_at") or r.get("queued_at") or now
         snap = _json_dict(r.get("input_snapshot"))
         try:
             timeout = int(snap.get("harness_timeout") or 1800)
@@ -212,28 +250,144 @@ def sweep_stale_runs(now: float | None = None) -> int:
             stale = now - started > timeout + STALE_RUN_GRACE_SEC
         if not stale:
             continue
-        n = execute("UPDATE task_runs SET status='failed', error=?, error_class='悬挂',"
-                    " finished_at=? WHERE id=? AND status IN ('queued','running')",
+        cursor = database.db().execute("UPDATE task_runs SET status='failed', error=?, error_class='悬挂',"
+                    " finished_at=? WHERE id=? AND status=?",
                     ("状态悬挂：超过阈值仍未结束（进程可能被中断或 supervisor 重启），已自动标记失败",
-                     now, r["id"]))
-        if n:
+                     now, r["id"], r["status"]))
+        database.db().commit()
+        if cursor.rowcount:
             audit("supervisor", "run.stale", f"run#{r['id']}", f"{r['status']}->failed")
             marked += 1
     return marked
 
 
+def preview_changes(project_id, task_type, task_id=None, change_probes=None):
+    projects.get_project(project_id)
+    registry.get_task_type(task_type)
+    lock = projects.repo_lock(project_id)
+    if not lock.acquire(blocking=False):
+        return {"change_summary": {"state": "unknown", "repo_state": "unknown",
+                "probe_errors": ["工程正在执行任务，输入快照将在轮到本任务时生成"]}}
+    try:
+        projects.sync_project(project_id)
+        return change_detection.capture(project_id, task_type, task_id, change_probes)
+    finally:
+        lock.release()
+
+
 def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
             prompt_override: str = "", cwd_override: str = "", harness_override: str = "",
             task_id: int | None = None, change_policy: str = "always", change_probes=None,
-            allow_skip: bool = False, trigger_kind: str = "manual") -> dict:
+            allow_skip: bool = False, trigger_kind: str = "manual", request_key: str = "") -> dict:
+    """先原子登记 queued Run 并返回；同步、探针、渲染和执行由后台 worker 完成。"""
     project = projects.get_project(project_id)
     task_spec = registry.get_task_type(task_type)
+    harness_name = (harness_override or (project.get("overrides") or {}).get("harness")
+                    or registry.get_default_harness())
+    harness = registry.get_harness(harness_name)
+    if harness.get("session", "once") != "once":
+        raise HTTPException(status_code=422, detail="当前仅支持 once harness")
+    options = dict(extra_prompt=extra_prompt, prompt_override=prompt_override,
+                   cwd_override=cwd_override, harness_override=harness_override,
+                   task_id=task_id, change_policy=change_policy,
+                   change_probes=change_detection.normalize_probes(change_probes),
+                   allow_skip=allow_skip, trigger_kind=trigger_kind)
+    request_hash = hashlib.sha256(json.dumps(
+        {"project_id": project_id, "task_type": task_type, **options},
+        sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    connection = database.db()
+    # 事务只包含查询与登记，耗时前置操作不能占用数据库写锁。
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        existing = None
+        if request_key:
+            existing = connection.execute(
+                "SELECT id, request_hash FROM task_runs WHERE created_by=? AND request_key=?",
+                (actor, request_key)).fetchone()
+        if existing:
+            if existing["request_hash"] != request_hash:
+                raise HTTPException(status_code=409, detail="该请求标识已用于不同的任务参数")
+            run_id = existing["id"]
+        else:
+            active = connection.execute(
+                "SELECT id FROM task_runs WHERE project_id=? AND task_type=?"
+                " AND status IN ('queued','running') ORDER BY id DESC LIMIT 1",
+                (project_id, task_type)).fetchone()
+            if active:
+                raise HTTPException(status_code=409,
+                                    detail=f"该任务已有排队或运行中的 Run #{active['id']}，请查看执行记录")
+            cursor = connection.execute(
+                "INSERT INTO task_runs(task_id, project_id, task_type, status, trigger, harness,"
+                " prompt_version, input_snapshot, created_by, queued_at, runner_env, request_key, request_hash)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (task_id, project_id, task_type, "queued", trigger_kind, harness_name, "",
+                 dumps({"phase": "waiting"}), actor, time.time(), _runner_env(), request_key, request_hash))
+            run_id = cursor.lastrowid
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    if existing:
+        return {**get_run(run_id), "reused": True}
+    worker = threading.Thread(target=_worker,
+        args=(run_id, project, task_spec, harness_name, harness, options),
+        daemon=True, name=f"chronicler-run-{run_id}")
+    try:
+        with _workers_guard:
+            _workers[run_id] = worker
+            worker.start()
+    except Exception as error:
+        with _workers_guard:
+            _workers.pop(run_id, None)
+        _fail_run(run_id, error, preflight=True)
+        raise
+    return get_run(run_id)
+
+
+def _fail_run(run_id: int, error: Exception, *, preflight: bool = False):
+    if preflight:
+        # 组件凭据可能出现在异常中；前置失败只记录异常类型。
+        message, kind = f"任务前置检查失败：{type(error).__name__}", "前置检查"
+    else:
+        message = f"{type(error).__name__}: {error}"[:500]
+        kind = _classify_error(message)
+    execute("UPDATE task_runs SET status='failed', error=?, error_class=?, finished_at=?"
+            " WHERE id=? AND status IN ('queued','running')",
+            (message, kind, time.time(), run_id))
+    audit("supervisor", "run.failed", f"run#{run_id}", type(error).__name__)
+
+
+def _worker(run_id, project, task_spec, harness_name, harness, options):
+    prepared = False
+    try:
+        # 固定锁顺序；轮到该任务时才冻结快照，直至发布结束都保护工作树。
+        with _harness_lock(harness_name), projects.repo_lock(project["id"]), _shadow_lock(project["id"]):
+            if get_run(run_id)["status"] != "queued":
+                return
+            execute("UPDATE task_runs SET input_snapshot=? WHERE id=?",
+                    (dumps({"phase": "preparing"}), run_id))
+            result = _prepare_run(run_id, project, task_spec, harness_name, harness, **options)
+            if result is None:
+                return
+            prepared = True
+            prompt, cwd = result
+            _run(run_id, harness, prompt, cwd)
+    except Exception as error:
+        _fail_run(run_id, error, preflight=not prepared)
+    finally:
+        database.close()
+        with _workers_guard:
+            _workers.pop(run_id, None)
+
+
+def _prepare_run(run_id, project, task_spec, harness_name, harness, extra_prompt="",
+                 prompt_override="", cwd_override="", harness_override="", task_id=None,
+                 change_policy="always", change_probes=None, allow_skip=False, trigger_kind="manual"):
+    project_id, task_type = project["id"], task_spec["name"]
     projects.sync_project(project_id)
 
     overrides = project.get("overrides") or {}
     # harness 解析：任务定义覆盖 > 工程级覆盖 > 全局默认（FR-MGR-020）
-    harness_name = harness_override or overrides.get("harness") or registry.get_default_harness()
-    harness = registry.get_harness(harness_name)
     if harness.get("session", "once") != "once":
         raise RuntimeError(f"harness {harness_name} 声明为持久会话，v1 暂不支持（ADR-0021 TBD）")
     # 工作目录解析：任务定义覆盖（cwd_override）> harness 默认（cwd）> 工程仓库
@@ -278,14 +432,11 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
         "ci_context": ci_context,
         **change,
     }
-    started_at = time.time()
-    run_id = execute(
-        "INSERT INTO task_runs(task_id, project_id, task_type, status, trigger, harness, prompt_version,"
-        " input_snapshot, created_by, started_at, runner_env)"
-        " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        (task_id, project_id, task_type, "queued", trigger_kind, harness_name, prompt_version,
-         dumps(snapshot), actor, started_at, _runner_env()))
-    # prompt 在 run_id 分配后渲染（需要 {{report_file}}/{{prompt_file}} 等运行路径变量）
+    snapshot["phase"] = "preparing"
+    execute("UPDATE task_runs SET input_snapshot=?, prompt_version=? WHERE id=?",
+            (dumps(snapshot), prompt_version, run_id))
+    started_at = get_run(run_id)["queued_at"]
+    actor = get_run(run_id)["created_by"]
     run_dir = Cfg.runs_dir() / str(run_id)
     report_file = str(run_dir / "report.md")
     prompt = render_prompt(template, build_prompt_context(
@@ -320,10 +471,8 @@ def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
         execute("UPDATE task_runs SET status='skipped', error=?, error_class='无增量',"
                 " finished_at=? WHERE id=?",
                 (f"自动触发按 {change_policy} 策略跳过：无相关输入变化", time.time(), run_id))
-        return get_run(run_id)
-    threading.Thread(target=_run, args=(run_id, harness, prompt, cwd), daemon=True).start()
-    return get_run(run_id)
-
+        return None
+    return prompt, cwd
 
 def record_preflight_failure(task: dict, trigger_kind: str, error: Exception) -> dict:
     """自动触发进入 runner 前失败也保留 Run，避免调度器静默漏档。"""
@@ -369,9 +518,7 @@ def _run(run_id: int, harness: dict, prompt: str, cwd: str = "repo"):
     stdin_data = prompt if harness.get("stdin_prompt") else None
     capture_report = harness.get("report_mode") == "stdout"
 
-    execute("UPDATE task_runs SET status='running', log_path=? WHERE id=?",
-            (str(log_file), run_id))
-    with _harness_lock(harness["name"]), _shadow_lock(run["project_id"]):
+    with _harness_lock(harness["name"]), projects.repo_lock(run["project_id"]), _shadow_lock(run["project_id"]):
         try:
             publish_policy = run["input_snapshot"].get("publish_policy", "direct")
             if publish_policy != "direct":
@@ -379,6 +526,8 @@ def _run(run_id: int, harness: dict, prompt: str, cwd: str = "repo"):
             projects.prepare_shadow_direct(run["project_id"])
             with open(log_file, "w", encoding="utf-8") as log:
                 log.write(f"$ {command}\n\n")
+            execute("UPDATE task_runs SET status='running', started_at=?, log_path=?"
+                    " WHERE id=? AND status='queued'", (time.time(), str(log_file), run_id))
             returncode, stdout = _exec(command, cwd_path, env, stdin_data, log_file,
                                        int(harness.get("timeout_sec", 1800)))
             if capture_report and stdout.strip():
@@ -502,7 +651,7 @@ def get_run(run_id: int) -> dict:
 def list_runs(project_id: int | None = None, limit: int = 50) -> list[dict]:
     cols = ("id, task_id, project_id, task_type, status, trigger, harness, prompt_version, input_snapshot, log_path,"
             " report_path, error, error_class, runner_env, artifacts, publication, created_by,"
-            " started_at, finished_at")
+            " queued_at, started_at, finished_at")
     if project_id:
         rows = q(f"SELECT {cols} FROM task_runs WHERE project_id=? ORDER BY id DESC LIMIT ?",
                  (project_id, limit))
@@ -510,6 +659,7 @@ def list_runs(project_id: int | None = None, limit: int = 50) -> list[dict]:
         rows = q(f"SELECT {cols} FROM task_runs ORDER BY id DESC LIMIT ?", (limit,))
     for row in rows:
         snapshot = _json_dict(row.pop("input_snapshot"))
+        row["phase"] = snapshot.get("phase", "")
         row["baseline_run_id"] = snapshot.get("baseline_run_id")
         row["change_summary"] = snapshot.get("change_summary") or {}
         row["repo_head"] = snapshot.get("repo_head", "")

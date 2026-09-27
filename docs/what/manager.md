@@ -1,6 +1,6 @@
 # Chronicler（supervisor）规格（数据模型 / API / 任务框架 / 权限 / 页面）
 
-> 版本：v1.8 · 日期：2026-09-21 · 状态：生效
+> 版本：v1.9 · 日期：2026-09-27 · 状态：生效
 > 定位：Chronicler（原 Manager，宿主侧 supervisor，ADR-0020/0022）对外可见的契约与规格；内部机制（架构、执行管线、CI 集成）见 ../how/manager-architecture.md
 > 关联需求：FR-MGR-001 ~ FR-MGR-031、FR-TASK-002、FR-TASK-003、BR-008
 > v1 实现注记：存储 SQLite（ADR-0023），鉴权本地账密 admin/user（Keycloak 后端预留），agent 为宿主自装 harness（ADR-0021）；Git 发布已落 direct 基础框架（main 直接提交/推送，不建 PR），远端基线保护及 review/local 仍属规划
@@ -135,6 +135,10 @@ GET    /api/health                   供 Uptime Kuma
 ```
 
 ### 2.3 任务类型框架（TaskType Registry）
+
+当前触发接口 `POST /api/tasks/{id}/trigger`、`POST /api/runs/trigger` 接收后立即返回 Run，耗时检查在后台执行。可传 `Idempotency-Key` 请求头（最多 128 字符）；相同用户、相同标识、相同参数返回原 Run 并附 `reused: true`。标识与参数不匹配，或同工程同任务类型已有活动 Run 而使用新标识时，返回 409。
+
+`queued_at` 表示接收时间，`started_at` 在实际启动 harness 前写入，排队或准备期间为空。列表响应的 `phase` 为 `waiting` 或 `preparing`；任务列表的 `active_run_id`、`active_run_status` 指向同工程同任务类型的活动记录。实现机制见 [执行管线](../how/manager-architecture.md#23-agent-执行管线)。
 
 任务类型定义“何时运行、采用什么模式、产出进入哪里”，Prompt 定义 Agent 的职责和输出契约，两者通过 registry 显式映射（ADR-0050）。正式任务与正式 Prompt 一一对应，自定义任务仍可选择 Prompt。
 
