@@ -1,6 +1,6 @@
 schema_version: 2
 name: project_cognitive_maintainer
-version: 1.1.0
+version: 1.2.0
 title: 维护项目认知资产
 content_file: project_cognitive_maintainer.md
 variables:
@@ -10,6 +10,7 @@ variables:
   - shadow_source_baseline_commit
   - source_head_commit
   - run_date
+  - run_id
   - report_file
   - components
   - extra

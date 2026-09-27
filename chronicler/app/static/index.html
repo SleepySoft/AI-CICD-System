@@ -742,6 +742,7 @@
 
     <!-- 日志 -->
     <el-dialog v-model="showLog" :title="'任务 #' + logRunId + ' 日志'" width="80%" top="6vh" @close="stopLogPoll">
+      <el-alert v-if="logText.includes('\uFFFD')" type="warning" :closable="false" style="margin-bottom:10px" title="这份日志包含已损坏的历史编码字符，原始字符无法还原。修复编码环境后重跑可生成新的完整日志。"></el-alert>
       <pre class="log-view">{{ logText || '（暂无日志）' }}</pre>
     </el-dialog>
 

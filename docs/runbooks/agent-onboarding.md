@@ -1,6 +1,6 @@
 # Runbook: 接入一家新 Agent（用户自装 harness 模式）
 
-> 版本：v1.3 · 日期：2026-09-01 · 状态：生效
+> 版本：v1.4 · 日期：2026-09-27 · 状态：生效
 > 适用：supervisor（Chronicler）已在宿主运行（见 deploy.md 第二节），操作者为 admin 角色
 > 关联：chronicler/config/harness.yaml、ADR-0021（用户自装 harness）、ADR-0023（v1 仅 once 会话）、FR-MGR-019
 > 旧的 manager/agents.yaml + scripts/agents/*.sh 安装脚本体系已随 manager/ 删除，本文替代旧流程
@@ -59,7 +59,7 @@ bash scripts/verify-chronicler.sh   # supervisor 冒烟（含受保护 API 401 �
 | Run 报命令不存在 / CLI 不在 PATH（2026-08-27） | CLI 装在用户 venv/pipx，supervisor 进程 PATH 不含它 | `command_template` 写绝对路径（如 `/home/u/.local/bin/aider`） |
 | 密钥未生效（`${VAR}` 解析为空）（2026-08-27） | `${VAR}` 引用的是 supervisor 进程环境，非登录 shell 环境 | systemd 场景把变量写进仓库根 `.env`（unit 已配 `EnvironmentFile=-$REPO/.env`）；前台运行则先 `export VAR=...` 再启动 |
 | Run 成功但报告为空/未产出（2026-09-01） | harness 把回复打印到 stdout 而没写 `{report_file}` | 把该 harness 的 `report_mode` 设为 `stdout`（如 kimi）；或命令里加 `-o {report_file}`（如 codex） |
-| 任务日志/报告乱码（2026-09-01） | CLI 按本地编码（Windows GBK）输出 | runner 已改为二进制逐行解码（UTF-8→回落本地编码）后按 UTF-8 落盘，并默认注入 `PYTHONUTF8=1`；页面查看接口同样逐行归一解码。**已被旧版替换符（U+FFFD）写坏的历史日志无法恢复，需重跑该任务** |
+| 任务日志/报告乱码（2026-09-01、09-27） | CLI 本地编码输出，或 Agent 的 Windows PowerShell 已错误读取 UTF-8 文件/解码中文输出 | runner 逐行 UTF-8→系统本地编码回落并注入 Python UTF-8；上游 PowerShell 仍须修复文件、控制台、管道编码，见 [排障步骤](dev-debug.md#任务日志和工程说明乱码)。已写成 U+FFFD 或字面 `?` 的历史字符无法恢复 |
 | Run 一直显示"运行中"（2026-09-01） | 进程被中断/supervisor 重启/执行线程死亡，状态未落库 | 调度器每分钟做状态悬挂扫描：queued 超 10 分钟或 running 超过 harness 超时+2 分钟仍未结束 → 自动标记失败（error_class=悬挂）；历史悬挂记录在下次扫描时自动清理 |
 | 声明 `session: persistent` 的 harness 被拒执行（2026-08-27） | v1 仅支持一次性会话（ADR-0023） | 改回 `once`；persistent/resume 语义待后续版本（ADR-0021 TBD） |
 

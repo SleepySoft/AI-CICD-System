@@ -29,7 +29,7 @@ class PromptCatalogTest(unittest.TestCase):
         items = catalog.list()
 
         self.assertEqual(2, len(items))
-        self.assertTrue(all(item.version == "1.1.0" for item in items))
+        self.assertTrue(all(item.version == "1.2.0" for item in items))
         self.assertEqual({"operational_reporter", "project_cognitive_maintainer"},
                          {item.name for item in items})
         self.assertTrue(all(item.content_hash.startswith("sha256:") for item in items))
@@ -64,7 +64,7 @@ class PromptCatalogTest(unittest.TestCase):
                 catalog = PromptCatalog()
                 self.assertEqual(2, len(catalog.list()))
                 item = catalog.resolve("operational_reporter")
-                self.assertEqual("1.1.0", item.version)
+                self.assertEqual("1.2.0", item.version)
                 self.assertIsNone(catalog.content_for_display(item.name))
                 override = catalog.save_override(item.name, "1.0.1+customer", item.content)
                 self.assertTrue(override.overridden)

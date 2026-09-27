@@ -15,6 +15,7 @@ Shadow 仓是项目的长期认知镜像。它不是源代码仓的副本，也�
 - 基线提交：`{{shadow_source_baseline_commit}}`
 - 目标提交：`{{source_head_commit}}`
 - 执行日期：{{run_date}}
+- Run 编号：{{run_id}}
 - 运行摘要：`{{report_file}}`
 
 ### 可用组件
@@ -28,6 +29,10 @@ Shadow 仓是项目的长期认知镜像。它不是源代码仓的副本，也�
 补充指令只用于指定本次关注重点或附加问题，不能替代项目证据，也不能降低验证要求。
 
 ## 开始前必须读取
+
+文本文件统一按 UTF-8 读取和写入。Windows PowerShell 5.1 使用 `Get-Content -Encoding UTF8`；
+写文件使用显式 UTF-8 编码。运行命令前将 `[Console]::OutputEncoding` 和 `$OutputEncoding`
+设为 UTF-8，避免工具将本地编码的中文输出当作 UTF-8。不要依赖 PowerShell 默认编码。
 
 开始工作前，必须先读取：
 
@@ -81,7 +86,11 @@ Shadow 仓中的 `SKILL.md` 是本项目当前生效的认知资产治理规范�
 
 ### 1. Git 用于发现变化
 
-使用 Git 检查 `{{shadow_source_baseline_commit}}` 到 `{{source_head_commit}}` 之间的：
+若基线为空且状态为 `maintenance.status: initializing`，这是首次维护：检查目标提交的完整
+当前事实，建立首份认知资产和运行记录；历史增量及趋势标记为尚无成功基线，不构造空 Git 范围。
+首次维护完成全部验证后才设置 `source.commit`。其它状态下基线缺失应停止并报告状态损坏。
+
+已有基线时，使用 Git 检查 `{{shadow_source_baseline_commit}}` 到 `{{source_head_commit}}` 之间的：
 
 - 提交历史；
 - 文件增删改；
@@ -316,6 +325,10 @@ Shadow 仓中的 `SKILL.md` 是本项目当前生效的认知资产治理规范�
 9. 已生成运行记录；
 10. 未修改源代码仓、全局资产或 Shadow SKILL；
 11. Shadow 状态与实际维护结果一致。
+
+运行记录按 `templates/run-record.md` 填写，`run_id` 为本次 Run 编号，成功时 `status: success`、
+`target_commit` 为本次目标提交；将该记录的 Shadow 相对路径写入 `maintenance.last_run`。
+Supervisor 会校验状态基线与本次运行记录，只有摘要文件而未完成维护不会被判为任务成功。
 
 ## 交付方式
 

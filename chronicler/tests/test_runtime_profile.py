@@ -54,7 +54,7 @@ class RuntimeProfileTest(unittest.TestCase):
                 snapshot = run["input_snapshot"]
                 self.assertEqual("", stored["prompt_text"])
                 self.assertEqual("operational_reporter", snapshot["prompt_name"])
-                self.assertEqual("1.1.0", snapshot["prompt_version"])
+                self.assertEqual("1.2.0", snapshot["prompt_version"])
                 self.assertTrue(snapshot["prompt_hash"].startswith("sha256:"))
 
                 harness = registry.get_harness("dummy")
@@ -72,7 +72,7 @@ class RuntimeProfileTest(unittest.TestCase):
                 with patch.object(runs, "PROFILE", sealed):
                     prompt_info = asyncio.run(runs.prompt(run["id"], {"username": "test"}))
                 self.assertIn("name: operational_reporter", prompt_info)
-                self.assertIn("version: 1.1.0", prompt_info)
+                self.assertIn("version: 1.2.0", prompt_info)
                 self.assertNotIn("TOPSECRET", prompt_info)
             finally:
                 current = getattr(db._local, "conn", None)

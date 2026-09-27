@@ -61,6 +61,13 @@ def git(*args: str) -> subprocess.CompletedProcess:
 
 
 class ShadowTemplateTest(unittest.TestCase):
+    def setUp(self):
+        self.audit_patch = patch.object(projects, "record")
+        self.audit_patch.start()
+
+    def tearDown(self):
+        self.audit_patch.stop()
+
     def test_new_local_shadow_repo_is_initialized_from_template(self):
         with tempfile.TemporaryDirectory() as temp:
             dest = Path(temp) / "sample-shadow"
@@ -107,8 +114,45 @@ class ShadowTemplateTest(unittest.TestCase):
                 projects.ensure_shadow_repo(1)
 
             self.assertTrue((dest / "README.md").is_file())
-            self.assertFalse((dest / "SKILL.md").exists())
+            self.assertEqual("existing\n", (dest / "README.md").read_text(encoding="utf-8"))
+            self.assertTrue((dest / "SKILL.md").exists())
+            self.assertTrue((dest / ".cognitive-state.yaml").exists())
+            self.assertIn('commit: ""', (dest / ".cognitive-state.yaml").read_text(encoding="utf-8"))
+            previous_head = git("-C", str(dest), "rev-parse", "HEAD").stdout
+            with patch.object(projects, "get_project", return_value=project), patch.object(projects, "shadow_dir", return_value=dest):
+                projects.ensure_shadow_repo(1)
+            self.assertEqual(previous_head, git("-C", str(dest), "rev-parse", "HEAD").stdout)
+
+    def test_partial_governance_is_not_reinitialized(self):
+        with tempfile.TemporaryDirectory() as temp:
+            dest = Path(temp)
+            git("init", "-b", "main", str(dest))
+            (dest / "SKILL.md").write_text("custom rules\n", encoding="utf-8")
+            git("-C", str(dest), "add", "-A")
+            git("-C", str(dest), "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-m", "custom")
+            with self.assertRaisesRegex(RuntimeError, "治理资源不完整"):
+                projects._ensure_shadow_governance(dest, {"id": 1, "name": "sample"})
+            self.assertEqual("custom rules\n", (dest / "SKILL.md").read_text(encoding="utf-8"))
             self.assertFalse((dest / ".cognitive-state.yaml").exists())
+
+    def test_dirty_legacy_shadow_is_not_migrated(self):
+        with tempfile.TemporaryDirectory() as temp:
+            dest = Path(temp)
+            git("init", "-b", "main", str(dest))
+            (dest / "existing.md").write_text("local edits\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "未提交修改"):
+                projects._ensure_shadow_governance(dest, {"id": 1, "name": "sample"})
+            self.assertFalse((dest / "SKILL.md").exists())
+
+    def test_broken_shadow_git_cannot_escape_to_parent_repository(self):
+        with tempfile.TemporaryDirectory() as temp:
+            parent = Path(temp)
+            git("init", "-b", "main", str(parent))
+            dest = parent / "shadow"
+            (dest / ".git").mkdir(parents=True)
+            with self.assertRaisesRegex(RuntimeError, "独立 git 仓库"):
+                projects._ensure_shadow_governance(dest, {"id": 1, "name": "sample"})
+            self.assertFalse((dest / "SKILL.md").exists())
 
     def test_empty_remote_shadow_repo_is_initialized_from_template(self):
         with tempfile.TemporaryDirectory() as temp:

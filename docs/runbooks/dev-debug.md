@@ -1,6 +1,6 @@
 # Runbook: 手动启动与调试 Chronicler
 
-> 版本：v1.3 · 日期：2026-09-27 · 状态：生效
+> 版本：v1.4 · 日期：2026-09-27 · 状态：生效
 > 适用：本机（Windows Docker Desktop 或 WSL）开发/调试 supervisor 与底座
 > 关联：chronicler/（主入口 chronicler/__main__.py）、scripts/up.sh、ADR-0020/0023
 
@@ -84,6 +84,39 @@ bash scripts/verify-chronicler.sh    # WSL；Windows 用浏览器访问 http://1
 
 改动后重启 supervisor，并刷新桌面或移动页面。回归验证命令见
 [组件测试](testing.md#任务链路回归)。
+
+## 认知维护因 Shadow 治理资源缺失而停止
+
+旧版只在创建空 Shadow 仓库时复制治理模板；已有 `.git` 就直接返回。因此仓库存在不代表其中已有 `SKILL.md`、`.cognitive-state.yaml` 和治理模板，认知任务遇到这种历史仓库会按规则停止。
+
+新版准备流程会验证 Shadow 是独立 Git 仓库，并对工作区干净、同时缺少 `SKILL.md` 和状态文件的历史仓库补齐治理文件、提交迁移。已有文件和历史保持不变，基线保持空值，状态为 `initializing`，首次任务从当前源码事实建立认知。如果治理文件仅部分缺失，或工作区有未提交改动，准备流程会停止并报告原因；应先检查并恢复对应版本的资源，不要删除目录或虚构基线。
+
+```powershell
+git -C data/public/shadow/ai-cicd-system-shadow status --short
+Get-Content -Encoding UTF8 data/public/shadow/ai-cicd-system-shadow/.cognitive-state.yaml
+```
+
+内置 Codex harness 在 Shadow 工作目录使用 `workspace-write`，额外可写根目录清空，源码作为只读输入；源码同步由 supervisor 执行。认知维护成功还要求状态中的提交等于本次目标提交，`maintenance.last_run` 指向本次运行记录，记录的 `run_id`、`status: success` 和目标提交一致。只有停止摘要时保留报告，但运行标记失败。
+
+2026-09-27 修复工程 2 的历史 Shadow：原有 68 个文件内容不变，迁移提交 `e8b648a` 已推送；Run 27 因未完成维护修正为失败，原报告保留。操作前元数据备份在 `data/private/chronicler/repair-backups/20260927-151227/metadata.json`，变更写入审计。回滚治理迁移前应检查独立 Shadow 仓库并评审对应提交，不能删除整个目录。
+
+## 任务日志和工程说明乱码
+
+日志文件使用 UTF-8，不代表写入前的字符串没有损坏。Windows PowerShell 5.1 的文件读取编码、控制台输出编码和 `$OutputEncoding`（向原生命令传入管道文本）是不同设置。未指定编码读取 UTF-8 文件、用错误编码传递中文后，即使最终写成 UTF-8，内容仍可能已经变成问号或 U+FFFD。Python 的 UTF-8 设置不能单独控制 PowerShell。
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fix-powershell-utf8.ps1
+```
+
+脚本保留并备份现有 CurrentUserAllHosts profile，添加幂等的 UTF-8 设置，包括文件命令默认编码、控制台与管道编码、Python 子进程编码。执行后打开新终端；内置 Codex harness 已启用 shell profile。自定义命令使用 `-NoProfile` 时仍需自己显式设置编码，读取源码使用 `Get-Content -Encoding UTF8`。PowerShell 5.1 的默认 UTF-8 写入可能带 BOM，且换行可能为 CRLF；仓库文件仍须遵守 LF，可用 Python 显式按 UTF-8 和 LF 写入。
+
+```powershell
+chronicler/.venv-win/Scripts/python.exe -m unittest chronicler.tests.test_text_encoding chronicler.tests.test_shadow_template -q
+```
+
+历史日志中的 U+FFFD 或已存入数据库的问号无法仅靠切换编码还原。保留原日志，修复环境后重跑；工程说明应根据实际用途重新填写。本次工程 2 的说明在旧备份中也已是问号，因此重写为“GitHub 源码仓库（SSH 同步）”，未声称恢复原文。日志面板遇到 U+FFFD 会提示已有内容损坏。
+
+需要回滚 shell 设置时，将脚本打印的原始备份复制回 `$PROFILE.CurrentUserAllHosts`，然后打开新终端。重启 Chronicler 后，新的准备流程、harness 和完成校验才会完整生效。
 
 ## 常见问题
 

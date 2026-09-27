@@ -198,6 +198,11 @@ chronicler\.venv-win\Scripts\python.exe -m chronicler serve   # 主入口；首�
 - 前端资源已本地化（chronicler/app/static/vendor/，vue/element-plus/icons 版本钉死）：
   勿改回 CDN 引用（公司网络/代理下 unpkg 加载不稳，曾实测登录页渲染原始 {{ }}、
   图标按钮不可见但可点，2026-09-01）。图标按钮依赖 app.js 全局注册 ElementPlusIconsVue。
+- **旧 Shadow 治理资源与上游编码**（2026-09-27）：旧仓有 `.git` 不代表已具备认知治理模板。
+  `ensure_shadow_repo` 增补迁移干净旧仓，保留现有资产、基线为空；部分治理损坏须显式修复。
+  Codex 默认以 Shadow 为 workspace-write 根，源仓只读，Git 提交由 supervisor 完成。
+  Windows PowerShell 5.1 文件/输出/管道编码须统一，运行 `scripts/fix-powershell-utf8.ps1`；
+  已写坏的 `?`/U+FFFD 无法由 UTF-8 重读恢复。详见 `docs/runbooks/dev-debug.md`。
 
 ## 路线图（Manager）
 

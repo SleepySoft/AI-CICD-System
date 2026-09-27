@@ -47,8 +47,9 @@ harnesses:
       PYTHONIOENCODING: "utf-8"
     timeout_sec: 1800
   - name: codex
-    desc: OpenAI Codex CLI（exec 非交互；prompt 经 stdin，报告经 -o 写文件，read-only 沙箱）
-    command_template: "codex exec --skip-git-repo-check --sandbox read-only -C {repo_dir} -o {report_file}"
+    desc: OpenAI Codex CLI（Shadow 工作区可写，源仓只读；prompt 经 stdin，报告经 -o 写文件）
+    command_template: "codex exec --skip-git-repo-check --sandbox workspace-write -c sandbox_workspace_write.writable_roots=[] -c shell_environment_policy.experimental_use_profile=true -C {shadow_dir} -o {report_file}"
+    cwd: shadow
     stdin_prompt: true
     report_mode: file             # codex 用 -o 自己写报告文件
     session: once

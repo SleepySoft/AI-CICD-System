@@ -1,6 +1,6 @@
 # Manager 架构与执行机制
 
-> 版本：v1.8 · 日期：2026-09-27 · 状态：生效
+> 版本：v1.9 · 日期：2026-09-27 · 状态：生效
 > 定位：Manager 的内部实现机制（架构、执行管线、CI 集成、部署形态）；规格契约见 ../what/manager.md
 > 关联需求：FR-MGR-003 ~ FR-MGR-031
 
@@ -61,6 +61,19 @@ FastAPI + SQLAlchemy 2 + Alembic（异步、自带 OpenAPI）；APScheduler（As
 ```
 
 当前并发控制：按 harness → 工程仓 → shadow 仓的固定顺序取得进程内锁，从前置检查持有到发布结束。同 harness 或同工程串行执行，不同工程与不同 harness 可并行；当前没有全局并发上限。工程同步和重置遇到其它线程占用工作树时返回 409。锁与活跃 worker 注册表仅覆盖单个 supervisor 进程，部署须保持单实例。
+
+Shadow 准备在工程锁内验证 git toplevel 为目标自身，检查治理资源。全无 `SKILL.md` 与状态文件
+的干净旧仓复制缺失的内置文件，保留既有 README、文档、报告和模板；只暂存新增文件并提交迁移，
+基线不从旧报告推测。部分治理资源缺失、脏仓、clone 或 commit 失败都会阻止执行。
+已有治理契约不随中央模板自动覆盖升级。
+
+认知任务的 `_cognitive_completion_error` 校验 `source.commit` 与输入 `repo_head` 一致，
+`maintenance.last_run` 指向 Shadow 内文件，运行记录的 `run_id`、`status: success` 和目标提交
+与当前 Run 一致；未满足时报告和产物仍保留，Run 判失败。首次空基线按初始化全量事实维护处理。
+
+日志按 UTF-8 存盘，单行非 UTF-8 时回落 `locale.getencoding()`（不受 Python UTF-8 模式影响）。
+上游 Agent 的错误解码不能靠重新写 UTF-8 修复；Windows 配置修复见
+[调试手册](../runbooks/dev-debug.md#任务日志和工程说明乱码)。
 
 接收时在 SQLite 短事务中检查请求标识与活动 Run。同用户的相同 Idempotency-Key 与参数复用原记录（即使已结束）；同标识不同参数返回 409。同工程、同任务类型已有 queued/running 时，其它新请求返回 409。cron 请求标识使用任务 ID 与应触发时刻，重复扫描同一调度时刻不会重复执行。前置失败更新已接收的记录；过期清扫跳过仍有活跃 worker 的等待或执行任务。预览及 Git 路由使用 FastAPI 线程池，避免阻塞事件循环和执行记录查询。
 

@@ -14,6 +14,7 @@ from fastapi import HTTPException
 from .config import Cfg
 from .db import execute, loads, q, q1
 from .runtime import PROFILE
+from .auditing import record
 
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 SHADOW_MAIN_BRANCH = "main"
@@ -237,6 +238,7 @@ def shadow_dir(pid: int) -> Path:
     return Cfg.PUBLIC / "shadow" / f"{p['name']}-shadow"
 
 
+@_serialize_repo
 def ensure_shadow_repo(pid: int) -> Path:
     """建立或获取 shadow 库：指定 shadow_repo 则 clone；未指定则尝试 Gitea 自动建仓
     <工程名>-shadow（幂等）；Gitea 不可达时纯本地仓。新空仓使用内置 Cognitive Shadow
@@ -244,7 +246,10 @@ def ensure_shadow_repo(pid: int) -> Path:
     p = get_project(pid)
     dest = shadow_dir(pid)
     if (dest / ".git").is_dir():
+        _ensure_shadow_governance(dest, p)
         return dest
+    if dest.exists() and any(dest.iterdir()):
+        raise RuntimeError("Shadow 目录已有文件但不是独立仓库，已阻止初始化；请先检查目录")
     url = (p.get("shadow_repo") or "").strip()
     if not url:
         url = _auto_shadow_repo(p) or ""  # 建仓成功会回写 project.shadow_repo
@@ -253,35 +258,63 @@ def ensure_shadow_repo(pid: int) -> Path:
     if url:
         r = _git(["clone", url, str(dest)], timeout=300)
         if r.returncode != 0:
-            # clone 失败（如空仓 404）则本地初始化，推送时建仓
-            dest.mkdir(parents=True, exist_ok=True)
-            _git(["-C", str(dest), "init", "-b", SHADOW_MAIN_BRANCH])
+            raise RuntimeError("Shadow 克隆失败，已停止准备；请检查远端地址、访问权限和连接")
         else:
             head = _git(["-C", str(dest), "rev-parse", "--verify", "HEAD"])
             seed_template = head.returncode != 0
     else:
         dest.mkdir(parents=True, exist_ok=True)
-        _git(["-C", str(dest), "init", "-b", SHADOW_MAIN_BRANCH])
+        initialized = _git(["-C", str(dest), "init", "-b", SHADOW_MAIN_BRANCH])
+        if initialized.returncode:
+            raise RuntimeError("Shadow git 初始化失败")
 
     if seed_template:
         _initialize_shadow_project(dest, p)
+    _ensure_shadow_governance(dest, p)
     return dest
 
 
-def _initialize_shadow_project(dest: Path, project: dict) -> None:
+def _ensure_shadow_governance(dest: Path, project: dict) -> None:
+    """仅补齐尚未采用治理契约的旧仓；既有治理资源损坏时明确拒绝运行。"""
+    if not _is_own_repo(dest):
+        raise RuntimeError("Shadow 不是独立 git 仓库，已阻止操作")
+    template = PROFILE.resource_root / "assets" / "shadow-project"
+    required = [Path("SKILL.md"), Path(".cognitive-state.yaml"), Path("README.md")]
+    required.extend(p.relative_to(template) for p in (template / "templates").glob("*") if p.is_file())
+    missing = [str(path) for path in required if not (dest / path).is_file()]
+    if not missing:
+        return
+    if (dest / "SKILL.md").exists() or (dest / ".cognitive-state.yaml").exists():
+        record("shadow.governance", project["name"], result="blocked", missing=missing)
+        raise RuntimeError("Shadow 治理资源不完整，须显式修复，不能自动覆盖：" + "、".join(missing))
+    status = _git(["-C", str(dest), "status", "--porcelain"])
+    if status.returncode or status.stdout.strip():
+        raise RuntimeError("Shadow 旧仓存在未提交修改，已阻止治理迁移")
+    _initialize_shadow_project(dest, project, preserve_existing=True)
+    record("shadow.governance_migrated", project["name"], source="builtin-template", added=missing,
+           baseline="unset")
+
+
+def _initialize_shadow_project(dest: Path, project: dict, preserve_existing: bool = False) -> None:
     """将内置 Cognitive Shadow 模板复制到空 Shadow 仓，并生成初始提交。"""
     template = PROFILE.resource_root / "assets" / "shadow-project"
     if not template.is_dir():
         raise RuntimeError(f"Shadow 初始化模板不存在：{template}")
+    if not _is_own_repo(dest):
+        raise RuntimeError("Shadow 初始化目标不是独立 git 仓库")
+    added = []
     for source in template.rglob("*"):
         target = dest / source.relative_to(template)
         if source.is_dir():
             target.mkdir(parents=True, exist_ok=True)
             continue
         if target.exists():
+            if preserve_existing:
+                continue
             raise RuntimeError(f"Shadow 初始化模板与现有文件冲突：{target}")
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
+        added.append(str(source.relative_to(template)))
 
     state_path = dest / ".cognitive-state.yaml"
     state = state_path.read_text(encoding="utf-8")
@@ -291,11 +324,18 @@ def _initialize_shadow_project(dest: Path, project: dict) -> None:
     state = state.replace('branch: ""', f'branch: {json.dumps(branch, ensure_ascii=False)}')
     state_path.write_text(state, encoding="utf-8", newline="\n")
 
-    _git(["-C", str(dest), "symbolic-ref", "HEAD", f"refs/heads/{SHADOW_MAIN_BRANCH}"])
-    _git(["-C", str(dest), "add", "-A"])
-    _git(["-C", str(dest), "-c", "user.name=chronicler", "-c",
+    if not preserve_existing:
+        branch = _git(["-C", str(dest), "symbolic-ref", "HEAD", f"refs/heads/{SHADOW_MAIN_BRANCH}"])
+        if branch.returncode:
+            raise RuntimeError("Shadow 初始化分支失败")
+    staged = _git(["-C", str(dest), "add", "--", *added])
+    if staged.returncode:
+        raise RuntimeError("Shadow 治理文件暂存失败")
+    committed = _git(["-C", str(dest), "-c", "user.name=chronicler", "-c",
           "user.email=chronicler@localhost", "commit", "--allow-empty",
-          "-m", "init cognitive shadow"])
+          "-m", "migrate legacy cognitive shadow" if preserve_existing else "init cognitive shadow"])
+    if committed.returncode:
+        raise RuntimeError("Shadow 治理文件提交失败，已停止准备")
 
 
 def prepare_shadow_direct(pid: int) -> Path:

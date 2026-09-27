@@ -1,6 +1,6 @@
 # 追溯矩阵
 
-> 版本：v1.14 · 日期：2026-09-27 · 状态：生效
+> 版本：v1.15 · 日期：2026-09-27 · 状态：生效
 > 定位：需求 ID ↔ 设计章节 ↔ 实现位置 ↔ 验证手段。Agent 做 gap 分析的输入；改代码必须同步本表。
 
 ## 功能需求（FR）
@@ -50,7 +50,7 @@
 | FR-MGR-002 | Agent 终端 | what/manager.md §前端页面 | chronicler/components/terminal-runtime/（可选隔离沙箱，ADR-0021） | 人工：部署 terminal-runtime 后访问 term.localhost/ui |
 | FR-MGR-003 | 代码源管理 | what/manager.md §数据模型 | chronicler/（M2 规划） | 待实现（M2） |
 | FR-MGR-004 | 任务多方式触发 | what/manager.md §数据模型 | chronicler/（M2-M3 规划） | 待实现（M3） |
-| FR-MGR-005 | 一切皆 Run | what/manager.md §数据模型 | chronicler/app/runner.py（Prompt name/version/hash；source 全文/sealed 不落明文；状态悬挂扫描）+ chronicler/app/tasks.py | 单测 test_runtime_profile；人工查看 Run「提示词」与悬挂状态 |
+| FR-MGR-005 | 一切皆 Run | what/manager.md §数据模型、§Shadow 治理准备与认知任务完成 | chronicler/app/runner.py（Prompt name/version/hash；source 全文/sealed 不落明文；状态悬挂扫描；认知状态与本次运行记录校验）+ chronicler/app/tasks.py | 单测 test_runtime_profile、test_text_encoding；人工查看 Run「提示词」与悬挂状态 |
 | FR-MGR-006 | SSE 实时日志 | what/manager.md §API 概要 | chronicler/（M2 规划） | 待实现（M2） |
 | FR-MGR-007 | 内置任务与正式 Prompt | what/manager.md §任务类型框架 | chronicler/app/registry.py（2 任务→2 Prompt 映射）+ chronicler/assets/prompts/（2 正式 Prompt）+ tasks.py + routers/config.py（ADR-0050） | `python -m unittest chronicler.tests.test_prompts`；启动迁移保留历史 Run；页面显示 2 个正式任务和 Prompt |
 | FR-MGR-008 | 报告分级可见 | what/manager.md §权限规格 | chronicler/（M3 规划） | 待实现（M3） |
@@ -58,7 +58,7 @@
 | FR-MGR-010 | CI 结果消费 | what/manager.md §数据模型 | chronicler/app/runner.py _ci_context（最小实现：快照记录同期构建） | 人工：Run 快照含 ci_context |
 | FR-MGR-011 | Prompt 库版本化 | what/manager.md §数据模型 | chronicler/（M3 规划） | 待实现（M3） |
 | FR-MGR-012 | 项目全景仪表盘 | what/manager.md §前端页面 | chronicler/（M3 规划） | 待实现（M3） |
-| FR-MGR-013 | 项目影子库 | what/manager.md §数据模型 | chronicler/app/projects.py（ensure_shadow_repo + Gitea 自动建仓）+ runner._commit_shadow（ADR-0028） | 人工：触发任务后查 artifacts 的 commit/pushed 与 Gitea 仓 |
+| FR-MGR-013 | 项目影子库 | what/manager.md §Shadow 治理准备与认知任务完成；how/manager-architecture.md §2 | chronicler/app/projects.py（ensure_shadow_repo + 旧仓增补迁移）+ runner._commit_shadow（ADR-0028） | test_shadow_template.py（保留旧内容/幂等/拒绝部分治理与脏仓/阻止 git 逃逸）；test_text_encoding.py（认知完成校验） |
 | FR-MGR-014 | 全局资产库 | what/manager.md §Git 发布与审核契约 | chronicler/（M4 规划；ADR-0033） | 待实现（M4）：项目经验提升产生全局库 PR，审核合并后进入默认分支 |
 | FR-MGR-015 | 资源能力注入（skill 化） | what/manager.md §契约要点 | chronicler/app/registry.py（injectable_components）+ chronicler/components/\<name\>/SKILL.md（ADR-0024/0025） | 人工：触发 Run 后查 prompt 快照含 SKILL 路径 |
 | FR-MGR-016 | 任务来源适配与降级 | what/manager.md §任务类型框架 | chronicler/（M3 规划） | 待实现（M3） |

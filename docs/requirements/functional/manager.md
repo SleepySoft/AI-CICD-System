@@ -1,6 +1,6 @@
 # 功能需求：Manager 管理服务（MGR）
 
-> 版本：v1.9 · 日期：2026-09-21 · 状态：生效
+> 版本：v1.10 · 日期：2026-09-27 · 状态：生效
 > 定位：Manager（supervisor/Chronicler，ADR-0020/0022）的功能需求；规格（数据模型/API/权限）见 `../../what/manager.md`，机制见 `../../how/manager-architecture.md`
 
 ### FR-MGR-001 工具总览面板
@@ -26,7 +26,7 @@
 ### FR-MGR-005 一切皆 Run
 - 状态: 生效 | 上层: BR-002 | 优先级: P0
 - 描述: 每次执行（无论触发方式、无论成败）产生完整 Run 档案：输入快照（分析基于的提交、Prompt name/version/hash；source 模式另存渲染全文，sealed 模式不落明文；harness 命令与版本、注入资源清单、触发人）+ 执行过程（状态机、日志、错误归类）+ 产物清单（生成/更新了哪些产物、产物落入的 git 提交）。字段明细与规约见 `../../what/manager.md` §2.1.1。
-- 验收: 任一历史 Run（含失败的）可查看输入快照、Prompt name/version/hash、日志与产物清单；source 模式可查看本次渲染全文，sealed 模式只显示安全元数据且磁盘无遗留 prompt.md；产物为 git 内容时可定位到具体提交；悬挂状态由调度器自动标记失败（error_class=悬挂）。
+- 验收: 任一历史 Run（含失败的）可查看输入快照、Prompt name/version/hash、日志与产物清单；source 模式可查看本次渲染全文，sealed 模式只显示安全元数据且磁盘无遗留 prompt.md；产物为 git 内容时可定位到具体提交；悬挂状态由调度器自动标记失败（error_class=悬挂）。认知维护须校验状态基线和匹配本次 Run 的成功运行记录，停止摘要单独产出时判失败并保留报告。
 
 ### FR-MGR-006 实时日志
 - 状态: 生效 | 上层: UR-004 | 优先级: P1
@@ -66,7 +66,7 @@
 ### FR-MGR-013 项目影子库（project_shadow）
 - 状态: 生效 | 上层: BR-007 | 优先级: P1
 - 描述: 每个受管项目一个 shadow git 仓（`data/public/shadow/<工程名>-shadow`，ADR-0028）：承载分析报告（reports/）与蒸馏卡片（know-how/）等全部持久产物，统一 git 提交并推送远端（默认 Gitea 自动建仓，可指定任意 git 远端）；内容本体在 git，Chronicler 仅存索引（NFR-009）。
-- 验收: Run 的 artifacts 含 shadow 提交 SHA 与推送状态；Gitea 仓可见对应提交；未配置远端时纯本地仓也成立。
+- 验收: Run 的 artifacts 含 shadow 提交 SHA 与推送状态；Gitea 仓可见对应提交；未配置远端时纯本地仓也成立。新仓初始化治理模板；未采用治理契约的干净旧仓以增补迁移保留既有内容和历史，初始基线为空；部分治理资源损坏、工作区有未提交修改或 git 解析到父仓时拒绝自动初始化。
 
 ### FR-MGR-014 全局资产库
 - 状态: 生效 | 上层: BR-007 | 优先级: P1

@@ -17,6 +17,10 @@
 
 ## 本次上下文
 
+文本文件统一按 UTF-8 读取和写入。Windows PowerShell 5.1 使用 `Get-Content -Encoding UTF8`；
+写文件使用显式 UTF-8 编码。运行命令前将 `[Console]::OutputEncoding` 和 `$OutputEncoding`
+设为 UTF-8，避免本地编码的中文命令输出被错误解码。
+
 - 源代码仓：`{{source_repo_dir}}`
 - Shadow 仓：`{{shadow_repo_dir}}`
 - 报告模式：`{{task_mode}}`

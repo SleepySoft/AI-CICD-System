@@ -81,7 +81,7 @@ def _decode_bytes(data: bytes) -> str:
     逐行回落避免文件里单个非 UTF-8 字节（或运行中读到半截写缓冲）把整份内容拖进
     GBK 重解导致整页乱码；日志/报告统一按 UTF-8 落盘。"""
     import locale
-    fallback = locale.getpreferredencoding(False) or "utf-8"
+    fallback = locale.getencoding() or "utf-8"  # 不受 PYTHONUTF8 模式误导，取系统实际本地编码。
     out = []
     for line in data.splitlines(keepends=True):
         try:
@@ -544,9 +544,11 @@ def _run(run_id: int, harness: dict, prompt: str, cwd: str = "repo"):
                 artifacts.extend(shadow_arts)
             if artifacts:
                 warn = "" if returncode == 0 else f"（harness 退出码 {returncode}，产物已在，判成功）"
-                execute("UPDATE task_runs SET status='success', artifacts=?, publication=?, error=?,"
+                completion_error = _cognitive_completion_error(run)
+                execute("UPDATE task_runs SET status=?, artifacts=?, publication=?, error=?, error_class=?,"
                     " finished_at=? WHERE id=?",
-                    (dumps(artifacts), dumps(publication), warn, time.time(), run_id))
+                    ("failed" if completion_error else "success", dumps(artifacts), dumps(publication),
+                     completion_error or warn, "认知维护未完成" if completion_error else "", time.time(), run_id))
             else:
                 err = "" if returncode == 0 else f"exit code {returncode}"
                 if not artifacts:
@@ -563,6 +565,34 @@ def _run(run_id: int, harness: dict, prompt: str, cwd: str = "repo"):
         finally:
             if not PROFILE.persist_rendered_prompt and prompt_file.is_file():
                 prompt_file.unlink(missing_ok=True)
+
+
+def _cognitive_completion_error(run: dict) -> str:
+    if run["task_type"] != "project_cognitive_maintainer":
+        return ""
+    import yaml
+    shadow = projects.shadow_dir(run["project_id"]).resolve()
+    try:
+        state = yaml.safe_load((shadow / ".cognitive-state.yaml").read_text(encoding="utf-8"))
+        target = run["input_snapshot"].get("repo_head")
+        if not target or state["source"].get("commit") != target:
+            return "报告已保存，但认知维护未完成：状态基线未推进到本次目标提交"
+        relative = state["maintenance"].get("last_run")
+        if not relative:
+            return "报告已保存，但认知维护未完成：缺少本次运行记录"
+        path = (shadow / relative).resolve()
+        if not path.is_relative_to(shadow):
+            return "认知维护运行记录路径越界"
+        text = path.read_text(encoding="utf-8")
+        if not text.startswith("---\n"):
+            return "认知维护运行记录缺少 YAML 元数据"
+        meta = yaml.safe_load(text.split("---", 2)[1])
+        if (str(meta.get("run_id")) != str(run["id"]) or meta.get("status") != "success"
+                or meta.get("target_commit") != target):
+            return "报告已保存，但认知维护未完成：运行记录与本次任务不匹配"
+    except Exception as exc:
+        return f"认知维护完成校验失败：{type(exc).__name__}"
+    return ""
 
 
 def _commit_shadow(run: dict, publish_policy: str) -> tuple[str | None, list[dict], dict]:
