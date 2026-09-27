@@ -1,6 +1,6 @@
 # 文档索引
 
-> 版本：v1.15 · 日期：2026-09-05 · 状态：生效
+> 版本：v1.16 · 日期：2026-09-27 · 状态：生效
 > 定位：docs/ 全部文档的目录与状态总表；写作规范见 `.agents/skills/docs-management/`
 
 ## 文档总表
@@ -95,6 +95,7 @@
 | 接入新 Agent | runbooks/agent-onboarding.md | runbooks | 生效 |
 | 手动启动与调试 Chronicler | runbooks/dev-debug.md | runbooks | 生效 |
 | Keycloak 用户与权限管理 | runbooks/keycloak-users.md | runbooks | 生效 |
+| Chronicler 账号密码重置 | runbooks/password-reset.md | runbooks | 生效 |
 | Web 终端（SSHwifty）接入与使用 | runbooks/web-terminal.md | runbooks | 生效 |
 | 构建与安装 sealed Chronicler | runbooks/build-sealed-chronicler.md | runbooks | 生效 |
 | Clash Verge 代理排查 | runbooks/proxy-clash.md | runbooks | 生效 |
@@ -109,6 +110,7 @@
 - 想集成/调用：`what/`（环境契约、Manager API、知识库契约）
 - 想改实现：`how/` 对应模块 → `requirements/traceability.md` 反查影响的需求
 - 想部署/运维：`runbooks/`
+- 忘记密码或为用户重置密码：[账号密码重置](runbooks/password-reset.md)
 - 想确认某条需求落地没有：`requirements/traceability.md`
 
 ## 模块注册表

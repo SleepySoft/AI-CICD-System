@@ -4,6 +4,8 @@
 `git -C <dest> reset --hard origin/<branch>` 向上逃逸到宿主源码库执行，
 主仓库未推送提交被抹掉。守卫：dest 必须是 toplevel==自身的独立 git 仓库。
 """
+import os
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -64,6 +66,67 @@ class SyncGuardTest(unittest.TestCase):
         _git(dest, "init", "-b", "main")
         assert projects._is_own_repo(dest)
         assert not projects._is_own_repo(self.root / "workspace")  # 会逃逸到外层 → False
+
+    def test_reset_rebuilds_broken_clone_with_readonly_file(self):
+        # 模拟 Windows 删除残留：旧目录没有 .git，且含只读文件。
+        dest = projects.repo_dir(1)
+        dest.mkdir(parents=True)
+        stale = dest / "stale.txt"
+        stale.write_text("old clone", encoding="utf-8")
+        stale.chmod(stat.S_IREAD)
+        db.execute("UPDATE projects SET git_url=?, default_branch='main', last_sync_error='损坏'"
+                   " WHERE id=1", (str(self.root),))
+        head_before = _git(self.root, "rev-parse", "HEAD").stdout.strip()
+        (self.root / "f.txt").write_text("host uncommitted changes", encoding="utf-8")
+
+        result = projects.reset_clone(1)
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(projects._is_own_repo(dest))
+        self.assertFalse(stale.exists())
+        self.assertEqual("v1", (dest / "f.txt").read_text(encoding="utf-8"))
+        self.assertEqual("", projects.get_project(1)["last_sync_error"])
+        self.assertTrue(projects.get_project(1)["last_synced_at"])
+        self.assertEqual(head_before, _git(self.root, "rev-parse", "HEAD").stdout.strip())
+        self.assertEqual("host uncommitted changes", (self.root / "f.txt").read_text(encoding="utf-8"))
+
+    def test_reset_cleanup_failure_does_not_sync(self):
+        dest = projects.repo_dir(1)
+        dest.mkdir(parents=True)
+        with patch.object(projects.shutil, "rmtree", side_effect=PermissionError("file in use")), \
+                patch.object(projects, "sync_project") as sync:
+            with self.assertRaises(HTTPException) as ctx:
+                projects.reset_clone(1)
+        self.assertEqual(409, ctx.exception.status_code)
+        self.assertIn("无法清理", ctx.exception.detail)
+        self.assertIn("file in use", projects.get_project(1)["last_sync_error"])
+        sync.assert_not_called()
+
+    def test_reset_incomplete_cleanup_does_not_sync(self):
+        projects.repo_dir(1).mkdir(parents=True)
+        with patch.object(projects.shutil, "rmtree"), \
+                patch.object(projects, "sync_project") as sync:
+            with self.assertRaises(HTTPException) as ctx:
+                projects.reset_clone(1)
+        self.assertEqual(409, ctx.exception.status_code)
+        self.assertIn("克隆目录仍然存在", ctx.exception.detail)
+        sync.assert_not_called()
+
+    def test_reset_rejects_path_outside_workspace(self):
+        with patch.object(projects, "repo_dir", return_value=self.root), \
+                patch.object(projects.shutil, "rmtree") as remove, \
+                patch.object(projects, "sync_project") as sync:
+            with self.assertRaises(HTTPException) as ctx:
+                projects.reset_clone(1)
+        self.assertEqual(409, ctx.exception.status_code)
+        self.assertIn("路径异常", ctx.exception.detail)
+        remove.assert_not_called()
+        sync.assert_not_called()
+
+    def test_readonly_retry_preserves_other_permission_errors(self):
+        error = PermissionError("directory cannot be read")
+        with self.assertRaises(PermissionError):
+            projects._retry_readonly_removal(os.scandir, self.root, (type(error), error, None))
 
 
 if __name__ == "__main__":

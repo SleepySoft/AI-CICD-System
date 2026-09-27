@@ -1,6 +1,6 @@
 # Runbook: Keycloak 用户与权限管理
 
-> 版本：v1.0 · 日期：2026-09-01 · 状态：生效
+> 版本：v1.1 · 日期：2026-09-27 · 状态：生效
 > 适用：可选底座已起（keycloak 组件运行中）；操作者为 Keycloak 管理员（`.env` 的 `KEYCLOAK_ADMIN/KEYCLOAK_ADMIN_PASSWORD`）
 > 关联：chronicler/components/keycloak/、scripts/wire-sso.sh、docs/how/sso-wiring.md；需求 FR-ENV-005、UR-006、FR-MGR-017
 
@@ -22,6 +22,11 @@
 2. 添加用户：左侧 Users → Add user → 填 Username（必填）与 Email → Create。
 3. 设置密码：进入该用户 → Credentials → Set password → 输入密码，勾选 Temporary（推荐：首次登录须改密）→ Save。
 4. 授予权限：进入该用户 → Groups → Join Group → 选择 `boss`（= Chronicler admin）或 `dev`（= 普通 user）→ Join。
+
+## 重置已有用户密码
+
+可由 Chronicler admin 在 OIDC 模式的「用户」页重置，也可在宿主终端调用身份组件能力。
+操作步骤、临时密码与永久密码的区别见 [账号密码重置](password-reset.md)。
 
 ## 验证
 

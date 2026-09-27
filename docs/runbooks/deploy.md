@@ -1,6 +1,6 @@
 # Runbook: 环境部署与初始化
 
-> 版本：v1.4 · 日期：2026-09-04 · 状态：生效
+> 版本：v1.5 · 日期：2026-09-27 · 状态：生效
 > 适用：Windows / WSL2 / Linux，已装 Docker（可选底座）与 Python 3（supervisor）
 > 克隆仓库需 `git clone --recurse-submodules`（ATR 子模块，ADR-0016）
 > 关联：scripts/（up.sh / wire-sso.sh / verify*.sh / build-images.sh）、chronicler/scripts/install-service.sh；机制原理见 ../how/deployment.md；架构依据 ADR-0020/0021/0022/0023
@@ -53,6 +53,11 @@ chronicler/.venv/bin/python -m chronicler setup-recover
 访问入口：无底座时直连 http://127.0.0.1:8600 ；两段并存时经 Caddy 访问
 http://app.localhost （Caddy 已反代到 host.docker.internal:8600，caddy 服务带
 `extra_hosts: host-gateway`）。
+
+## 账号密码重置
+
+忘记本地 admin 密码，或需要重置统一登录用户密码时，按
+[账号密码重置手册](password-reset.md) 操作（含 Windows/WSL 终端菜单与 Web 管理员入口）。
 
 ## 验证
 

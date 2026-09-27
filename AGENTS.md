@@ -138,6 +138,10 @@ chronicler\.venv-win\Scripts\python.exe -m chronicler serve   # 主入口；首�
   手动操作须显式 `DATA_ROOT=<仓库根>/data`（或走首页工具面板「部署」，supervisor 注入绝对路径）（本机实测，2026-09-01）。
 - Windows 侧 Python subprocess 捕获输出必须显式 `encoding="utf-8", errors="replace"`
   （`text=True` 用 GBK 解码，遇 UTF-8 提交信息 stdout 变 None，2026-08-27 实测）。
+- **重置克隆删除残留**（2026-09-27 Windows 回归验证）：只读文件可使 `shutil.rmtree(ignore_errors=True)`
+  静默留下损坏目录，随后同步再次提示「请重置克隆」。显式重置须验证路径属于该工程工作区、
+  对删除遇到的只读文件清除只读位后重试，清理失败须报告原因并停止同步；操作见
+  `docs/runbooks/dev-debug.md`「重置损坏的工程克隆」。
 - **git 向上逃逸**（2026-09-05 实测事故）：`data/workspace/repos/<id>` 的 `.git` 残缺/丢失后，
   `git -C <克隆目录> ...` 会向上解析到宿主源码库执行——sync_project 的 `reset --hard origin/<branch>`
   曾因此打在主仓库上、抹掉未推送提交（reflog 可找回）。已在 sync_project 加守卫

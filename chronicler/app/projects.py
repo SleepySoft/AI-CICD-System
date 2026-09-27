@@ -3,6 +3,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 from pathlib import Path
 
@@ -162,10 +163,35 @@ def _last_commit(pid: int) -> str | None:
 
 def reset_clone(pid: int) -> dict:
     """删除工作空间克隆并重新拉取（克隆损坏/远端 force push/工程换址场景）"""
-    import shutil
     get_project(pid)
-    shutil.rmtree(repo_dir(pid), ignore_errors=True)
+    dest = repo_dir(pid)
+    # 清理是用户显式授权的动作，但目标仍必须是该工程在工作区内的独立目录。
+    # resolve 会识别符号链接/Windows junction，防止删除链接指向的其它目录。
+    root = Cfg.repos_dir().resolve()
+    if dest.resolve() != root / str(pid):
+        message = "工作区克隆路径异常，已阻止重置；请检查克隆目录是否链接到其它位置"
+        _mark_sync_error(pid, message)
+        raise HTTPException(status_code=409, detail=message)
+    try:
+        if dest.exists():
+            shutil.rmtree(dest, onerror=_retry_readonly_removal)
+        if os.path.lexists(dest):
+            raise OSError("克隆目录仍然存在")
+    except OSError as error:
+        message = ("无法清理工作区克隆；请关闭占用该目录的终端或程序，并检查目录权限后重试："
+                   f"{error}")
+        _mark_sync_error(pid, message[:500])
+        raise HTTPException(status_code=409, detail=message[:500]) from error
     return sync_project(pid)
+
+
+def _retry_readonly_removal(function, path, exc_info) -> None:
+    """Windows Git 文件可能只读：只对删除操作的权限错误清除只读位后重试。"""
+    if not isinstance(exc_info[1], PermissionError) or function not in (
+            os.unlink, os.remove, os.rmdir):
+        raise exc_info[1]
+    os.chmod(path, os.stat(path).st_mode | stat.S_IWRITE)
+    function(path)
 
 
 def repo_dirty(pid: int) -> bool:

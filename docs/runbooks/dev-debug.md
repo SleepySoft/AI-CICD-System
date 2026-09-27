@@ -1,6 +1,6 @@
 # Runbook: 手动启动与调试 Chronicler
 
-> 版本：v1.1 · 日期：2026-09-01 · 状态：生效
+> 版本：v1.2 · 日期：2026-09-27 · 状态：生效
 > 适用：本机（Windows Docker Desktop 或 WSL）开发/调试 supervisor 与底座
 > 关联：chronicler/（主入口 chronicler/__main__.py）、scripts/up.sh、ADR-0020/0023
 
@@ -53,6 +53,23 @@ bash scripts/verify-chronicler.sh    # WSL；Windows 用浏览器访问 http://1
 | Run 提示词 | `data/private/chronicler/runs/<run_id>/prompt.md`（或页面「任务」→ 提示词；渲染后全文同时落库 task_runs.prompt_text） |
 | 容器日志 | 首页组件卡片「日志」按钮，或 `docker logs aisystem-<name>-1` |
 | 数据库 | `data/private/chronicler/chronicler.db`（SQLite，可用 `sqlite3` 或 DBeaver 直查） |
+
+## 重置损坏的工程克隆
+
+适用：同步提示「工作区克隆已损坏（不是独立 git 仓库）」；旧版本在点击「重置克隆」后
+仍提示同一错误（2026-09-27 Windows 回归验证，见 AGENTS.md 已知环境坑）。
+
+1. 更新代码后，停止旧 Chronicler 进程，再按上文「启动 supervisor」启动，使修复生效。
+2. 用 admin 登录，在「工程」页找到目标工程，点击「重置克隆」，确认重建。
+   此操作会删除该工程工作区中的本地文件与未提交修改；需要保留的文件请先另行备份。
+3. 当前实现会处理只读文件；若提示「无法清理工作区克隆」，先关闭占用该目录的终端、编辑器或
+   agent 会话并检查目录权限，再重试。清理失败时不会继续同步。
+4. 验证：页面提示「已重置并重新拉取」，刷新后该工程显示远端最近提交，同步错误清空。
+   再点击同步应成功，不再出现损坏克隆提示。
+
+重置保留工程登记、Run 档案与 Shadow 报告，但已删除的未提交修改无法自动恢复，
+只能从操作前另存的备份取回。路径异常时系统拒绝删除；请检查该工程克隆目录是否为
+指向其它位置的符号链接或 Windows junction，勿对宿主源码目录执行 `git reset --hard`。
 
 ## 常见问题
 
