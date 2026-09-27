@@ -12,6 +12,7 @@ import re
 import time
 
 from ..db import execute, q, q1
+from ..auditing import record, vault_mutation, stage
 from . import crypto
 
 _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
@@ -41,12 +42,17 @@ def count() -> int:
 
 def _identity_verified() -> "crypto.x25519.Identity":
     """取可用主密钥：库空才允许生成新钥；库非空必须能解密抽样记录，否则锁定。"""
-    identity = crypto.load_identity()
+    identity = crypto.load_identity(report=lambda source, result, error_class="":
+        record("vault.master_key.read", "master-key", source=source,
+               result=result, error_class=error_class))
     n = count()
     if identity is None:
         if n:
+            record("vault.master_key.verify", "master-key", result="blocked", reason="master-key-missing")
             raise VaultLocked("master-key-missing")
-        identity = crypto.generate_identity()
+        with stage("vault.master_key.generate", "master-key", source="generated"):
+            identity = crypto.generate_identity(report=lambda source, result:
+                record("vault.master_key.write", "master-key", source=source, result=result))
         meta_set("key_acked", "")  # 新钥匙进入“未交接”状态
         return identity
     if n:
@@ -54,7 +60,9 @@ def _identity_verified() -> "crypto.x25519.Identity":
         try:
             crypto.decrypt(sample["ciphertext"], identity)
         except Exception:
+            record("vault.master_key.verify", "master-key", result="failed", reason="master-key-mismatch")
             raise VaultLocked("master-key-mismatch")
+    record("vault.master_key.verify", "master-key")
     return identity
 
 
@@ -86,7 +94,8 @@ def try_unlock(key_text: str) -> str:
             crypto.decrypt(sample["ciphertext"], identity)
         except Exception:
             raise ValueError("密钥与既有秘密数据不匹配")
-    crypto.write_identity(identity)
+    crypto.write_identity(identity, report=lambda source, result:
+        record("vault.master_key.write", "master-key", source=source, result=result))
     return str(identity.to_public())
 
 
@@ -117,9 +126,10 @@ def _auto_snapshot():
     try:
         from . import exporter
         exporter.write_snapshot()
-    except Exception:  # noqa: BLE001
-        import traceback
-        traceback.print_exc()
+    except Exception as exc:  # noqa: BLE001
+        record("vault.snapshot", "secrets.age", result="failed", error_class=type(exc).__name__)
+    else:
+        record("vault.snapshot", "secrets.age")
 
 
 # ---------- 元数据 CRUD ----------
@@ -159,6 +169,7 @@ def find(scope: str, name: str) -> dict | None:
     return q1("SELECT * FROM vault_secrets WHERE scope=? AND name=?", (scope, name))
 
 
+@vault_mutation("create")
 def create(kind: str, name: str, scope: str, plain: bytes, actor: str,
            secret_type: str = "password", rotation_risk: str = "coordinated",
            summary: str = "", owner: str = "", expires_at: float | None = None,
@@ -192,7 +203,9 @@ def upsert(kind: str, name: str, scope: str, plain: bytes, actor: str,
     if row and row["sha256"] == digest:
         return "unchanged"
     if row:
-        replace_value(row["id"], plain, mark_pending=mark_pending)
+        from ..auditing import scope as audit_scope, context
+        with audit_scope(actor=context().get("actor") or actor):
+            replace_value(row["id"], plain, mark_pending=mark_pending)
         return "updated"
     create(kind=kind, name=name, scope=scope, plain=plain, actor=actor,
            mark_pending=mark_pending, **meta)
@@ -206,9 +219,12 @@ def is_protected(row: dict) -> bool:
 
 def validate_replacement(row: dict | None, plain: bytes):
     if row and is_protected(row) and row["sha256"] != hashlib.sha256(plain).hexdigest():
+        record("vault.replacement_rejected", f"{row['scope']}/{row['name']}",
+               result="blocked", reason="protected-encryption-key")
         raise ValueError(f"{row['scope']}/{row['name']} 是已初始化的数据加密密钥，不可直接替换；须先备份并迁移加密数据")
 
 
+@vault_mutation("metadata")
 def update_meta(sid: int, fields: dict) -> bool:
     row = get_meta(sid)
     if row and is_protected(row) and any(
@@ -232,6 +248,7 @@ def update_meta(sid: int, fields: dict) -> bool:
     return True
 
 
+@vault_mutation("replace")
 def replace_value(sid: int, plain: bytes, mark_pending: bool = True) -> None:
     """轮换值：旧值随密文覆盖不可恢复（recover 语义见 ADR-0040）。"""
     if not plain:
@@ -250,10 +267,18 @@ def replace_value(sid: int, plain: bytes, mark_pending: bool = True) -> None:
 
 
 def decrypt_value(row: dict) -> bytes:
-    identity = _identity_verified()
-    return crypto.decrypt(row["ciphertext"], identity)
+    target = f"{row['scope']}/{row['name']}"
+    try:
+        identity = _identity_verified()
+        value = crypto.decrypt(row["ciphertext"], identity)
+    except Exception as exc:
+        record("vault.secret.read", target, source="vault", result="failed", error_class=type(exc).__name__)
+        raise
+    record("vault.secret.read", target, source="vault")
+    return value
 
 
+@vault_mutation("delete")
 def delete(sid: int, mark_pending: bool = True) -> dict | None:
     row = get_meta(sid)
     if row and is_protected(row):

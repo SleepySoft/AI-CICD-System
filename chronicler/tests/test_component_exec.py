@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from chronicler.app import component_exec
+from chronicler.app import db
 from chronicler.app.config import Cfg
 
 
@@ -17,8 +18,14 @@ class ComponentExecTest(unittest.TestCase):
         self.components.mkdir()
         self.patch_components = patch.object(Cfg, "COMPONENTS_DIR", self.components)
         self.patch_components.start()
+        self.patch_data = patch.object(Cfg, "DATA", Path(self.tmp.name) / "data")
+        self.patch_data.start()
+        db.close()
+        db.init()
 
     def tearDown(self):
+        db.close()
+        self.patch_data.stop()
         self.patch_components.stop()
         self.tmp.cleanup()
 
@@ -52,6 +59,7 @@ class ComponentExecTest(unittest.TestCase):
         result = component_exec.run_capability(
             "echo.py", [], env={"DEMO_TOKEN": "secret-value"})
         assert result is not None and result["ok"] and result["field"] == "secret-value"
+        self.assertNotIn("secret-value", json.dumps(db.q("SELECT * FROM audit_log")))
 
 
 if __name__ == "__main__":

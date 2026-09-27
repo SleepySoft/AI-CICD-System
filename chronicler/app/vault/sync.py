@@ -7,6 +7,7 @@ import hashlib
 from pathlib import Path
 
 from ..db import audit
+from ..auditing import record, operation
 from ..db import init as db_init
 from ..runtime import PROFILE
 from . import store
@@ -42,6 +43,7 @@ def secret_field_map(components: dict) -> dict:
     return result
 
 
+@operation("vault.config_sync", source="env-file")
 def sync_env_secrets(values: dict, components: dict, actor: str = "setup") -> int:
     """persist 双写：把本次写入 .env 的秘密键同步进 vault。返回变化条数。"""
     fmap = secret_field_map(components)
@@ -91,6 +93,7 @@ def read_env_secrets(components: dict) -> dict:
     return found
 
 
+@operation("vault.env_import", source="env-file")
 def import_env(components: dict, actor: str, force: bool = False) -> dict:
     """把 .env 中已配置的组件秘密导入 vault（老系统接管）。冲突默认不覆盖。"""
     fmap = secret_field_map(components)
@@ -173,6 +176,7 @@ def resolve_ref(ref: str) -> str:
     scope, _, name = ref.partition("/")
     row = store.find(scope, name)
     if not row:
+        record("vault.secret.read", f"{scope}/{name}", source="vault", result="missing")
         raise ValueError(f"秘密库缺少条目：{ref}")
     return store.decrypt_value(row).decode("utf-8")
 
@@ -198,14 +202,18 @@ def migrate_env_to_masked(components: dict, actor: str = "supervisor") -> int:
     库锁定时拒绝迁移（绝不把值抹成占位后解不开）。返回迁移条数。"""
     path = PROFILE.install_root / ".env"
     if not path.is_file():
+        record("runtime.env_migration", ".env", result="skipped", reason="file-missing")
         return 0
     if not read_env_secrets(components):
+        record("runtime.env_migration", ".env", result="skipped", reason="no-plaintext-secrets")
         return 0  # 没有明文秘密（已是糊化态或无秘密），不动
     if store.lock_state()["locked"]:
+        record("runtime.env_migration", ".env", result="blocked", reason="vault-locked")
         print("[WARN] 秘密库已锁定，跳过 .env 糊化迁移（请先解锁）")
         return 0
     drift = env_status(components)["drifted"]
     if drift:
+        record("runtime.env_migration", ".env", result="blocked", reason="secret-conflict", keys=drift)
         raise EnvConflict(".env 与秘密库存在冲突，已阻止启动迁移：" + "、".join(drift))
     result = import_env(components, actor=actor, force=False)
     masked = mask_env_text(path.read_text(encoding="utf-8"), components)
@@ -218,6 +226,7 @@ def migrate_env_to_masked(components: dict, actor: str = "supervisor") -> int:
     except OSError:
         pass
     audit(actor, "vault.env_masked", "", f"migrated={result['imported']}")
+    record("runtime.env_migration", ".env", source="env-file", imported=result["imported"])
     print(f"[INFO] .env 已糊化：{result['imported']} 个秘密字段改为 VAULT: 引用（ADR-0045）")
     return result["imported"]
 
@@ -230,10 +239,8 @@ def apply_chronicler_secrets() -> int:
     更新 os.environ + Cfg，并重建 import 时固化的签名器。返回解析条数。
     """
     path = PROFILE.install_root / ".env"
-    if not path.is_file():
-        return 0
     resolved = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines() if path.is_file() else []:
         clean = line.strip()
         if not clean or clean.startswith("#") or "=" not in clean:
             continue
@@ -241,6 +248,14 @@ def apply_chronicler_secrets() -> int:
         key, value = key.strip(), value.strip()
         if key in GLOBAL_SECRETS and value.startswith(VAULT_PREFIX):
             resolved[key] = resolve_ref(value[len(VAULT_PREFIX):])  # 锁定/缺条目会抛错
+            record("runtime.secret_load", key, source="vault")
+    import os
+    from ..config import ENV_SOURCES
+    for key in GLOBAL_SECRETS.keys() - resolved.keys():
+        source = ENV_SOURCES.get(key, "process-env" if key in os.environ else "default")
+        record("runtime.secret_load", key, source=source,
+               result="success" if os.environ.get(key) and "change_me" not in os.environ[key].lower()
+               else "missing")
     if not resolved:
         return 0
     import os

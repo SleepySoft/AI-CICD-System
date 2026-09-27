@@ -48,6 +48,7 @@ class InitializationTest(unittest.TestCase):
         (path / "plugin.yaml").write_text(yaml.safe_dump({
             "name": name, "group": group, "desc": f"{name} description",
         }), encoding="utf-8")
+
         (path / "setup.yaml").write_text(yaml.safe_dump({
             "schema_version": 1,
             "profiles": profiles or [],
@@ -58,6 +59,25 @@ class InitializationTest(unittest.TestCase):
             "fields": fields or [],
             "readiness": {"kind": "container-health", "timeout_sec": 30},
         }), encoding="utf-8")
+
+    def test_setup_audit_preserves_initiator_and_step_on_failure(self):
+        from chronicler.app import db
+        db.init()
+        store.init_schema()
+        run_id = store.execute("INSERT INTO setup_runs(plan_id,status,started_at,created_by) VALUES(1,'running',1,'operator-x')")
+        step_id = store.execute("INSERT INTO setup_steps(run_id,component,phase,ordinal,status,input_hash) VALUES(?,'demo','configure',0,'pending','test')", (run_id,))
+        step = store.one("SELECT * FROM setup_steps WHERE id=?", (step_id,))
+        config_store.set_secrets({"DEMO_TOKEN": "do-not-log-this-token"})
+        with patch.object(orchestrator, "_run_action", side_effect=RuntimeError("do-not-log-this-token")):
+            with self.assertRaises(RuntimeError):
+                orchestrator._execute_step(run_id, {}, step)
+        rows = db.q("SELECT actor,action,detail FROM audit_log WHERE action='setup.phase'")
+        self.assertEqual([r["actor"] for r in rows], ["operator-x", "operator-x"])
+        outcome = json.loads(rows[-1]["detail"])
+        self.assertEqual(outcome["result"], "failed")
+        self.assertEqual(outcome["step_id"], step_id)
+        self.assertEqual(outcome["correlation_id"], f"setup:{run_id}")
+        self.assertNotIn("do-not-log-this-token", json.dumps(rows))
 
     def test_catalog_rejects_unmarked_secret(self):
         self.component("bad", fields=[{"key": "API_TOKEN", "kind": "text"}])

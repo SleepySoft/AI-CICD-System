@@ -77,6 +77,94 @@ class VaultTest(unittest.TestCase):
 
     # ---------- 工具 ----------
 
+    def test_unified_audit_permissions_filters_and_cursor(self):
+        self.assertEqual(self.dev.get("/api/audit").status_code, 403)
+        sid = self._create_text(name="AUDIT_TOKEN")
+        self.assertEqual(self.admin.post(f"/api/vault/{sid}/value", json={"value": "new-audit-value"}).status_code, 200)
+        self.admin.post("/api/vault/999999/value", json={"value": "not-logged-value"})
+        page = self.admin.get("/api/audit", params={"actor": "admin", "target": "AUDIT_TOKEN", "limit": 1}).json()
+        self.assertEqual(len(page["items"]), 1)
+        self.assertIsNotNone(page["next_before_id"])
+        older = self.admin.get("/api/audit", params={"target": "AUDIT_TOKEN", "limit": 1,
+                                                    "before_id": page["next_before_id"]}).json()
+        self.assertLess(older["items"][0]["id"], page["items"][0]["id"])
+        self.assertEqual(self.admin.get("/api/audit", params={"target": "%"}).json()["total"], 0)
+        failures = self.admin.get("/api/audit", params={"action": "http.mutation", "result": "failed"}).json()
+        self.assertGreaterEqual(failures["total"], 1)  # non-existent mutation route still leaves a trace
+
+    def test_user_operation_records_actual_admin_identity(self):
+        db.execute("INSERT INTO users(username,password_hash,role,created_at) VALUES(?,?,?,1)",
+                   ("operator", auth.hash_password("x"), "admin"))
+        self.admin.cookies.set(Cfg.SESSION_COOKIE, auth.make_session("operator"))
+        with patch.object(Cfg, "AUTH_BACKEND", "local"):
+            response = self.admin.post("/api/users", json={"username": "audit-created-user", "password": "hidden-user-password", "role": "user"})
+        self.assertEqual(response.status_code, 200)
+        row = db.q1("SELECT actor,detail FROM audit_log WHERE action='user.create' AND target='audit-created-user'")
+        self.assertEqual(row["actor"], "operator")
+        self.assertNotIn("hidden-user-password", row["detail"])
+
+    def test_secret_mutation_revisions_and_actor_never_include_values(self):
+        from chronicler.app.auditing import scope
+        from chronicler.app.vault import store
+        sid = self._create_text(name="REVISION_TOKEN")
+        with scope(actor="config-admin", source="env-file", correlation_id="mutation-test"):
+            store.replace_value(sid, b"replacement-hidden-value")
+            store.replace_value(sid, b"replacement-hidden-value")
+        rows = db.q("SELECT actor,detail FROM audit_log WHERE action='vault.mutation.replace' AND target='infra/REVISION_TOKEN' ORDER BY id")
+        self.assertEqual(rows[0]["actor"], "config-admin")
+        first, second = [json.loads(r["detail"]) for r in rows]
+        self.assertNotEqual(first["before_revision"], first["after_revision"])
+        self.assertEqual(second["result"], "unchanged")
+        self.assertEqual(first["correlation_id"], "mutation-test")
+        all_logs = json.dumps(db.q("SELECT * FROM audit_log"), ensure_ascii=False)
+        self.assertNotIn(SECRET_VALUE, all_logs)
+        self.assertNotIn("replacement-hidden-value", all_logs)
+
+    def test_missing_and_locked_secret_reads_are_audited(self):
+        from chronicler.app.auditing import scope
+        from chronicler.app.vault import sync, crypto
+        self._create_text(name="READ_TOKEN")
+        with scope(actor="supervisor", correlation_id="read-test"):
+            self.assertEqual(sync.resolve_ref("infra/READ_TOKEN"), SECRET_VALUE)
+            with self.assertRaises(ValueError):
+                sync.resolve_ref("infra/MISSING_TOKEN")
+            with patch.object(crypto, "load_identity", return_value=None):
+                with self.assertRaises(RuntimeError):
+                    sync.resolve_ref("infra/READ_TOKEN")
+        rows = db.q("SELECT action,target,detail FROM audit_log WHERE detail LIKE '%read-test%'")
+        states = {(r["action"], r["target"], json.loads(r["detail"])["result"]) for r in rows}
+        self.assertIn(("vault.secret.read", "infra/READ_TOKEN", "success"), states)
+        self.assertIn(("vault.secret.read", "infra/READ_TOKEN", "failed"), states)
+        self.assertIn(("vault.secret.read", "infra/MISSING_TOKEN", "missing"), states)
+        self.assertTrue(any(json.loads(r["detail"]).get("source") == "master-key-file" for r in rows))
+
+    def test_runtime_failure_audit_contains_stage_and_not_exception_text(self):
+        from chronicler.app.main import create_app
+        from chronicler.app.vault.sync import EnvConflict
+        with patch("chronicler.app.vault.sync.migrate_env_to_masked", side_effect=EnvConflict(SECRET_VALUE)), \
+                patch("chronicler.app.tasks.start_scheduler") as scheduler:
+            with self.assertRaises(EnvConflict):
+                create_app()
+            scheduler.assert_not_called()
+        rows = db.q("SELECT action,detail FROM audit_log WHERE action='runtime.initialize' ORDER BY id DESC LIMIT 1")
+        detail = json.loads(rows[0]["detail"])
+        self.assertEqual(detail["result"], "failed")
+        self.assertEqual(detail["error_class"], "EnvConflict")
+        self.assertNotIn(SECRET_VALUE, rows[0]["detail"])
+        phases = db.q("SELECT detail FROM audit_log WHERE action='runtime.secret_migration' ORDER BY id DESC LIMIT 1")
+        self.assertEqual(json.loads(phases[0]["detail"])["correlation_id"], detail["correlation_id"])
+
+    def test_master_key_keyring_failure_falls_back_with_audit(self):
+        from chronicler.app.vault import crypto, sync
+        self._create_text(name="FALLBACK_TOKEN")
+        with patch.dict(os.environ, {"CHRONICLER_VAULT_KEY_BACKEND": ""}), \
+                patch("keyring.get_password", side_effect=RuntimeError(SECRET_VALUE)):
+            self.assertEqual(sync.resolve_ref("infra/FALLBACK_TOKEN"), SECRET_VALUE)
+        records = [json.loads(r["detail"]) for r in db.q("SELECT detail FROM audit_log WHERE action='vault.master_key.read'")]
+        self.assertTrue(any(r["source"] == "os-keyring" and r["result"] == "failed" for r in records))
+        self.assertTrue(any(r["source"] == "master-key-file" and r["result"] == "success" for r in records))
+        self.assertNotIn(SECRET_VALUE, json.dumps(records))
+
     def _create_text(self, name="API_TOKEN", scope="infra", value=SECRET_VALUE):
         resp = self.admin.post("/api/vault/text", json={
             "name": name, "scope": scope, "value": value,
@@ -218,6 +306,10 @@ class VaultTest(unittest.TestCase):
         with patch.object(config_store, "PROFILE", SimpleNamespace(install_root=self.root)):
             config_store.persist({}, components)
             before = (self.root / ".env").read_bytes()
+            config_store.persist({}, components)
+            self.assertEqual((self.root / ".env").read_bytes(), before)
+            same = db.q1("SELECT detail FROM audit_log WHERE action='config.field.update' AND target='DATA_KEY' ORDER BY id DESC LIMIT 1")
+            self.assertEqual(json.loads(same["detail"])["result"], "unchanged")
             config_store.set_secrets({"DATA_KEY": "b" * 64})
             with self.assertRaises(ValueError):
                 config_store.persist({"BASE_DOMAIN": "changed.test"}, components)

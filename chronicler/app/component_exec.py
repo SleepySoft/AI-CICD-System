@@ -14,6 +14,7 @@ from pathlib import Path
 
 from .config import Cfg
 from .runtime import PROFILE, component_python
+from .auditing import record, stage
 
 _BASE_KEYS = {"PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "HOME", "USERPROFILE", "TEMP", "TMP",
               "DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CERT_PATH", "DOCKER_TLS_VERIFY",
@@ -33,6 +34,16 @@ def find_capability(script: str) -> str | None:
 
 def run_capability(script: str, args: list[str], timeout: int = 120,
                    env: dict[str, str] | None = None) -> dict | None:
+    with stage("component.capability", script) as outcome:
+        result = _run_capability(script, args, timeout, env)
+        outcome["result"] = "skipped" if result is None else "success" if result.get("ok") else "failed"
+        record("component.capability.result", script,
+               result=outcome["result"])
+        return result
+
+
+def _run_capability(script: str, args: list[str], timeout: int,
+                    env: dict[str, str] | None) -> dict | None:
     """执行提供该能力的组件脚本；无提供者返回 None。"""
     name = find_capability(script)
     if not name:
@@ -111,4 +122,10 @@ def _resolved_field_env(field_keys: set) -> dict:
                 continue
         if value and "change_me" not in value.lower():
             out[key] = value
+            if not clean.partition("=")[2].strip().startswith(vault_sync.VAULT_PREFIX):
+                record("runtime.field_load", key, source="env-file")
+        else:
+            record("runtime.field_load", key, source="env-file", result="missing")
+    for key in sorted(field_keys - out.keys()):
+        record("runtime.field_available", key, source="component-environment", result="missing")
     return out

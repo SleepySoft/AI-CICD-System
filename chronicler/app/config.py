@@ -9,6 +9,7 @@ from pathlib import Path
 from .runtime import PROFILE
 
 PKG_ROOT = Path(__file__).resolve().parent.parent  # 仅源码模块定位；发行资源走 PROFILE
+ENV_SOURCES = {key: "process-env" for key in os.environ}
 
 
 def _load_dotenv():
@@ -25,7 +26,10 @@ def _load_dotenv():
         # 在启动时解析（本模块 import 时数据库尚未就绪，不能在此解密）
         if v.startswith("VAULT:"):
             continue
-        os.environ.setdefault(k.strip(), v)  # 已有环境变量优先
+        key = k.strip()
+        if key not in os.environ:
+            os.environ[key] = v
+            ENV_SOURCES[key] = "env-file"
 
 
 _load_dotenv()

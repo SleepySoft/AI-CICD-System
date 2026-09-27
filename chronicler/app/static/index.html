@@ -489,6 +489,29 @@
             <el-table-column prop="detail" label="详情" min-width="130" show-overflow-tooltip></el-table-column>
           </el-table>
         </el-tab-pane>
+        <el-tab-pane v-if="isAdmin" label="审计日志" name="audit">
+          <p class="muted">操作、配置变更和运行时初始化记录。秘密值不写入审计；密钥变更指纹基于密文。</p>
+          <el-form inline @submit.prevent="loadAudit()">
+            <el-form-item label="操作者"><el-input v-model="auditFilter.actor" clearable style="width:130px"></el-input></el-form-item>
+            <el-form-item label="动作"><el-input v-model="auditFilter.action" clearable style="width:190px" placeholder="如 runtime. / vault."></el-input></el-form-item>
+            <el-form-item label="目标"><el-input v-model="auditFilter.target" clearable style="width:170px"></el-input></el-form-item>
+            <el-form-item label="结果"><el-select v-model="auditFilter.result" clearable style="width:130px">
+              <el-option v-for="(label, s) in auditResultLabels" :key="s" :label="label" :value="s"></el-option>
+            </el-select></el-form-item>
+            <el-form-item label="关联编号"><el-input v-model="auditFilter.correlation_id" clearable style="width:220px"></el-input></el-form-item>
+            <el-button @click="loadAudit()" :loading="loadingAudit">查询 / 刷新</el-button>
+          </el-form>
+          <p class="muted">匹配 {{ auditTotal }} 条，已加载 {{ auditRows.length }} 条</p>
+          <el-table :data="auditRows" v-loading="loadingAudit" style="width:100%">
+            <el-table-column label="时间" width="170"><template #default="{ row }">{{ fmtTime(row.at) }}</template></el-table-column>
+            <el-table-column prop="actor" label="操作者" width="100"></el-table-column>
+            <el-table-column prop="action" label="动作" min-width="190" show-overflow-tooltip></el-table-column>
+            <el-table-column prop="target" label="目标" min-width="180" show-overflow-tooltip></el-table-column>
+            <el-table-column label="结果" width="100"><template #default="{ row }">{{ auditResult(row) }}</template></el-table-column>
+            <el-table-column prop="detail" label="详情 / 关联编号" min-width="300"><template #default="{ row }"><span style="white-space:pre-wrap;word-break:break-all">{{ row.detail }}</span></template></el-table-column>
+          </el-table>
+          <el-button v-if="auditNext" style="margin-top:12px" @click="loadAudit(true)" :loading="loadingAudit">加载更早记录</el-button>
+        </el-tab-pane>
       </el-tabs>
     </div>
 

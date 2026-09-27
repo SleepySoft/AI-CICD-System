@@ -11,6 +11,7 @@ from pathlib import Path
 import docker
 
 from .. import db
+from ..auditing import scope, stage, record
 from ..auth import hash_password
 from ..runtime import component_python
 from ..tools import deploy_component, get_tool
@@ -34,7 +35,7 @@ def get_plan(plan_id: int) -> dict | None:
     return {**json.loads(row["plan_json"]), "id": row["id"], "confirmed_at": row["confirmed_at"]}
 
 
-def create_run(plan_id: int) -> int:
+def create_run(plan_id: int, actor: str = "bootstrap") -> int:
     plan = get_plan(plan_id)
     if not plan:
         raise ValueError("计划不存在")
@@ -47,8 +48,8 @@ def create_run(plan_id: int) -> int:
     with store.transaction() as conn:
         if conn.execute("SELECT id FROM setup_runs WHERE status='running'").fetchone():
             raise ValueError("已有初始化任务正在运行")
-        run_id = conn.execute("INSERT INTO setup_runs(plan_id,status,started_at) VALUES(?,'running',?)",
-                              (plan_id, now)).lastrowid
+        run_id = conn.execute("INSERT INTO setup_runs(plan_id,status,started_at,created_by) VALUES(?,'running',?,?)",
+                              (plan_id, now, actor)).lastrowid
         for ordinal, action in enumerate(plan["actions"]):
             input_hash = hashlib.sha256(json.dumps(
                 {"plan": plan["plan_hash"], "action": action}, sort_keys=True).encode()).hexdigest()
@@ -66,6 +67,12 @@ def create_run(plan_id: int) -> int:
 
 def _event(run_id: int, level: str, event_type: str, message: str, step_id: int | None = None):
     store.add_event(run_id, level, event_type, message, step_id)
+    db.init()
+    run = store.one("SELECT created_by FROM setup_runs WHERE id=?", (run_id,))
+    record("setup." + event_type, f"setup#{run_id}",
+           actor=run["created_by"] if run else "bootstrap", correlation_id=f"setup:{run_id}",
+           result={"error": "failed", "warning": "blocked", "info": "started"}.get(level, "success"),
+           step_id=step_id)
 
 
 def _step(run_id: int, component: str, phase: str) -> dict:
@@ -117,6 +124,10 @@ def _hook(name: str, action: str):
                  "DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CERT_PATH", "DOCKER_TLS_VERIFY",
                  "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "BASE_DOMAIN"}
     env = {key: value for key, value in os.environ.items() if key.upper() in base_keys | field_keys}
+    from ..vault.sync import secret_field_map
+    for key in sorted(field_keys & secret_field_map(entries).keys()):
+        record("runtime.secret_inject", key, source="process-env", consumer=name,
+               result="success" if env.get(key) and not env[key].startswith("VAULT:") else "missing")
     env["CHRONICLER_COMPONENT_CONTAINER"] = get_tool(name).get("container", "")
     for dependency in dependencies - {name}:
         env[f"CHRONICLER_DEPENDENCY_{dependency.upper().replace('-', '_')}_CONTAINER"] = \
@@ -162,6 +173,14 @@ def _run_action(run_id: int, plan: dict, component: str, phase: str):
 
 
 def _execute_step(run_id: int, plan: dict, step: dict):
+    db.init()
+    run = store.one("SELECT created_by FROM setup_runs WHERE id=?", (run_id,))
+    with scope(actor=run["created_by"] if run else "bootstrap", source="setup",
+               correlation_id=f"setup:{run_id}", step_id=step["id"]):
+        return _execute_step_inner(run_id, plan, step)
+
+
+def _execute_step_inner(run_id: int, plan: dict, step: dict):
     if step["status"] in {"success", "skipped"}:
         return
     if store.one("SELECT cancel_requested FROM setup_runs WHERE id=?", (run_id,))["cancel_requested"]:
@@ -170,7 +189,8 @@ def _execute_step(run_id: int, plan: dict, step: dict):
     _event(run_id, "info", "step.running",
            f"开始：{step['component'] + ' / ' if step['component'] else ''}{step['phase']}", step["id"])
     try:
-        _run_action(run_id, plan, step["component"], step["phase"])
+        with stage("setup.phase", step["component"] or "installation", phase=step["phase"]):
+            _run_action(run_id, plan, step["component"], step["phase"])
         _mark(step, "success")
         _event(run_id, "success", "step.success", "完成", step["id"])
     except Exception as exc:

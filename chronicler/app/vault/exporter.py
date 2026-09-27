@@ -12,6 +12,7 @@ import tarfile
 import time
 
 from . import crypto, store
+from ..auditing import operation
 
 FORMAT = "chronicler-vault-export"
 
@@ -105,6 +106,7 @@ def build_export() -> tuple[bytes, int]:
     return out.getvalue(), len(items)
 
 
+@operation("vault.restore", source="encrypted-export")
 def restore_export(blob: bytes, actor: str, force: bool = False) -> dict:
     """从导出包恢复进 vault（新部署/灾难恢复）。
 

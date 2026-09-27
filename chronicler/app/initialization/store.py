@@ -99,6 +99,8 @@ def init_schema():
     conn = _connect()
     try:
         conn.executescript(SCHEMA)
+        if "created_by" not in {row["name"] for row in conn.execute("PRAGMA table_info(setup_runs)")}:
+            conn.execute("ALTER TABLE setup_runs ADD COLUMN created_by TEXT DEFAULT 'bootstrap'")
         conn.commit()
     finally:
         conn.close()

@@ -36,6 +36,10 @@ Agent 行为规范的单一事实源，每个技能一个子目录（含 SKILL.m
 - **密钥绝不入库**：只提交 `.env.example`；`.env` 已在 .gitignore，且其中秘密字段为 `VAULT:`
   糊化占位（ADR-0045：真实值只在秘密库，启动时自动迁移存量明文）。例外：age 密文
   （`secrets/*.age`、导出包）可入库，主密钥 `secrets/master.key` 永不入库。
+- **操作与运行初始化审计**（FR-INIT-018）：统一记录在 `audit_log`，admin 页面「审计日志」及
+  `GET /api/audit` 查询；配置/秘密逐项变更、启动阶段、秘密读取来源与结果须留痕并带关联编号。
+  审计禁止写秘密值、请求正文、命令参数与原始异常输出；变更指纹使用密文哈希。操作见
+  `docs/runbooks/audit-log.md`。
 - **秘密库（vault，ADR-0041~0045）**：秘密值一律 age 密文存储，元数据透明可查；
   Web 管理页「秘密库」（admin 专属 tab），API `/api/vault/*`；全量导出 = 明文 manifest + 密文
   payload.age；本地浏览/验证用 `python scripts/vault-inspect.py list|verify|show|extract`；

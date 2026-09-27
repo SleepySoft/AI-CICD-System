@@ -8,7 +8,8 @@ from pydantic import BaseModel
 
 from ..auth import hash_password, require_admin
 from ..config import Cfg
-from ..db import audit, execute, q, q1
+from ..db import execute, q, q1
+from ..auditing import record
 from .. import component_exec
 
 router = APIRouter(prefix="/api/users", tags=["users"], dependencies=[Depends(require_admin)])
@@ -46,7 +47,7 @@ async def create_user(body: UserBody):
     uid = execute("INSERT INTO users(username, password_hash, role, created_at)"
                   " VALUES (?,?,?,strftime('%s','now'))",
                   (body.username, hash_password(body.password), body.role))
-    audit("admin", "user.create", body.username)
+    record("user.create", body.username)
     return {"id": uid, "username": body.username, "role": body.role}
 
 
@@ -77,7 +78,7 @@ async def reset_password(username: str, body: ResetPasswordBody):
         raise HTTPException(status_code=400, detail="当前部署的身份组件不支持在线重置密码")
     if not result.get("ok"):
         raise HTTPException(status_code=502, detail=f"重置失败：{result.get('error', '')[:200]}")
-    audit("admin", "user.reset_password", username, f"temporary={body.temporary}")
+    record("user.reset_password", username, temporary=body.temporary)
     return {"ok": True, "username": username}
 
 
@@ -91,5 +92,5 @@ async def delete_user(uid: int):
             and q1("SELECT role FROM users WHERE id=?", (uid,))["role"] == "admin":
         raise HTTPException(status_code=400, detail="不能删除最后一个 admin")
     execute("DELETE FROM users WHERE id=?", (uid,))
-    audit("admin", "user.delete", user["username"])
+    record("user.delete", user["username"])
     return {"ok": True}

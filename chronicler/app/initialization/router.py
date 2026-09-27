@@ -98,6 +98,12 @@ async def save_draft(body: DraftBody, user=Depends(security.require_setup_sessio
                 raise ValueError(field.get("validation_message") or
                                  f"秘密格式无效：{field.get('label') or key}")
         config_store.set_secrets(body.secrets)
+        from ..auditing import record
+        for key, value in body.secrets.items():
+            if value:
+                record("setup.secret.stage", key, actor=user["username"], source="setup-input")
+        for key in body.values:
+            record("setup.config.stage", key, actor=user["username"], source="setup-input")
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     return store.save_draft(body.stage, body.profile, body.selections, body.values,
@@ -203,7 +209,7 @@ async def execute_plan(plan_id: int, user=Depends(security.require_setup_session
         blocked = [item for item in check["checks"] if item["status"] == "block"]
         if blocked:
             raise ValueError("执行前环境复核失败：" + "；".join(item["message"] for item in blocked))
-        return {"run_id": orchestrator.create_run(plan_id)}
+        return {"run_id": orchestrator.create_run(plan_id, actor=user["username"])}
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
 

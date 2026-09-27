@@ -49,15 +49,22 @@ def _backend_override() -> str:
     return os.environ.get("CHRONICLER_VAULT_KEY_BACKEND", "").strip().lower()
 
 
-def _keyring_get() -> "x25519.Identity | None":
+def _keyring_get(report=None) -> "x25519.Identity | None":
     if _backend_override() == "file":
+        if report:
+            report("os-keyring", "skipped")
         return None
     try:
         import keyring  # Windows DPAPI / macOS Keychain / Linux libsecret（ADR-0045）
         stored = keyring.get_password(_KEYRING_SERVICE, _KEYRING_USER)
-        return parse_identity(stored) if stored else None
-    except Exception:
+        identity = parse_identity(stored) if stored else None
+    except Exception as exc:
+        if report:
+            report("os-keyring", "failed", type(exc).__name__)
         return None  # 无钥匙串环境（无头 Linux 等）回落文件
+    if report:
+        report("os-keyring", "success" if identity else "missing")
+    return identity
 
 
 def _keyring_set(identity: "x25519.Identity") -> bool:
@@ -71,20 +78,32 @@ def _keyring_set(identity: "x25519.Identity") -> bool:
         return False
 
 
-def load_identity() -> "x25519.Identity | None":
+def load_identity(report=None) -> "x25519.Identity | None":
     """读取现有主密钥（钥匙串优先，文件回落）；不存在返回 None（绝不生成）。"""
-    identity = _keyring_get()
+    identity = _keyring_get(report=report)
     if identity is not None:
         return identity
     path = master_key_path()
     if not path.exists():
+        if report:
+            report("master-key-file", "missing")
         return None
-    return parse_identity(path.read_text(encoding="utf-8"))
+    try:
+        identity = parse_identity(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        if report:
+            report("master-key-file", "failed", type(exc).__name__)
+        raise
+    if report:
+        report("master-key-file", "success")
+    return identity
 
 
-def write_identity(identity: "x25519.Identity"):
+def write_identity(identity: "x25519.Identity", report=None):
     """把身份写入存储（首次生成或解锁收养）：钥匙串优先，不可用才落 master.key 文件。"""
     if _keyring_set(identity):
+        if report:
+            report("os-keyring", "success")
         return
     path = master_key_path()
     content = ("# Chronicler 秘密库主密钥（ADR-0041）\n"
@@ -98,12 +117,14 @@ def write_identity(identity: "x25519.Identity"):
         os.chmod(path, 0o600)
     except OSError:
         pass
+    if report:
+        report("master-key-file", "success")
 
 
-def generate_identity() -> "x25519.Identity":
+def generate_identity(report=None) -> "x25519.Identity":
     """生成新主密钥并落盘。调用方必须确保库中无既有秘密（见 store._identity_verified）。"""
     identity = x25519.Identity.generate()
-    write_identity(identity)
+    write_identity(identity, report=report)
     return identity
 
 

@@ -53,6 +53,32 @@ const app = createApp({
     // ---- 秘密库（admin，ADR-0041~0044 一期）----
     const vaultItems = ref([]);
     const vaultAudit = ref([]);
+    const auditRows = ref([]);
+    const auditTotal = ref(0);
+    const auditNext = ref(null);
+    const loadingAudit = ref(false);
+    const auditFilter = ref({ actor: "", action: "", target: "", result: "", correlation_id: "" });
+    const auditResultLabels = { started: "开始", success: "成功", failed: "失败", blocked: "已阻止",
+                                missing: "缺失", skipped: "已跳过", unchanged: "未变化" };
+    function auditResult(row) {
+      try {
+        const value = JSON.parse(row.detail).result;
+        return auditResultLabels[value] || value || "历史记录";
+      } catch (_) { return "历史记录"; }
+    }
+    async function loadAudit(more = false) {
+      if (!isAdmin.value || loadingAudit.value) return;
+      loadingAudit.value = true;
+      try {
+        const params = new URLSearchParams(Object.entries(auditFilter.value).filter(([, v]) => v));
+        if (more && auditNext.value) params.set("before_id", auditNext.value);
+        const data = await api("/api/audit?" + params);
+        auditRows.value = more ? [...auditRows.value, ...data.items] : data.items;
+        auditTotal.value = data.total;
+        auditNext.value = data.next_before_id;
+      } catch (e) { toast.err(e); }
+      finally { loadingAudit.value = false; }
+    }
     const loadingVault = ref(false);
     const vaultMaster = ref({ recipient: "", path: "" });
     const vaultMasterSecret = ref("");
@@ -956,6 +982,7 @@ const app = createApp({
       loadProjects(); loadRuns(); loadTasks(); loadConfig(); loadTools();
       startRunPolling();
       if (isAdmin.value) { loadUsers(); loadPendingProp(); }
+      if (tab.value === "audit") loadAudit();
     }
     // 秘密库变更待传播横幅（JIRA 式维护通知）：vault 改值后组件未重建/未对齐时悬挂
     async function loadPendingProp() {
@@ -977,6 +1004,7 @@ const app = createApp({
       else if (name === "config") loadConfig();
       else if (name === "users") loadUsers();
       else if (name === "vault") loadVault();
+      else if (name === "audit") loadAudit();
     }
 
     onMounted(async () => {
@@ -990,6 +1018,7 @@ const app = createApp({
     onUnmounted(() => { stopLogPoll(); stopRunPolling(); });
 
     return {
+      auditRows, auditTotal, auditNext, loadingAudit, auditFilter, auditResult, auditResultLabels, loadAudit,
       user, loading, acting, triggeringTasks, triggeringRun, taskTriggerBusy, loginError, loginForm, authBackend, ssoLogin, showLocalLogin, tab, isAdmin,
       pendingProp, loadPendingProp, dismissProp,
       projects, loadingProjects, runs, loadingRuns, runFilter,

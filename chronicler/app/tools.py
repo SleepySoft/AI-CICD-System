@@ -7,6 +7,8 @@ docker 控制走本地 socket（ADR-0020：supervisor 与 dockerd 同环境）�
 """
 import os
 import re
+import contextvars
+from .auditing import record, stage, scope
 import subprocess
 import sys
 import tempfile
@@ -146,7 +148,9 @@ def _compose_up_cmd(tool: dict) -> tuple[list, dict, str | None]:
     except docker.errors.DockerException:
         pass
     service = tool.get("compose_service") or tool["name"]
-    rendered = _render_env_if_masked()
+    with scope(consumer=tool["name"]):
+        rendered = _render_env_if_masked()
+        record("component.environment", tool["name"], source="vault-rendered-env" if rendered else "env-file")
     env_file = rendered or str(PROFILE.install_root / ".env")
     return (["docker", "compose", "-p", "aisystem", "--env-file", env_file,
              "-f", str(compose_file), "up", "-d", service], env, rendered)
@@ -182,6 +186,15 @@ def _clear_pending_quietly(name: str):
 
 
 def deploy_component(tool: dict) -> str:
+    with stage("component.deploy", tool["name"]) as outcome:
+        result = _deploy_component(tool)
+        outcome["result"] = "skipped" if result == "skip" else "success"
+        record("component.deploy.result", tool["name"],
+               result="skipped" if result == "skip" else "success", method=result)
+        return result
+
+
+def _deploy_component(tool: dict) -> str:
     """部署组件（初始化执行用）：有部署钩子走钩子，否则无条件 compose up
     （compose 按配置哈希自行决定是否重建容器，确保秘密/配置漂移能落到已存在容器）。"""
     import subprocess
@@ -210,6 +223,15 @@ def deploy_component(tool: dict) -> str:
 
 
 def ensure_running(tool: dict, raise_on_error: bool = False) -> str:
+    with stage("component.ensure_running", tool["name"]) as outcome:
+        result = _ensure_running(tool, raise_on_error)
+        outcome["result"] = {"skip": "skipped", "error": "failed"}.get(result, "success")
+        record("component.ensure_running.result", tool["name"],
+               result={"skip": "skipped", "error": "failed"}.get(result, "success"), method=result)
+        return result
+
+
+def _ensure_running(tool: dict, raise_on_error: bool = False) -> str:
     """确保组件运行：running→跳过；stopped/absent→compose up（现场从 vault 重渲染 env，
     配置哈希变化时自动重建容器）。返回动作：skip/deploy-hook/compose-up/error
 
@@ -226,7 +248,7 @@ def ensure_running(tool: dict, raise_on_error: bool = False) -> str:
     except docker.errors.NotFound:
         pass
     except docker.errors.DockerException as e:
-        audit("supervisor", "tool.autostart_failed", name, str(e)[:200])
+        audit("supervisor", "tool.autostart_failed", name, type(e).__name__)
         if raise_on_error:
             raise RuntimeError(str(e)) from e
         return "error"
@@ -241,7 +263,7 @@ def ensure_running(tool: dict, raise_on_error: bool = False) -> str:
             _clear_pending_quietly(name)
             return "deploy-hook"
         detail = (r.stderr or r.stdout or "组件部署 hook 失败").strip()
-        audit("supervisor", "tool.autostart_failed", name, detail[:200])
+        audit("supervisor", "tool.autostart_failed", name, f"deploy-hook exit={r.returncode}")
         if raise_on_error:
             raise RuntimeError(detail[-2000:])
         return "error"
@@ -252,11 +274,11 @@ def ensure_running(tool: dict, raise_on_error: bool = False) -> str:
             _clear_pending_quietly(name)
             return "compose-up"
         detail = (r.stderr or r.stdout or f"Compose 退出码 {r.returncode}").strip()
-        audit("supervisor", "tool.autostart_failed", name, detail[:200])
+        audit("supervisor", "tool.autostart_failed", name, f"compose exit={r.returncode}")
         if raise_on_error:
             raise RuntimeError(detail[-2000:])
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-        audit("supervisor", "tool.autostart_failed", name, str(e)[:200])
+        audit("supervisor", "tool.autostart_failed", name, type(e).__name__)
         if raise_on_error:
             raise RuntimeError(str(e)) from e
     return "error"
@@ -268,25 +290,31 @@ def autostart_boot(max_wait_sec: int = 600, interval: int = 20):
     随后每 20s 重试至多 10 分钟，而不是一次性放弃——supervisor 通常比 dockerd 先活。"""
     env_file = PROFILE.install_root / ".env"
     if not env_file.is_file():
+        record("runtime.components_autostart.result", result="blocked", reason="env-file-missing")
         print(f"[ERROR] autostart 跳过：缺少首要依赖 {env_file}（请先 cp .env.example .env 并编辑 *_change_me）",
               file=sys.stderr)
-        return
+        return "error"
     deadline = time.time() + max_wait_sec
     engine_launch_tried = False
     while True:
         try:
             _client().ping()
+            record("runtime.docker_ready")
             break
         except docker.errors.DockerException:
             if time.time() > deadline:
-                return
+                record("runtime.docker_ready", result="failed", reason="timeout")
+                return "error"
             if not engine_launch_tried:
-                _try_start_docker_engine()
+                launched = _try_start_docker_engine()
+                record("runtime.docker_launch", result="success" if launched else "failed")
                 engine_launch_tried = True
             time.sleep(interval)
+    failed = False
     for t in load_tools():
         if t["autostart"]:
-            ensure_running(t)
+            failed = ensure_running(t) == "error" or failed
+    return "error" if failed else "success"
 
 
 def _try_start_docker_engine() -> bool:
@@ -408,13 +436,16 @@ def start_deploy(tool: dict):
         if task and task["state"] == "running":
             raise HTTPException(status_code=409, detail="该组件正在部署中")
         _deploy_tasks[name] = {"state": "running", "lines": []}
-    threading.Thread(target=_deploy_worker, args=(tool,), daemon=True).start()
+    record("component.deploy.request", name, result="started")
+    ctx = contextvars.copy_context()
+    threading.Thread(target=ctx.run, args=(_deploy_worker, tool), daemon=True).start()
 
 
 def _deploy_worker(tool: dict):
     import subprocess as sp
     name = tool["name"]
     task = _deploy_tasks[name]
+    record("component.deploy", name, result="started")
 
     def emit(line: str):
         task["lines"].append(line)
@@ -436,15 +467,20 @@ def _deploy_worker(tool: dict):
             task["state"] = "done"
             from .db import audit
             audit("supervisor", "tool.deploy", name)
+            record("component.deploy", name)
         else:
             emit(f"✘ 部署失败（exit {proc.returncode}）")
             task["state"] = "error"
+            record("component.deploy", name, result="failed", exit_code=proc.returncode)
     except Exception as e:  # noqa: BLE001 - 部署线程兜底
         emit(f"✘ {type(e).__name__}: {e}")
         task["state"] = "error"
+        record("component.deploy", name, result="failed", error_class=type(e).__name__)
     finally:
         if rendered:
             Path(rendered).unlink(missing_ok=True)  # 临时明文即用即删
+        from .db import close
+        close()
 
 
 def deploy_status(name: str) -> dict:

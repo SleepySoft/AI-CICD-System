@@ -1,11 +1,13 @@
 """初始化配置与短期秘密暂存；秘密不写草稿、计划、事件或日志。"""
 import os
+import hashlib
 import re
 import tempfile
 import threading
 from pathlib import Path
 
 from ..runtime import PROFILE
+from ..auditing import record, operation
 
 _secrets: dict[str, str] = {}
 _reveal_consumed = False
@@ -117,6 +119,7 @@ def load_environment(components: dict):
     糊化引用（VAULT:scope/KEY，ADR-0045）在此从秘密库解密为真实值。"""
     target = PROFILE.install_root / ".env"
     if not target.is_file():
+        record("config.environment_load", ".env", result="skipped", reason="file-missing")
         return
     allowed = allowed_keys(components)
     for line in target.read_text(encoding="utf-8").splitlines():
@@ -125,6 +128,10 @@ def load_environment(components: dict):
             key, _, value = clean.partition("=")
             if key.strip() in allowed:
                 os.environ[key.strip()] = _resolve_ref(value.strip())
+                from ..vault.sync import secret_field_map
+                if key.strip() in secret_field_map(components) and not value.strip().startswith("VAULT:"):
+                    record("runtime.secret_load", key.strip(), source="env-file",
+                           result="success" if value.strip() and "change_me" not in value.lower() else "missing")
 
 
 def _resolve_ref(value: str) -> str:
@@ -138,11 +145,13 @@ def _resolve_ref(value: str) -> str:
         return value
 
 
+@operation("config.persist")
 def persist(values: dict, components: dict) -> Path:
     """合并 .env.example/.env，保留未知键和注释，同目录原子替换。"""
     target = PROFILE.install_root / ".env"
     source = target if target.is_file() else PROFILE.install_root / ".env.example"
     lines, indexes = _parse(source)
+    previous_values = {key: lines[index].partition("=")[2].strip() for key, index in indexes.items()}
     updates = {k: str(v) for k, v in values.items() if k in allowed_keys(components) and v is not None}
     updates.update({k: v for k, v in _secrets.items()
                     if k in allowed_keys(components) and not k.startswith("INIT_ADMIN_")})
@@ -151,6 +160,15 @@ def persist(values: dict, components: dict) -> Path:
         raise ValueError("配置值不得包含换行或空字符：" + "、".join(sorted(invalid)))
     from ..vault import sync as vault_sync
     fields = vault_sync.secret_field_map(components)
+    changed = {key: previous_values.get(key) != value for key, value in updates.items()}
+    from ..vault import store as vault_store
+    for key, value in updates.items():
+        old_value = previous_values.get(key, "")
+        if key in fields and old_value.startswith(vault_sync.VAULT_PREFIX) and not value.startswith(vault_sync.VAULT_PREFIX):
+            old_scope, _, old_name = old_value[len(vault_sync.VAULT_PREFIX):].partition("/")
+            row = vault_store.find(old_scope, old_name)
+            if row:
+                changed[key] = row["sha256"] != hashlib.sha256(value.encode("utf-8")).hexdigest()
     if target.is_file():
         for key, value in updates.items():
             meta = fields.get(key, {})
@@ -189,6 +207,9 @@ def persist(values: dict, components: dict) -> Path:
             os.unlink(temp_name)
     for key, value in updates.items():
         os.environ[key] = value
+        record("config.field.update", key, source="setup-input",
+               result="success" if changed[key] else "unchanged",
+               secret=key in fields, previous_present=key in previous_values)
     load_environment(components)
     return target
 

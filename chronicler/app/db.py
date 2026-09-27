@@ -3,6 +3,7 @@ import json
 import sqlite3
 import threading
 import time
+import uuid
 from pathlib import Path
 
 from .config import Cfg
@@ -186,6 +187,17 @@ def close():
 
 
 def audit(actor: str, action: str, target: str = "", detail: str = ""):
+    from .auditing import context
+    ctx = context()
+    try:
+        payload = json.loads(detail)
+    except (ValueError, TypeError):
+        payload = None
+    if not isinstance(payload, dict):
+        payload = {"result": "failed" if action.endswith("_failed") else "success", "summary": detail}
+    payload = {**{key: value for key, value in ctx.items() if key != "actor"}, **payload}
+    payload.setdefault("correlation_id", uuid.uuid4().hex)
+    detail = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     execute("INSERT INTO audit_log(actor, action, target, detail, at) VALUES (?,?,?,?,?)",
             (actor, action, target, detail, time.time()))
 
