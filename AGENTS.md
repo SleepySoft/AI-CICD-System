@@ -186,6 +186,9 @@ chronicler\.venv-win\Scripts\python.exe -m chronicler serve   # 主入口；首�
   「进程环境 > --env-file」——沙箱子进程若不清洗，生产值（如 HTTP_PORT=80）静默覆盖沙箱 env，
   容器直接绑到生产端口。沙箱 Compose 类已将 compose 引用的变量从子进程环境剔除；
   任何新代码从 chronicler 进程拉起 docker compose 都必须同样处理。
+- **Outline 旧账号密文不匹配**（2026-09-27）：容器与 vault 密钥一致且 dev 登录正常，仍有旧 boss 的
+  jwtSecret / accessToken / refreshToken 无法解密，触发 fatal 与页面加载失败。部分账号可解密时禁止
+  直接全局回退密钥；先做只读诊断和加密备份，再恢复目标账号认证数据，见 `docs/runbooks/outline-auth.md`。
 - 前端资源已本地化（chronicler/app/static/vendor/，vue/element-plus/icons 版本钉死）：
   勿改回 CDN 引用（公司网络/代理下 unpkg 加载不稳，曾实测登录页渲染原始 {{ }}、
   图标按钮不可见但可点，2026-09-01）。图标按钮依赖 app.js 全局注册 ElementPlusIconsVue。

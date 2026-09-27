@@ -124,6 +124,9 @@ def main():
                              plugin.get("container", "")],
                             capture_output=True, text=True, encoding="utf-8", errors="replace")
         if st.returncode != 0:
+            if "no such object:" in st.stderr.lower() or "no such container:" in st.stderr.lower():
+                report(name, True, "容器未部署", skip=True)
+                continue
             report(name, False, "无法读取容器状态，请检查 Docker 权限与连接")
             continue
         if st.stdout.strip() != "running":

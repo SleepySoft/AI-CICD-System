@@ -101,6 +101,7 @@
 | Clash Verge 代理排查 | runbooks/proxy-clash.md | runbooks | 生效 |
 | 秘密库操作手册 | runbooks/vault.md | runbooks | 生效 |
 | 组件测试（沙箱/巡检/漂移审计） | runbooks/testing.md | runbooks | 生效 |
+| Outline 加载与认证故障排查 | runbooks/outline-auth.md | runbooks | 生效 |
 | 旧-需求分析与选型 | 01-需求分析与选型.md | 历史 | 过时（已拆分至本结构） |
 | 旧-Manager 设计 | 02-管理服务设计.md | 历史 | 过时（已拆分至本结构） |
 
