@@ -16,6 +16,13 @@ from ..runtime import PROFILE
 router = APIRouter(prefix="/api/config", tags=["config"])
 
 
+@router.get("/compatibility")
+async def compatibility_status(user: dict = Depends(require_admin)):
+    from ..compatibility import check
+
+    return check()
+
+
 @router.get("/harnesses")
 async def harnesses(user: dict = Depends(current_user)):
     # env 中的 ${VAR} 引用只回传引用名，绝不回传解析后的密钥明文（NFR-002）

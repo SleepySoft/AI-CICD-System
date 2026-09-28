@@ -8,6 +8,7 @@
     python -m chronicler setup-recover       本机显式重开初始化引导（危险操作）
   python -m chronicler test [--component X] [--deploy] [--timeout N]   组件自检（FR-MGR-023）
   python -m chronicler sandbox [选项]     隔离沙箱组件入口可达性测试（现拉现建现测现毁，FR-ENV-003）
+  python -m chronicler check [--json]      只读检查组件定义与 Shadow 治理差异
 """
 import sys
 
@@ -21,7 +22,28 @@ if not __package__:
 
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "serve"
-    if cmd == "serve":
+    if cmd == "check":
+        import json
+        from .app.compatibility import check
+
+        result = check()
+        if "--json" in sys.argv[2:]:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(f"Chronicler {result['product_version']}；组件 {len(result['components'])} 个；"
+                  f"Shadow 工作区 {len(result['workspaces'])} 个")
+            for component in result["components"]:
+                print(f"  组件 {component['name']}: schema={component['setup_schema_version']} "
+                      f"revision={component['definition_revision'] or '?'} [{component['status']}]")
+            for workspace in result["workspaces"]:
+                print(f"  Shadow {workspace['name']}: skill={workspace['skill_version'] or '?'} "
+                      f"schema={workspace['schema_version'] or '?'} [{workspace['status']}]")
+            for issue in result["issues"]:
+                print(f"[GAP] {issue['scope']}/{issue['name']}: {issue['message']}")
+            if result["ok"]:
+                print("已知契约 gap 检查通过；组件运行版本尚未验证；未初始化的 Shadow 将在首次使用时创建。")
+        sys.exit(0 if result["ok"] else 1)
+    elif cmd == "serve":
         from .app.config import Cfg
         from .app.initialization.lifecycle import detect_mode
         mode = detect_mode()

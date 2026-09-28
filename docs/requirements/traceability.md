@@ -1,6 +1,6 @@
 # 追溯矩阵
 
-> 版本：v1.15 · 日期：2026-09-27 · 状态：生效
+> 版本：v1.16 · 日期：2026-09-28 · 状态：生效
 > 定位：需求 ID ↔ 设计章节 ↔ 实现位置 ↔ 验证手段。Agent 做 gap 分析的输入；改代码必须同步本表。
 
 ## 功能需求（FR）
@@ -39,6 +39,7 @@
 | FR-INIT-016 | 秘密作用域分权与审计（ADR-0043） | what/initialization.md §安全与错误呈现 | chronicler/app/initialization/ + app 用户与审计 | 单测（越权拒读/审计脱敏/包口令）；人工：授权收回与分发包验收 |
 | FR-INIT-017 | 接收者密钥体系与提交即加密（ADR-0044） | what/initialization.md §安全与错误呈现 | chronicler/app/initialization/（接收者登记/集合加解密） | 单测（集合外私钥不可解/免私钥提交/增补接收者重加密） |
 | FR-INIT-018 | 配置变更与运行时初始化审计 | what/initialization.md §统一审计；runbooks/audit-log.md | chronicler/app/auditing.py + routers/audit.py + vault/ + initialization/ + main.py | chronicler/tests/test_vault.py、test_initialization.py、test_component_exec.py（权限/分页/指纹/来源/失败脱敏/运行关联） |
+| FR-INIT-019 | 组件与工作区版本差异检测 | what/initialization.md §版本差异检查 | chronicler/app/compatibility.py + projects.py + routers/config.py + __main__.py | chronicler/tests/test_compatibility.py；`python -m chronicler check` |
 | FR-KB-001 | Markdown vault 事实源 | what/knowledge.md §分区规范 | 已废弃（知识改由 shadow 仓/全局资产库承载，ADR-0028/FR-MGR-013/014） | - |
 | FR-KB-002 | 来源分区与标注 | what/knowledge.md §frontmatter 契约 | 已废弃（同上，分区约定将迁入 shadow 仓结构） | - |
 | FR-KB-003 | 语义检索（Qdrant） | what/knowledge.md §索引契约 | chronicler/components/qdrant/ | 人工：MCP 语义查询 |

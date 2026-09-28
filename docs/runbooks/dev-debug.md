@@ -1,6 +1,6 @@
 # Runbook: 手动启动与调试 Chronicler
 
-> 版本：v1.4 · 日期：2026-09-27 · 状态：生效
+> 版本：v1.5 · 日期：2026-09-28 · 状态：生效
 > 适用：本机（Windows Docker Desktop 或 WSL）开发/调试 supervisor 与底座
 > 关联：chronicler/（主入口 chronicler/__main__.py）、scripts/up.sh、ADR-0020/0023
 
@@ -117,6 +117,22 @@ chronicler/.venv-win/Scripts/python.exe -m unittest chronicler.tests.test_text_e
 历史日志中的 U+FFFD 或已存入数据库的问号无法仅靠切换编码还原。保留原日志，修复环境后重跑；工程说明应根据实际用途重新填写。本次工程 2 的说明在旧备份中也已是问号，因此重写为“GitHub 源码仓库（SSH 同步）”，未声称恢复原文。日志面板遇到 U+FFFD 会提示已有内容损坏。
 
 需要回滚 shell 设置时，将脚本打印的原始备份复制回 `$PROFILE.CurrentUserAllHosts`，然后打开新终端。重启 Chronicler 后，新的准备流程、harness 和完成校验才会完整生效。
+
+## 升级前检查组件与 Shadow 契约
+
+在 PowerShell 项目根目录执行只读检查：
+
+```powershell
+chronicler/.venv-win/Scripts/python.exe -m chronicler check
+chronicler/.venv-win/Scripts/python.exe -m chronicler check --json
+```
+
+退出码 0 表示没有发现已知契约 gap；退出码 1 时按 `[GAP]` 的组件或工程名称检查声明与治理文件。
+`uninitialized` 是尚未创建的 Shadow，不等于损坏。组件显示 `runtime-unverified` 表示只验证了当前
+定义文件，未验证运行容器版本，不应据此宣称升级完成。管理员也可读取
+`GET /api/config/compatibility`；启动发现 gap 会在 stderr 与审计中留下记录。
+检查不重建数据。Shadow 版本不一致时先审阅项目治理文件与中央模板差异，再决定显式迁移或重建；
+认知任务会拒绝继续。详见 [初始化设计](../how/initialization-architecture.md#212-升级与契约迁移)。
 
 ## 常见问题
 

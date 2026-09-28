@@ -283,6 +283,13 @@ def _ensure_shadow_governance(dest: Path, project: dict) -> None:
     required.extend(p.relative_to(template) for p in (template / "templates").glob("*") if p.is_file())
     missing = [str(path) for path in required if not (dest / path).is_file()]
     if not missing:
+        from .compatibility import _yaml, shadow_version_gap
+
+        expected = _yaml(template / ".cognitive-state.yaml")
+        _, gap = shadow_version_gap(dest, str(expected["skill_version"]), expected["schema_version"])
+        if gap:
+            record("shadow.governance", project["name"], result="blocked", reason="version-gap")
+            raise RuntimeError("Shadow 治理版本检查失败：" + gap)
         return
     if (dest / "SKILL.md").exists() or (dest / ".cognitive-state.yaml").exists():
         record("shadow.governance", project["name"], result="blocked", missing=missing)

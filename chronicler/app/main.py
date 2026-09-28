@@ -14,6 +14,19 @@ from .auditing import scope, stage, record, context
 def create_app(mode: str = "normal") -> FastAPI:
     from . import db
     db.init()
+    from .compatibility import check as compatibility_check
+
+    result = compatibility_check()
+    import sys
+
+    print(f"[COMPATIBILITY] components={len(result['components'])} "
+          f"runtime-unverified={sum(item['deployed_revision'] is None for item in result['components'])} "
+          f"shadow={len(result['workspaces'])} gaps={len(result['issues'])}", file=sys.stderr)
+    if result["issues"]:
+        for issue in result["issues"]:
+            print(f"[COMPATIBILITY GAP] {issue['scope']}/{issue['name']}: {issue['message']}", file=sys.stderr)
+            record("runtime.compatibility_gap", f"{issue['scope']}/{issue['name']}",
+                   result="blocked", gap_code=issue["code"])
     with scope(actor="supervisor", source="runtime-startup", mode=mode,
                correlation_id=uuid.uuid4().hex):
         with stage("runtime.initialize"):
@@ -63,7 +76,9 @@ def _create_app(mode: str) -> FastAPI:
 
     @app.get("/api/health")
     async def health():
-        return {"ok": mode != "repair", "service": "chronicler", "version": "1.0.0", "mode": mode}
+        from chronicler import __version__
+
+        return {"ok": mode != "repair", "service": "chronicler", "version": __version__, "mode": mode}
 
     from .initialization.router import page_router, router as setup_router
     setup_static = Path(__file__).parent / "initialization" / "static"
