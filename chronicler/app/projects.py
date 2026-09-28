@@ -20,12 +20,28 @@ _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 SHADOW_MAIN_BRANCH = "main"
 _repo_locks = {}
 _repo_locks_guard = threading.Lock()
+_project_gates = {}
+_project_gates_guard = threading.Lock()
 
 
 def repo_lock(project_id: int):
     """执行、预览、同步与重置共享同一工程锁，保护正在使用的工作树。"""
     with _repo_locks_guard:
         return _repo_locks.setdefault(project_id, threading.RLock())
+
+
+def project_gate(project_id: int):
+    """仅协调 Run 入队与显式清理；不阻碍同工程多个任务正常排队。"""
+    with _project_gates_guard:
+        return _project_gates.setdefault(project_id, threading.RLock())
+
+
+def _serialize_trigger(function):
+    @wraps(function)
+    def wrapped(pid, *args, **kwargs):
+        with project_gate(pid):
+            return function(pid, *args, **kwargs)
+    return wrapped
 
 
 def _serialize_repo(function):
@@ -77,6 +93,7 @@ def list_projects() -> list[dict]:
     return rows
 
 
+@_serialize_trigger
 def update_project(pid: int, fields: dict) -> dict:
     p = get_project(pid)
     merged = {**p["overrides"], **(fields.pop("overrides", {}) or {})}

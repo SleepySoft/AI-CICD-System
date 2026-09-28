@@ -1,6 +1,6 @@
 # 文档索引
 
-> 版本：v1.17 · 日期：2026-09-27 · 状态：生效
+> 版本：v1.18 · 日期：2026-09-28 · 状态：生效
 > 定位：docs/ 全部文档的目录与状态总表；写作规范见 `.agents/skills/docs-management/`
 
 ## 文档总表
@@ -104,6 +104,7 @@
 | 操作与启动审计查询 | runbooks/audit-log.md | runbooks | 生效 |
 | 组件测试（沙箱/巡检/漂移审计） | runbooks/testing.md | runbooks | 生效 |
 | Outline 加载与认证故障排查 | runbooks/outline-auth.md | runbooks | 生效 |
+| 清理派生资源并重新分析 | runbooks/resource-cleanup.md | runbooks | 生效 |
 | 旧-需求分析与选型 | 01-需求分析与选型.md | 历史 | 过时（已拆分至本结构） |
 | 旧-Manager 设计 | 02-管理服务设计.md | 历史 | 过时（已拆分至本结构） |
 

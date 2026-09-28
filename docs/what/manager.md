@@ -1,8 +1,8 @@
 # Chronicler（supervisor）规格（数据模型 / API / 任务框架 / 权限 / 页面）
 
-> 版本：v1.10 · 日期：2026-09-27 · 状态：生效
+> 版本：v1.11 · 日期：2026-09-28 · 状态：生效
 > 定位：Chronicler（原 Manager，宿主侧 supervisor，ADR-0020/0022）对外可见的契约与规格；内部机制（架构、执行管线、CI 集成）见 ../how/manager-architecture.md
-> 关联需求：FR-MGR-001 ~ FR-MGR-031、FR-TASK-002、FR-TASK-003、BR-008
+> 关联需求：FR-MGR-001 ~ FR-MGR-032、FR-TASK-002、FR-TASK-003、BR-008
 > v1 实现注记：存储 SQLite（ADR-0023），鉴权本地账密 admin/user（Keycloak 后端预留），agent 为宿主自装 harness（ADR-0021）；Git 发布已落 direct 基础框架（main 直接提交/推送，不建 PR），远端基线保护及 review/local 仍属规划
 
 ## 1. WHY
@@ -16,6 +16,10 @@ Manager 是环境之上的"管理程序"：配置代码源、配置 Agent、编�
 FR-MGR-013：Shadow 必须是独立 Git 仓库并具备治理资源。新仓库初始化完整模板；工作区干净、尚无治理入口和状态的历史仓库通过追加提交迁移，保留已有文件及历史，初始基线为空。部分资源缺失或工作区有未提交改动时停止，不能自动覆盖已有治理规则。
 
 FR-MGR-005：认知任务的成功条件包括摘要产物、状态推进到本次目标提交，以及状态指向本次成功运行记录；记录的运行编号、状态和目标提交须匹配。停止摘要仍可保存和发布，但不能仅凭摘要存在标记成功。首次初始化从当前源码事实建立认知，完成后再进入增量维护。诊断与编码操作见 [开发调试手册](../runbooks/dev-debug.md#认知维护因-shadow-治理资源缺失而停止)。
+
+### 危险资源清理
+
+FR-MGR-032：隐藏入口 `/maintenance/cleanup` 仅管理员可用，显示工程本地 Shadow、配置的受管远端、源仓工作区克隆及残留克隆；提交前必须选目标、核对最新清单并输入精确确认文字。删除远端 Shadow 时同步清理本地 Shadow，并清空工程的 Shadow 远端配置，使后续分析重新建仓。活动 Run 或清单变化时拒绝执行。此操作不删除源仓远端、Run 和审计历史；MkDocs 工程文档随 Shadow 本地目录清除。操作步骤见 [资源清理手册](../runbooks/resource-cleanup.md)。
 
 ### 2.1 核心数据模型（Postgres，库 `manager`）
 

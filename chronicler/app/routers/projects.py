@@ -64,14 +64,19 @@ def reset_clone(pid: int, user: dict = Depends(require_admin)):
 
 @router.delete("/{pid}")
 async def delete(pid: int, user: dict = Depends(require_admin)):
-    import shutil
     from .. import tasks
+    from .. import maintenance
     p = projects.get_project(pid)
-    # 先清关联任务定义与 Run（外键），再删工程；报告保留在 shadow 仓供追溯
-    tasks.delete_project_tasks(pid)
-    projects.execute("DELETE FROM task_runs WHERE project_id=?", (pid,))
-    projects.execute("DELETE FROM projects WHERE id=?", (pid,))
-    shutil.rmtree(projects.repo_dir(pid), ignore_errors=True)  # 清理工作空间克隆
+    with projects.project_gate(pid), projects.repo_lock(pid):
+        from fastapi import HTTPException
+        if projects.q1("SELECT id FROM task_runs WHERE project_id=? AND status IN ('queued','running')",
+                       (pid,)):
+            raise HTTPException(status_code=409, detail="工程仍有排队或运行中的任务")
+        # 先安全删除工作区克隆；报告和 Shadow 保留，供追溯或在清理页单独删除。
+        maintenance._remove(projects.Cfg.repos_dir(), str(pid))
+        tasks.delete_project_tasks(pid)
+        projects.execute("DELETE FROM task_runs WHERE project_id=?", (pid,))
+        projects.execute("DELETE FROM projects WHERE id=?", (pid,))
     audit(user["username"], "project.delete", p["name"])
     return {"ok": True}
 

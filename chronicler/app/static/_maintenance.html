@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>资源清理 · Chronicler</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; background: #f7f4f0; color: #222; }
+    body { margin: 0 auto; max-width: 950px; padding: 28px 18px 80px; }
+    h1 { color: #8c241b; }
+    h2 { margin: 0 0 12px; }
+    p { line-height: 1.55; }
+    .warning { border-left: 5px solid #bc382c; background: #fff0ed; padding: 12px 16px; }
+    .card { background: white; border: 1px solid #d8d3cd; border-radius: 8px; padding: 18px; margin: 16px 0; }
+    .muted { color: #685f56; }
+    .badge { color: #8c241b; font-weight: 700; }
+    label { display: block; padding: 6px 0; }
+    input[type=text] { width: min(100%, 360px); padding: 9px; font: inherit; box-sizing: border-box; }
+    button { font: inherit; padding: 9px 15px; border: 0; border-radius: 5px; cursor: pointer; }
+    .danger { color: white; background: #a52c21; margin-top: 10px; }
+    .danger:disabled { background: #a9a09a; cursor: not-allowed; }
+    .secondary { background: #e8e3dc; }
+    .confirm { margin-top: 12px; padding: 12px; border: 1px solid #bc382c; background: #fff9f7; }
+    code { overflow-wrap: anywhere; }
+    #notice { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <p><a href="/">返回工作台</a></p>
+  <h1>资源清理</h1>
+  <p class="warning">这是管理员专用的永久删除操作。请先核对每个目标，再输入确认文字。清理后的文档与提交无法由 Chronicler 恢复；旧 Run 与审计记录会保留。此页没有放在常用导航中。</p>
+  <p>本地 Shadow 同时是 MkDocs 的工程文档来源。仅删除本地 Shadow，下一次分析可能从远端重新拉回旧文档；要从头分析，请同时选择本地与受管远端 Shadow。工程源仓远端和仓库内的 <code>docs/</code> 不在此页清理范围。</p>
+  <button class="secondary" id="refresh">重新检查资源</button>
+  <p id="notice" role="status"></p>
+  <div id="projects"></div>
+  <h2>残留工作区克隆</h2>
+  <div id="orphans"></div>
+  <script>
+    let snapshot;
+    const $ = id => document.getElementById(id);
+    const el = (tag, text, className) => {
+      const node = document.createElement(tag);
+      if (text !== undefined) node.textContent = text;
+      if (className) node.className = className;
+      return node;
+    };
+    async function request(url, options) {
+      const response = await fetch(url, {credentials: 'same-origin', ...options});
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.detail || `HTTP ${response.status}`);
+      return body;
+    }
+    function message(text, error = false) {
+      $('notice').textContent = text;
+      $('notice').style.color = error ? '#a52c21' : '#22593d';
+    }
+    function choice(box, value, label, available) {
+      const line = el('label');
+      const input = document.createElement('input');
+      input.type = 'checkbox'; input.value = value; input.disabled = !available;
+      line.append(input, document.createTextNode(` ${label}${available ? '' : '（不存在）'}`));
+      box.append(line);
+      return input;
+    }
+    function confirmation(box, phrase, action) {
+      const panel = el('div', undefined, 'confirm');
+      panel.append(el('p', `再次确认：输入「${phrase}」后才能执行。`));
+      const input = document.createElement('input');
+      input.type = 'text'; input.autocomplete = 'off'; input.spellcheck = false;
+      panel.append(input, document.createElement('br'));
+      const button = el('button', '永久删除', 'danger');
+      button.disabled = true;
+      input.addEventListener('input', () => button.disabled = input.value !== phrase);
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        try { await action(input.value); message('清理完成。'); await refresh(); }
+        catch (error) { message(error.message, true); button.disabled = false; }
+      });
+      panel.append(button);
+      box.append(panel);
+    }
+    function renderProject(project) {
+      const box = el('section', undefined, 'card');
+      box.append(el('h2', `${project.name} · 工程 #${project.id}`));
+      const detail = el('p', `本地 Shadow HEAD：${project.local_head || '无'}；最近 Run：${project.last_run || '无'}；推送状态：${project.last_push_status}`);
+      box.append(detail);
+      if (project.last_push_status === 'failed') box.append(el('p', '最近一次推送失败：本地 Shadow 可能有远端没有的提交。', 'badge'));
+      if (project.remote_shadow) box.append(el('p', `Shadow 远端：${project.remote_shadow}`, 'muted'));
+      if (project.active_runs.length) box.append(el('p', `有 ${project.active_runs.length} 个排队或运行中的任务，清理已禁用。`, 'badge'));
+      if (project.unsafe_targets.length) box.append(el('p', '发现指向工作区外的路径，相关目标已禁用。', 'badge'));
+      const local = choice(box, 'local_shadow', '本地 Shadow 和 MkDocs 工程文档', project.local_shadow && !project.unsafe_targets.includes('local_shadow'));
+      const remote = choice(box, 'remote_shadow', '受管 Gitea Shadow 远端仓库（同时清理本地 Shadow）', !!project.remote_shadow);
+      const clone = choice(box, 'source_clone', '工程源仓工作区克隆（保留源仓远端）', project.source_clone && !project.unsafe_targets.includes('source_clone'));
+      remote.addEventListener('change', () => { if (remote.checked) local.checked = true; });
+      const prepare = el('button', '核对并确认', 'secondary');
+      prepare.disabled = !!project.active_runs.length;
+      prepare.addEventListener('click', () => {
+        box.querySelector('.confirm')?.remove();
+        const targets = [local, remote, clone].filter(x => x.checked).map(x => x.value);
+        if (!targets.length) { message('请先选择至少一个资源。', true); return; }
+        if (remote.checked && !local.checked) { message('远端 Shadow 必须与本地 Shadow 一起清理。', true); return; }
+        const phrase = `删除 ${project.name}`;
+        const token = snapshot.token;
+        confirmation(box, phrase, value => request(`/api/maintenance/cleanup/projects/${project.id}`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({targets, token, confirmation: value})
+        }));
+      });
+      box.append(prepare);
+      return box;
+    }
+    function renderOrphan(orphan) {
+      const box = el('section', undefined, 'card');
+      box.append(el('h3', `残留克隆：${orphan.name}`));
+      box.append(el('p', orphan.independent_git ? '独立 Git 仓库' : '损坏或不完整的 Git 仓库', 'muted'));
+      const prepare = el('button', '核对并确认', 'secondary');
+      prepare.disabled = !orphan.safe;
+      if (!orphan.safe) box.append(el('p', '路径指向工作区外，已禁止清理。', 'badge'));
+      prepare.addEventListener('click', () => {
+        box.querySelector('.confirm')?.remove();
+        const token = snapshot.token;
+        confirmation(box, `删除残留 ${orphan.name}`, value => request(
+          `/api/maintenance/cleanup/orphans/${encodeURIComponent(orphan.name)}`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({token, confirmation: value})
+          }));
+      });
+      box.append(prepare);
+      return box;
+    }
+    async function refresh() {
+      try {
+        snapshot = await request('/api/maintenance/cleanup/preview');
+        $('projects').replaceChildren(...snapshot.projects.map(renderProject));
+        $('orphans').replaceChildren(...snapshot.orphan_clones.map(renderOrphan));
+        if (!snapshot.orphan_clones.length) $('orphans').append(el('p', '没有残留克隆。', 'muted'));
+      } catch (error) { message(error.message, true); }
+    }
+    $('refresh').addEventListener('click', refresh);
+    refresh();
+  </script>
+</body>
+</html>

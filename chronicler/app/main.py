@@ -61,6 +61,9 @@ def _create_app(mode: str) -> FastAPI:
 
     @app.middleware("http")
     async def mode_guard(request, call_next):
+        # 发行资源中的页面文件只能经管理员路由提供，静态文件挂载不可直出。
+        if request.url.path == "/_maintenance.html":
+            return JSONResponse({"detail": "not found"}, status_code=404)
         if mode == "bootstrap":
             path = request.url.path
             allowed = (path == "/api/health" or path == "/setup" or
@@ -127,9 +130,10 @@ def _create_app(mode: str) -> FastAPI:
     with stage("runtime.scheduler"):
         start_scheduler()
 
-    from .routers import auth, config, oidc, projects, runs, tasks, tools, users, vault, audit
+    from .routers import auth, config, oidc, projects, runs, tasks, tools, users, vault, audit, maintenance
     for item in (auth.router, oidc.router, users.router, projects.router, runs.router,
-                 tasks.router, config.router, tools.router, vault.router, audit.router):
+                 tasks.router, config.router, tools.router, vault.router, audit.router,
+                 maintenance.router):
         app.include_router(item)
 
     @app.on_event("startup")

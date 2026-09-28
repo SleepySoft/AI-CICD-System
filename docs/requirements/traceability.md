@@ -78,6 +78,7 @@
 | FR-MGR-029 | 结构化 Prompt Catalog 与运行 Profile | what/manager.md §Prompt Catalog 与运行 Profile | chronicler/app/runtime.py + prompt_catalog.py + assets/prompts/*.yaml + routers/config.py（ADR-0036） | `python -m unittest chronicler.tests.test_prompt_catalog chronicler.tests.test_runtime_profile` |
 | FR-MGR-030 | sealed 原生发行与 Prompt 留痕保护 | what/manager.md §Prompt Catalog 与运行 Profile | scripts/build-chronicler.* + install-chronicler.* + chronicler/requirements-build.txt + runner.py（ADR-0036） | bundle-only 明文扫描 + 各平台 Nuitka standalone 黑盒启动测试 |
 | FR-MGR-031 | 统一 Prompt 运行上下文注入 | what/prompt-context.md §标准字段与编写规则 | chronicler/app/prompt_context.py + runner.py + projects.py + assets/prompts/*（ADR-0049） | `python -m unittest chronicler.tests.test_prompt_context chronicler.tests.test_prompts` |
+| FR-MGR-032 | 管理员显式清理可重建资源 | what/manager.md §危险资源清理；runbooks/resource-cleanup.md | chronicler/app/maintenance.py + routers/maintenance.py + static/_maintenance.html + components/gitea/hooks/repos.py | `python -m unittest chronicler.tests.test_maintenance` |
 | FR-TASK-001 | 任务前端提交 | what/task-mgmt.md §角色分工 | chronicler/components/openproject/ | 人工：建包后 API 检索 |
 | FR-TASK-002 | AI 任务领取 | what/task-mgmt.md §API 契约 | .agents/skills/openproject/（Manager M2 起自动化） | 人工：按 skill 领任务置 in progress |
 | FR-TASK-003 | AI 状态回写 | what/task-mgmt.md §状态机 | .agents/skills/openproject/ + OpenProject workflow 配置 | 人工：回写成功且置 closed 被拒 |

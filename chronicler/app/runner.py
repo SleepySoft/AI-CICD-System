@@ -275,6 +275,7 @@ def preview_changes(project_id, task_type, task_id=None, change_probes=None):
         lock.release()
 
 
+@projects._serialize_trigger
 def trigger(project_id: int, task_type: str, actor: str, extra_prompt: str = "",
             prompt_override: str = "", cwd_override: str = "", harness_override: str = "",
             task_id: int | None = None, change_policy: str = "always", change_probes=None,
