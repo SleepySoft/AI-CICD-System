@@ -1,6 +1,6 @@
 # Web 初始化与环境设置规格
 
-> 版本：v1.12 · 日期：2026-09-28 · 状态：生效
+> 版本：v1.13 · 日期：2026-09-28 · 状态：生效
 > 定位：独立 initialization 模块对用户、组件和 API 暴露的契约；不规定内部线程、数据库实现或具体组件接线命令。
 > 关联需求：FR-INIT-001 ~ FR-INIT-019、NFR-002、NFR-004、NFR-010
 
@@ -258,9 +258,9 @@ FR-INIT-018 的管理员入口为「审计日志」。`GET /api/audit` 支持 `a
 
 FR-INIT-019 提供只读 `python -m chronicler check [--json]` 和仅 admin 可用的
 `GET /api/config/compatibility`。结果分别列出产品版本、组件定义修订指纹及其
-`setup_schema_version`、中央 Shadow 模板版本、各工程 Shadow 的治理版本和差异。
+`setup_schema_version`、中央 Shadow 模板版本与治理内容修订、各工程 Shadow 的治理版本与内容修订和差异。
 缺少 Shadow 目录标为 `uninitialized`，表示尚未按需创建；已有目录治理资源缺失、损坏或
-版本不一致标为 gap。检查本身不创建目录、不迁移、不重建。
+版本、治理内容修订或状态结构不一致标为 gap。检查本身不创建目录、不迁移、不重建。
 
 组件修订指纹取有效组件目录下的声明、compose、SKILL 和 hook 内容；它是**定义版本**，
 不是运行容器的版本。当前未记录部署时的指纹，返回 `deployed_revision: null` 和

@@ -1,6 +1,6 @@
 # Runbook: 手动启动与调试 Chronicler
 
-> 版本：v1.5 · 日期：2026-09-28 · 状态：生效
+> 版本：v1.6 · 日期：2026-09-28 · 状态：生效
 > 适用：本机（Windows Docker Desktop 或 WSL）开发/调试 supervisor 与底座
 > 关联：chronicler/（主入口 chronicler/__main__.py）、scripts/up.sh、ADR-0020/0023
 
@@ -128,7 +128,8 @@ chronicler/.venv-win/Scripts/python.exe -m chronicler check --json
 ```
 
 退出码 0 表示没有发现已知契约 gap；退出码 1 时按 `[GAP]` 的组件或工程名称检查声明与治理文件。
-`uninitialized` 是尚未创建的 Shadow，不等于损坏。组件显示 `runtime-unverified` 表示只验证了当前
+`uninitialized` 是尚未创建的 Shadow，不等于损坏。已有 Shadow 即使版本号相同，也会核对治理正文、
+资产模板修订和状态必需字段；旧内容会报 gap，认知任务不会继续。组件显示 `runtime-unverified` 表示只验证了当前
 定义文件，未验证运行容器版本，不应据此宣称升级完成。管理员也可读取
 `GET /api/config/compatibility`；启动发现 gap 会在 stderr 与审计中留下记录。
 检查不重建数据。Shadow 版本不一致时先审阅项目治理文件与中央模板差异，再决定显式迁移或重建；

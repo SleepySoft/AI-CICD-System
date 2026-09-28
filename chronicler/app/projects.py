@@ -288,7 +288,7 @@ def _ensure_shadow_governance(dest: Path, project: dict) -> None:
         expected = _yaml(template / ".cognitive-state.yaml")
         _, gap = shadow_version_gap(dest, str(expected["skill_version"]), expected["schema_version"])
         if gap:
-            record("shadow.governance", project["name"], result="blocked", reason="version-gap")
+            record("shadow.governance", project["name"], result="blocked", reason="contract-gap")
             raise RuntimeError("Shadow 治理版本检查失败：" + gap)
         return
     if (dest / "SKILL.md").exists() or (dest / ".cognitive-state.yaml").exists():
